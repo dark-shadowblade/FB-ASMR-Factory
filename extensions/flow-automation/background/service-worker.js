@@ -200,19 +200,25 @@ chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) poll
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await restoreTask();
-    if (message?.type === "FLOW_PAGE_READY" && activeTask) {
+    if (message?.type === "FLOW_PAGE_READY") {
       const senderUrl = sender.tab?.url || "";
       const detectedProject = flowProjectIdentity(senderUrl);
-      if (detectedProject) {
-        const c = await config();
+      const c = await config();
+      if (detectedProject && c.enabled && c.profileId && c.instanceId) {
         await chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: senderUrl, title: message.title || "", profileId: c.profileId, detectedAt: new Date().toISOString() } });
+        await api("/api/v1/extension/project-detected", { method: "POST", body: JSON.stringify({
+          protocolVersion: P.VERSION, profileId: c.profileId, instanceId: c.instanceId,
+          projectUrl: senderUrl, projectTitle: message.title || ""
+        }) });
       }
-      if (sender.tab?.id && sameFlowProject(senderUrl, activeTask.projectUrl)) {
+      if (activeTask && sender.tab?.id && sameFlowProject(senderUrl, activeTask.projectUrl)) {
         activeTabId = sender.tab.id;
         await chrome.storage.local.set({ activeTabId });
+        await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "", projectId: detectedProject?.projectId || null, matchesAssignedProject: true });
+        sendResponse({ task: activeTask });
+      } else {
+        sendResponse({ task: null, projectDetected: Boolean(detectedProject) });
       }
-      await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "", projectId: detectedProject?.projectId || null, matchesAssignedProject: sameFlowProject(senderUrl, activeTask.projectUrl) });
-      sendResponse({ task: activeTask });
       return;
     }
     if (message?.type === "FLOW_EVENT" && activeTask) {
