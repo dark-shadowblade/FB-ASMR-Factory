@@ -33,3 +33,18 @@ jobs:
         env:
           PYTHONPATH: .
         run: python -m pytest -q tests/test_extension_bridge.py
+
+  desktop-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install desktop dependencies
+        run: npm install --ignore-scripts
+      - name: Type-check and build desktop integration
+        run: npm run build
