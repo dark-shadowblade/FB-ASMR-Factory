@@ -33,7 +33,7 @@ app = FastAPI(title="ASMR Factory Local Orchestrator", version="0.1.0")
 app.include_router(create_extension_router(DB_PATH, DATA_DIR))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "file://", "null"],
+    allow_origins=["http://127.0.0.1:5173", "null"],
     allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
