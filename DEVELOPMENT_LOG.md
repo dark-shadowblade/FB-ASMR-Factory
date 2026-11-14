@@ -124,3 +124,11 @@ These are initial default subjects and can be refined later; do not reduce the s
 
 ### Verification boundary
 - Retry is a per-clip recovery primitive, not full crash recovery. Reconciliation after a desktop restart, automatic retry limits/backoff, and end-to-end testing across five real Flow sessions remain outstanding.
+
+## 2026-11-14 — One-click automatic production start
+
+- Added a default **Start automatic production** action in the desktop job panel.
+- It verifies all five Flow project URLs and live extension heartbeats, generates any missing prompts, approves the five-prompt pack automatically, and dispatches one task to each of the five independent profiles.
+- Prompt editing remains available before starting, but reviewing/approving the prompt pack is no longer a required step in the default production path.
+- The per-clip retry path remains available for failed or blocked tasks.
+- Updated the product specification so the final validated video is automatically published to the configured Facebook Page as a Reel when Meta publishing is connected; there is no mandatory video preview/approval gate. Meta API integration is still outstanding.
