@@ -172,7 +172,7 @@ class JobRulesTests(unittest.TestCase):
                          f"https://flow.google.com/project/{index:08d}-abcd", clip["prompt"],
                          "{}", "downloaded", "now", "now", str(source))
                     )
-            def fake_assemble(input_paths, output_path):
+            def fake_assemble(input_paths, output_path, **kwargs):
                 output = Path(output_path)
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_bytes(b"final-mp4")
