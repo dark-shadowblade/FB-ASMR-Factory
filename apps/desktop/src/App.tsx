@@ -297,6 +297,19 @@ export default function App() {
     } finally { setDispatching(false); }
   }
 
+  async function sendFlowCommand(task: FlowAutomationStatus["tasks"][number], command: "PAUSE" | "RESUME" | "CANCEL") {
+    try {
+      const response = await fetch(API + "/extension/tasks/" + task.task_id + "/command", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": bridgeToken },
+        body: JSON.stringify({ command })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not send Flow command");
+      setNotice(command + " command queued for " + task.profile_id + ". The extension confirms it after handling.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not send Flow command."); }
+  }
+
   async function retryFlowTask(task: FlowAutomationStatus["tasks"][number]) {
     try {
       const response = await fetch(API + "/extension/tasks/" + task.task_id + "/retry", {
@@ -317,9 +330,22 @@ export default function App() {
       if (!response.ok) throw new Error(data.detail || "Video assembly failed");
       setNotice(data.already_assembled ? "Final video is already in your library." : "Five clips validated and merged. Final video saved to the local library.");
       await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Video assembly failed."); }
+    } catch (error) {
+      setAutoAssemblyAttempted(current => { const next = new Set(current); next.delete(job.id); return next; });
+      setNotice(error instanceof Error ? error.message : "Video assembly failed.");
+    }
     finally { setAssembling(false); }
   }
+
+  useEffect(() => {
+    for (const job of jobs) {
+      const tasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
+      if (tasks.length === 5 && tasks.every(task => task.status === "downloaded") && !job.final_video && !autoAssemblyAttempted.has(job.id) && !assembling) {
+        setAutoAssemblyAttempted(current => new Set(current).add(job.id));
+        assembleJob(job);
+      }
+    }
+  }, [flowAutomation, jobs, autoAssemblyAttempted, assembling]);
 
   async function loadFacebookAccounts() {
     try {
@@ -596,7 +622,7 @@ export default function App() {
       {activePage === "home" && <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
         {jobs.length===0 ? <div className="empty"><div className="empty-icon">▤</div><b>No productions yet</b><span>Your created jobs will appear here.</span></div> :
-          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
+          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>{setSelected(job);setActivePage("prompts");}}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>}
 
       {activePage === "prompts" && active && <section className="panel detail-panel">
@@ -614,7 +640,7 @@ export default function App() {
             <div><b>Google Flow task queue</b><small>Chrome profiles 01–05 open automatically · {flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
             <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
           </div>
-          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
+          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}{["leased","project_open","submitted","generating","generation_completed","downloading"].includes(task.status) && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"PAUSE")}>Pause</button>}{task.status==="paused" && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"RESUME")}>Resume</button>}{!["downloaded","failed","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"CANCEL")}>Cancel</button>}</div>)}</div>}
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
           {active.final_video && <div className="facebook-publish-panel">
             <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS · SEO</div><h3>Publish finished video</h3></div><span className="count-pill">{facebookStatus.connected ? "PAGE CONNECTED" : "NOT CONNECTED"}</span></div>
