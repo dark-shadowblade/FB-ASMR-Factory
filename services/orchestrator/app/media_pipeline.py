@@ -69,6 +69,7 @@ def assemble_five_clips(
     *,
     ffmpeg: str = "ffmpeg",
     ffprobe: str = "ffprobe",
+    expected_clip_duration: float = 8.0,
 ) -> dict[str, Any]:
     """Normalize five vertical clips to a common H.264/AAC format, then concatenate."""
     if len(clip_paths) != 5:
@@ -79,8 +80,8 @@ def assemble_five_clips(
         raise MediaPipelineError(f"Required media tool not found: {ffprobe}")
     clips = [probe_video(Path(path), ffprobe=ffprobe) for path in clip_paths]
     for index, clip in enumerate(clips, start=1):
-        if abs(clip["duration"] - 8.0) > 1.5:
-            raise MediaPipelineError(f"Clip {index} duration is {clip['duration']:.2f}s; expected approximately 8 seconds")
+        if abs(clip["duration"] - expected_clip_duration) > max(1.0, expected_clip_duration * 0.15):
+            raise MediaPipelineError(f"Clip {index} duration is {clip['duration']:.2f}s; expected approximately {expected_clip_duration:g} seconds")
         ratio = clip["width"] / clip["height"]
         if clip["height"] <= clip["width"] or abs(ratio - (9 / 16)) > 0.12:
             raise MediaPipelineError(f"Clip {index} is not a portrait video suitable for 9:16 output ({clip['width']}x{clip['height']})")
@@ -104,7 +105,7 @@ def assemble_five_clips(
                         "-map", "0:v:0", "-map", "0:a:0", "-vf", video_filter,
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
                         "-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0",
-                        "-movflags", "+faststart", str(target)]
+                        "-shortest", "-movflags", "+faststart", str(target)]
                 else:
                     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(clip["path"]),
                         "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
