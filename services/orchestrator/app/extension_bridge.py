@@ -154,6 +154,22 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             busy = {r["profile_id"] for r in active}
             if busy:
                 raise HTTPException(status_code=409, detail="One or more Flow profiles already have active tasks: " + ", ".join(sorted(busy)))
+            instances = conn.execute(
+                "SELECT profile_id, last_seen FROM extension_instances"
+            ).fetchall()
+            recent = {}
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
+            for instance in instances:
+                try:
+                    recent[instance["profile_id"]] = datetime.fromisoformat(instance["last_seen"]) >= cutoff
+                except ValueError:
+                    recent[instance["profile_id"]] = False
+            missing_workers = [pid for pid in PROFILE_IDS if not recent.get(pid, False)]
+            if missing_workers:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Connect all five Flow extension workers before dispatch: " + ", ".join(missing_workers),
+                )
             settings = {"model": "Veo 3.1 Lite", "resolution": "720p", "durationSeconds": 8, "aspectRatio": "9:16"}
             created = []
             for index, clip in enumerate(clips):
