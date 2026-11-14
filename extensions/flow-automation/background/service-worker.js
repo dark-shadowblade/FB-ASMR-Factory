@@ -191,7 +191,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message?.type === "FLOW_EVENT" && activeTask) {
       await report(message.event, message.payload || {});
-      if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
+      const releasesWorker = [
+        "TASK_FAILED", "PROMPT_INSERT_FAILED", "DOWNLOAD_FAILED", "DOWNLOAD_COMPLETED",
+        "TASK_CANCELLED", "FLOW_UI_UNVERIFIED", "SETTINGS_UNVERIFIED",
+        "DOWNLOAD_SELECTOR_UNVERIFIED", "PROJECT_URL_MISMATCH",
+        "PROMPT_ALREADY_PRESENT", "SESSION_REQUIRED"
+      ];
+      if (releasesWorker.includes(message.event)) {
+        // A blocked task remains persisted in the orchestrator. Release this
+        // worker lease so an explicit retry can be polled, including on the
+        // same profile; otherwise activeTask prevents next-task polling forever.
         activeTask = null;
         activeTabId = null;
         activeDownloadIds.clear();
