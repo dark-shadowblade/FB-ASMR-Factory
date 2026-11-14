@@ -309,7 +309,53 @@ def style_bible(conn: sqlite3.Connection) -> str:
     return row["value"] if row else DEFAULT_STYLE_BIBLE
 
 def ai_provider_config() -> dict[str, str]:
-    return {"base_url": os.environ.get("ASMR_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/"), "api_key": os.environ.get("ASMR_AI_API_KEY", ""), "model": os.environ.get("ASMR_AI_MODEL", "")}
+    """Resolve AI settings from the local credential vault, then environment overrides."""
+    with connect() as conn:
+        rows = {row["key"]: row["value"] for row in conn.execute(
+            "SELECT key,value FROM settings WHERE key IN ('ai_provider','ai_base_url','ai_model')"
+        ).fetchall()}
+    provider = rows.get("ai_provider", "gemini")
+    base_url = os.environ.get("ASMR_AI_BASE_URL") or rows.get("ai_base_url") or (
+        "https://generativelanguage.googleapis.com/v1beta/openai" if provider == "gemini" else "https://api.openai.com/v1"
+    )
+    model = os.environ.get("ASMR_AI_MODEL") or rows.get("ai_model") or ("gemini-2.0-flash" if provider == "gemini" else "")
+    try:
+        api_key = os.environ.get("ASMR_AI_API_KEY") or keyring.get_password("ASMR Factory", "ai-provider-key") or ""
+    except Exception:
+        api_key = os.environ.get("ASMR_AI_API_KEY", "")
+    return {"provider": provider, "base_url": base_url.rstrip("/"), "api_key": api_key, "model": model}
+
+class AISettingsRequest(BaseModel):
+    provider: str = Field(pattern="^(gemini|openai-compatible)$")
+    base_url: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=120)
+    api_key: str = Field(default="", max_length=10000)
+
+@app.put("/api/v1/settings/ai")
+def put_ai_settings(request: AISettingsRequest) -> dict[str, Any]:
+    base_url = request.base_url.strip().rstrip("/")
+    if not base_url.startswith("https://"):
+        raise HTTPException(status_code=422, detail="AI provider URL must use HTTPS")
+    if request.api_key.strip():
+        try:
+            keyring.set_password("ASMR Factory", "ai-provider-key", request.api_key.strip())
+            if keyring.get_password("ASMR Factory", "ai-provider-key") != request.api_key.strip():
+                raise RuntimeError("Credential vault verification failed")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Could not save the AI key in the computer's secure credential vault: " + str(exc)[:180])
+    with connect() as conn:
+        for key, value in (("ai_provider", request.provider), ("ai_base_url", base_url), ("ai_model", request.model.strip())):
+            conn.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key,value,utc_now()))
+    cfg = ai_provider_config()
+    return {"configured": bool(cfg["api_key"] and cfg["model"]), "provider": cfg["provider"], "model": cfg["model"], "base_url": cfg["base_url"], "key_saved": bool(cfg["api_key"])}
+
+@app.delete("/api/v1/settings/ai/key")
+def delete_ai_key() -> dict[str, bool]:
+    try:
+        keyring.delete_password("ASMR Factory", "ai-provider-key")
+    except Exception:
+        pass
+    return {"removed": True}
 
 def compose_builtin_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     output = []
@@ -345,8 +391,8 @@ def compose_ai_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str
 @app.get("/api/v1/settings/ai")
 def get_ai_settings() -> dict[str, Any]:
     cfg = ai_provider_config()
-    return {"configured": bool(cfg["api_key"] and cfg["model"]),
-            "model": cfg["model"], "base_url": cfg["base_url"],
+    return {"configured": bool(cfg["api_key"] and cfg["model"]), "provider": cfg["provider"],
+            "model": cfg["model"], "base_url": cfg["base_url"], "key_saved": bool(cfg["api_key"]),
             "fallback": "built-in prompt composer"}
 
 @app.get("/api/v1/style-bible")
