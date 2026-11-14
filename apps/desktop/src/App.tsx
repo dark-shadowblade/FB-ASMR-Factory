@@ -337,16 +337,6 @@ export default function App() {
     finally { setAssembling(false); }
   }
 
-  useEffect(() => {
-    for (const job of jobs) {
-      const tasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
-      if (tasks.length === 5 && tasks.every(task => task.status === "downloaded") && !job.final_video && !autoAssemblyAttempted.has(job.id) && !assembling) {
-        setAutoAssemblyAttempted(current => new Set(current).add(job.id));
-        assembleJob(job);
-      }
-    }
-  }, [flowAutomation, jobs, autoAssemblyAttempted, assembling]);
-
   async function loadFacebookAccounts() {
     try {
       const [accountsResponse, statusResponse] = await Promise.all([fetch(API + "/facebook/accounts"), fetch(API + "/facebook/status")]);
