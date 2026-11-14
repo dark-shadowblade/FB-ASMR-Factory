@@ -102,7 +102,8 @@
 
     if (!actual.model.toLowerCase().includes(expectedModel.toLowerCase())) return { ok: false, reason: "Selected model does not match " + expectedModel + ".", actual };
     if (!actual.resolution.toLowerCase().includes(expectedResolution.toLowerCase())) return { ok: false, reason: "Selected resolution does not match " + expectedResolution + ".", actual };
-    if (!new RegExp("\\b" + expectedDuration + "\\b").test(actual.duration)) return { ok: false, reason: "Selected duration does not match " + expectedDuration + " seconds.", actual };
+    const selectedDurations = [...actual.duration.toLowerCase().matchAll(/(\d+(?:\.\d+)?)\s*(?:s|sec|seconds?)/g)].map(match => Number(match[1]));
+    if (!selectedDurations.includes(expectedDuration)) return { ok: false, reason: "Selected duration does not match " + expectedDuration + " seconds.", actual };
     if (expectedRatio && !actual.aspectRatio.replace(/\s/g, "").includes(expectedRatio)) {
       return { ok: false, reason: "Selected aspect ratio does not match " + expectedRatio + ".", actual };
     }
