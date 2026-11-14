@@ -706,14 +706,15 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if incomplete:
             raise HTTPException(status_code=409, detail="Five completed downloads are required before assembly")
         existing = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
-        if existing:
-            existing_output = dict(existing)
-            auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
-            return {"output": existing_output, "already_assembled": True,
-                    "publication": auto_publication, "auto_publish_error": auto_publish_error}
+        existing_output = dict(existing) if existing else None
         subjects = [row["subject"] for row in conn.execute(
             "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
         ).fetchall()]
+
+    if existing_output:
+        auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
+        return {"output": existing_output, "already_assembled": True,
+                "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
     downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
     clip_paths: list[Path] = []
