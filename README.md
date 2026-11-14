@@ -178,12 +178,12 @@ Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/
 
 ## Facebook Page Reels publishing
 
-The desktop app can prepare editable Reel SEO metadata and publish the assembled MP4 to a Facebook **Page** (not a personal profile) through Meta Graph API's Page Reels endpoint. Configure these environment variables for the local orchestrator before launching it:
+The desktop app includes a Facebook Page account manager. Choose **Add account**, enter an account label, Facebook Page ID and Page access token, then connect. The orchestrator verifies the token against Meta before saving the Page. You can add multiple Pages, choose the active publishing Page, and remove saved Pages.
 
-- `ASMR_META_PAGE_ID`: numeric Facebook Page ID.
-- `ASMR_META_PAGE_ACCESS_TOKEN`: Page access token with `pages_show_list`, `pages_read_engagement` and `pages_manage_posts` permissions, and a Page role/task that allows content creation.
-- `ASMR_META_GRAPH_VERSION`: optional Graph API version; defaults to `v27.0`.
+Page access tokens are stored in the operating system credential vault through Python Keyring (Windows Credential Manager on Windows); only non-secret Page/account metadata is stored in the local SQLite database. Tokens are never sent to GitHub and are not shown again after a successful connection. The Windows installer bundles the Keyring package and Windows backend.
 
-Never commit access tokens to Git or paste them into issue reports. The app does not persist the token in SQLite. The Facebook panel checks the configured Page, lets you edit the title/caption/description/hashtags, uploads the Reel, and polls Meta's processing status. Each job has a publication record; accepted or uncertain uploads are blocked from automatic resubmission to reduce duplicate posts. If an upload becomes uncertain, inspect the Page in Facebook before taking manual action.
+Use a Page access token with the permissions needed to read the Page and publish content, including `pages_manage_posts`, and ensure the Meta app/user has the required Page task. The account manager checks the supplied Page ID and token before accepting the account.
+
+The app supports editing the Reel title, caption, description and hashtags, uploading the assembled MP4 through Meta's Page Reels API, and polling the processing status. Each job has a publication record; accepted or uncertain uploads are blocked from automatic resubmission to reduce duplicate posts. If an upload becomes uncertain, inspect the Page in Facebook before taking manual action.
 
 Meta's Page Reels API uses a start → binary upload → finish flow. Publishing availability and permissions are controlled by Meta and may require app review/advanced access for the app being used. Official reference: https://developers.facebook.com/docs/graph-api/reference/page/video_reels/ .
