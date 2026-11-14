@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import httpx
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,7 +67,7 @@ def init_db() -> None:
             clip_order INTEGER NOT NULL,
             UNIQUE(job_id, clip_order)
         );
-        CREATE TABLE IF NOT EXISTS job_events (
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS job_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
             event TEXT NOT NULL,
