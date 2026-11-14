@@ -161,10 +161,14 @@ async function pollCommands() {
     await restoreTask();
     const c = await config();
     if (!c.enabled || !activeTask) return;
-    const result = await api("/api/v1/extension/commands?profile_id=" + encodeURIComponent(c.profileId));
+    const result = await api("/api/v1/extension/commands?profile_id=" + encodeURIComponent(c.profileId) + "&task_id=" + encodeURIComponent(activeTask.taskId));
     for (const item of (result.commands || [])) {
       if (item.task_id !== activeTask.taskId) continue;
-      if (activeTabId) await chrome.tabs.sendMessage(activeTabId, { type: item.command }).catch(() => {});
+      if (item.command === "OPEN_PROJECT" && activeTabId) {
+        await chrome.tabs.update(activeTabId, { url: activeTask.projectUrl });
+      } else if (activeTabId) {
+        await chrome.tabs.sendMessage(activeTabId, { type: item.command }).catch(() => {});
+      }
 
     }
   } catch (error) { console.warn("[ASMR Flow] command poll failed", error.message); }
