@@ -16,8 +16,8 @@ document.getElementById("save").addEventListener("click", async () => {
     return;
   }
   if (v.selectorsVerified && (!v.promptSelector || !v.generateSelector || !v.downloadSelector ||
-      !v.modelSelector || !v.resolutionSelector || !v.durationSelector)) {
-    status.textContent = "To verify automation, provide prompt, Generate, download, model, resolution and duration selectors.";
+      !v.modelSelector || !v.resolutionSelector || !v.durationSelector || !v.aspectRatioSelector)) {
+    status.textContent = "To verify automation, provide prompt, Generate, download, model, resolution, duration and aspect-ratio selectors.";
     return;
   }
   const savedBefore = await chrome.storage.local.get("profileId");
