@@ -168,5 +168,21 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()["job"]["status"], "prompts_approved")
 
+    def test_cors_allows_desktop_put_and_patch_preflights(self):
+        origin = "http://127.0.0.1:5173"
+        for method, path in [
+            ("PUT", "/api/v1/style-bible"),
+            ("PUT", "/api/v1/flow/profiles/flow-1"),
+            ("PATCH", "/api/v1/jobs/example/clips/example/prompt"),
+        ]:
+            response = self.client.options(path, headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": "content-type",
+            })
+            self.assertEqual(response.status_code, 200, f"{method} {path}: {response.text}")
+            self.assertIn(method, response.headers.get("access-control-allow-methods", ""))
+            self.assertEqual(response.headers.get("access-control-allow-origin"), origin)
+
 if __name__ == "__main__":
     unittest.main()
