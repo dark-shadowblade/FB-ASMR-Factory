@@ -284,3 +284,19 @@ Inspected the user-provided Veo Automation 2.0.1 Chrome extension ZIP. Applied o
 - README documents the reference-derived selector patterns and why the reference extension's CDP debugger/drag-drop techniques were not copied.
 
 Validation: updated content script and existing background, protocol and options JavaScript files pass syntax parsing. This is not a live Flow test. Current Flow selectors, setting controls, prompt acceptance, generation completion and download behavior remain unverified against an authenticated browser session; selector verification remains required.
+
+
+## 2026-11-14 — Flow Worker audit and options UI improvements
+
+Reviewed the extension content script, background service worker, options page and protocol tests.
+
+Changes committed:
+- Replaced the plain options page with a responsive dark control panel, clearer five-profile labels, grouped connection/selector/diagnostic sections and mobile-friendly layout.
+- Added form validation for the local bridge URL, required bridge token when polling is enabled, and required selector fields before the verified checkbox can be saved.
+- Improved save feedback, including a warning when a profile reassignment is attempted during an active task.
+- Fixed a task-state hazard: saving options no longer unconditionally clears the active task and its download tracking.
+- Tightened VIDEO_READY detection so generic page text containing “download” cannot prematurely mark a generation as complete; a playable video plus a download control is required.
+- Made download-selector failures retryable after the selector is corrected.
+- Improved diagnostic classification for icon-labelled Generate controls and added regression checks for the above behaviors.
+
+Validation performed: all modified JavaScript files pass syntax parsing. Added Node regression tests to the existing extension test suite. These tests have not yet been executed in a local Node environment or confirmed by a GitHub Actions run. No live Flow browser generation test has been performed; actual selectors and settings remain unverified.
