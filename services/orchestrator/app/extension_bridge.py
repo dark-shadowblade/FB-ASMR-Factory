@@ -248,7 +248,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
     def enqueue_command(task_id: str, request: CommandRequest, x_asmr_bridge_token: str = Header(default="")):
         require_token(x_asmr_bridge_token)
         command = request.command.upper()
-        if command not in ("PAUSE", "RESUME", "CANCEL", "CHECK_STATUS", "DOWNLOAD_VIDEO"):
+        if command not in ("OPEN_PROJECT", "SUBMIT_PROMPT", "CHECK_STATUS", "DOWNLOAD_VIDEO", "PAUSE", "RESUME", "CANCEL"):
             raise HTTPException(status_code=422, detail="Unsupported extension command")
         with connect() as conn:
             task = conn.execute("SELECT profile_id FROM extension_tasks WHERE task_id=?", (task_id,)).fetchone()
