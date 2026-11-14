@@ -55,6 +55,7 @@ export default function App() {
   const [seoDescription, setSeoDescription] = useState("");
   const [seoHashtags, setSeoHashtags] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
 
   async function refresh() {
     try {
@@ -333,6 +334,15 @@ export default function App() {
   }
 
   const active = selected ?? jobs[0] ?? null;
+
+  useEffect(() => {
+    if (!active || active.final_video || assembling || autoAssemblyAttempted.has(active.id)) return;
+    const downloaded = flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length;
+    if (downloaded === 5) {
+      setAutoAssemblyAttempted(current => new Set(current).add(active.id));
+      assembleJob(active);
+    }
+  }, [active?.id, active?.final_video?.created_at, flowAutomation.tasks, assembling, autoAssemblyAttempted]);
 
   useEffect(() => {
     if (!active) { setFacebookPublication(null); return; }
