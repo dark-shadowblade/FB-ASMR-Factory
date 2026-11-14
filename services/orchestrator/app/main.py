@@ -509,7 +509,11 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         existing = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
         if existing:
             return {"output": dict(existing), "already_assembled": True}
+        subjects = [row["subject"] for row in conn.execute(
+            "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
+        ).fetchall()]
 
+    social_metadata = compose_social_metadata(job["topic"], job["theme"], subjects)
     downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
     clip_paths: list[Path] = []
     for row in tasks:
@@ -535,11 +539,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
                          (job_id, "Media assembly failed: " + str(exc)[:400], utc_now()))
         raise HTTPException(status_code=422, detail=str(exc))
     metadata = {key: value for key, value in result.items() if key != "output"}
-    with connect() as conn:
-        subjects = [row["subject"] for row in conn.execute(
-            "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
-        ).fetchall()]
-    metadata["social_metadata"] = compose_social_metadata(job["topic"], job["theme"], subjects)
+    metadata["social_metadata"] = social_metadata
     with connect() as conn:
         conn.execute(
             """INSERT INTO job_outputs(job_id,output_path,duration_seconds,width,height,size_bytes,metadata_json,created_at)
