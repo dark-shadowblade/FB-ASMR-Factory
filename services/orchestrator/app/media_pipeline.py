@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+
+
+logger = logging.getLogger("asmr_factory.media")
 
 
 class MediaPipelineError(RuntimeError):
@@ -12,14 +16,28 @@ class MediaPipelineError(RuntimeError):
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    tool_name = Path(command[0]).name
+    logger.info("Media tool started: %s", tool_name)
     try:
-        return subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
+        output = (result.stderr or result.stdout or "").strip()
+        if output:
+            # FFmpeg writes its diagnostics/progress to stderr; retain a bounded tail.
+            logger.info("%s output: %s", tool_name, output[-6000:])
+        logger.info("Media tool completed: %s (exit=%s)", tool_name, result.returncode)
+        return result
     except FileNotFoundError as exc:
+        logger.exception("Media tool not found: %s", tool_name)
         raise MediaPipelineError(f"Required media tool not found: {command[0]}") from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        logger.error("%s failed (exit=%s): %s", tool_name, exc.returncode, detail[-6000:])
         raise MediaPipelineError(f"Media command failed: {detail[-1200:]}") from exc
     except subprocess.TimeoutExpired as exc:
+        logger.error("%s timed out after 180 seconds", tool_name)
+        detail = exc.stderr or exc.stdout
+        if detail:
+            logger.error("%s timeout output: %s", tool_name, str(detail)[-3000:])
         raise MediaPipelineError(f"Media command timed out: {command[0]}") from exc
 
 
