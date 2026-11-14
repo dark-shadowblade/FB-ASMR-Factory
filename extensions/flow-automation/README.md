@@ -23,6 +23,24 @@ Manifest V3 module for the existing FB-ASMR-Factory repository.
 6. Enter the local bridge token and assign the matching profile ID. Repeat separately in each profile.
 7. Keep task polling disabled until the desktop app has assigned the correct profile and project URL.
 
+## Reference extension findings applied
+
+The supplied Veo Automation 2.0.1 package was inspected as an implementation reference. Its content script uses these Flow editor patterns:
+
+- `div.ProseMirror[contenteditable="true"]`
+- `flow-rich-text-editor [contenteditable="true"]`
+- `[contenteditable="true"]` and `[role="textbox"]`
+
+It also contains these Generate-control patterns:
+
+- `button[aria-label="Start generation"]`
+- `button.generate-icon-button[type="submit"]`
+- a button containing an `arrow_forward` icon
+
+The worker now prefers the observed rich-text editor patterns when identifying a unique prompt field, and the read-only diagnostic reports icon text where available so icon-only Generate/Download controls are easier to recognise. For contenteditable editors, prompt insertion now uses the browser editing-command path instead of directly replacing `textContent`; it deliberately avoids private React internals and DevTools Protocol input simulation.
+
+These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker still requires an explicitly configured and verified selector before it submits anything. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
+
 ## Live Flow selectors: deliberately unverified
 
 The repository has no captured DOM fixture or verified live Google Flow selectors. The content script therefore runs in safe mode: it reports whether it can identify a unique prompt field but does not submit prompts or click Generate until the user has supplied selectors and explicitly marked them verified in that profile's options.
