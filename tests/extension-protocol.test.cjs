@@ -30,10 +30,10 @@ test("Manifest V3 permissions and Flow host scope are declared", () => {
 test("saving extension settings preserves an in-flight task", () => {
   const worker = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/background/service-worker.js"), "utf8");
   const configStart = worker.indexOf('message?.type === "CONFIG_UPDATED"');
-  const configEnd = worker.indexOf("\\nasync function pollCommands()", configStart);
+  const configEnd = worker.indexOf("\nasync function pollCommands()", configStart);
   const configHandler = worker.slice(configStart, configEnd);
   assert.match(configHandler, /Saving options must not discard an in-flight task/);
-  assert.doesNotMatch(configHandler, /activeTask\\s*=\\s*null/);
+  assert.doesNotMatch(configHandler, /activeTask\s*=\s*null/);
 });
 test("Flow ready state requires playable video and a download control", () => {
   const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
