@@ -126,3 +126,60 @@ copyReport.addEventListener("click", async () => {
 })();
 
 refreshFlowTabs().catch(error => { diagnosticStatus.textContent = String(error?.message || error); });
+
+const liveIds = ["liveProfile","liveConnection","liveProject","liveProjectMeta","liveModel","liveQuality","liveDuration","liveRatio","liveTaskMeta"];
+function profileLabel(id) {
+  const n = String(id || "").match(/^flow-([1-5])$/);
+  return n ? "Browser " + n[1].padStart(2, "0") : "Not configured";
+}
+function setLive(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+async function refreshLiveStatus() {
+  const saved = await chrome.storage.local.get([
+    "profileId","enabled","bridgeToken","extensionWorkerStatus",
+    "lastFlowProject","extensionTaskSnapshot","activeTask"
+  ]);
+  const profile = saved.profileId || "";
+  setLive("liveProfile", profileLabel(profile));
+  const worker = saved.extensionWorkerStatus || {};
+  const age = worker.registeredAt ? Date.now() - Date.parse(worker.registeredAt) : Infinity;
+  if (!saved.enabled) setLive("liveConnection", "Polling disabled");
+  else if (!saved.bridgeToken) setLive("liveConnection", "Bridge token missing");
+  else if (worker.profileId === profile && worker.connected && age < 90000) {
+    setLive("liveConnection", "Connected · registered " + Math.max(0, Math.round(age / 1000)) + "s ago");
+  } else if (worker.error) setLive("liveConnection", "Connection issue · " + worker.error);
+  else setLive("liveConnection", "Waiting for worker registration");
+  const project = saved.lastFlowProject || {};
+  if (project.projectId) {
+    setLive("liveProject", "Project " + project.projectId);
+    setLive("liveProjectMeta", (project.title || "Google Flow") + " · detected " +
+      (project.detectedAt ? new Date(project.detectedAt).toLocaleString() : "recently"));
+  } else {
+    setLive("liveProject", "No project detected");
+    setLive("liveProjectMeta", "Open a project in this managed browser");
+  }
+  const task = saved.extensionTaskSnapshot || {};
+  const taskSettings = task.settings || {};
+  setLive("liveModel", taskSettings.model || "Not provided by desktop");
+  setLive("liveQuality", taskSettings.resolution ? "Resolution · " + taskSettings.resolution : "Resolution not received");
+  setLive("liveDuration", taskSettings.durationSeconds ? String(taskSettings.durationSeconds) + " seconds" : "Duration not received");
+  setLive("liveRatio", taskSettings.aspectRatio ? "Aspect ratio · " + taskSettings.aspectRatio : "Aspect ratio not specified");
+  if (saved.activeTask && task.taskId) {
+    setLive("liveTaskMeta", "Active task " + task.taskId + " · " + (task.state || "assigned"));
+  } else if (task.taskId) {
+    setLive("liveTaskMeta", "Last task " + task.taskId + " · " + (task.state || "completed/ended"));
+  } else {
+    setLive("liveTaskMeta", "No task assigned to this profile.");
+  }
+}
+document.getElementById("refreshLiveStatus").addEventListener("click", () => {
+  refreshLiveStatus().catch(error => setLive("liveConnection", String(error?.message || error)));
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && ["profileId","enabled","bridgeToken","extensionWorkerStatus","lastFlowProject","extensionTaskSnapshot","activeTask"].some(key => changes[key])) {
+    refreshLiveStatus().catch(() => {});
+  }
+});
+refreshLiveStatus().catch(error => setLive("liveConnection", String(error?.message || error)));
