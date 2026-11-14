@@ -75,3 +75,20 @@
 .facebook-add-form input{width:100%;height:37px;border:1px solid #354052;border-radius:7px;background:#0d121b;color:#f2f4f8;padding:0 10px;font:10px 'DM Sans',sans-serif;box-sizing:border-box}
 .facebook-add-form input:focus{outline:none;border-color:#6b91d9}
 .facebook-add-form .primary{margin-top:7px}
+
+/* AI provider account card inside Accounts */
+.ai-account-panel{margin-top:16px;padding:14px;border:1px solid #303747;border-radius:11px;background:#10141d;display:grid;gap:12px}
+.ai-account-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ai-account-heading b,.ai-account-heading small{display:block}
+.ai-account-heading b{font-size:12px;color:#edf0f6}
+.ai-account-heading small{font-size:9px;color:#8792a4;line-height:1.5;margin-top:4px}
+.ai-status{font-size:8px;letter-spacing:.8px;padding:6px 9px;border:1px solid #454052;border-radius:20px;color:#c4a27e;white-space:nowrap}
+.ai-status.connected{color:#70d5a2;border-color:#356b57}
+.ai-account-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ai-account-grid label,.ai-url-label{display:grid;gap:6px;color:#9ca7b8;font-size:8px;letter-spacing:.1em;font-weight:700}
+.ai-account-grid input,.ai-account-grid select,.ai-url-label input{width:100%;height:36px;border:1px solid #354052;border-radius:7px;background:#0d121b;color:#f2f4f8;padding:0 10px;font:10px 'DM Sans',sans-serif;box-sizing:border-box;min-width:0}
+.ai-account-grid .ai-key-field{grid-column:1/-1}
+.ai-url-label{display:grid}
+.ai-account-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ai-account-footer>span{font-size:9px;color:#8f9bad;line-height:1.5}
+.ai-account-footer .secondary.compact{margin:0;white-space:nowrap}
