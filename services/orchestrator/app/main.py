@@ -293,11 +293,12 @@ def approve_job(job_id: str) -> dict[str, Any]:
 
 
 # --- AI Director / Prompt Studio ---
-DEFAULT_STYLE_BIBLE = """Premium photorealistic fruit-cutting ASMR. Macro close-up, locked camera,
-vertical 9:16, shallow depth of field, clean dark charcoal or warm neutral surface,
-soft directional studio light, natural fruit color and realistic moisture. One continuous
-8-second shot: one deliberate controlled knife cut, believable resistance and clean separation.
-Intimate natural cutting audio only; no music, speech, text, logos, jump cuts or surreal physics."""
+DEFAULT_STYLE_BIBLE = """Premium photorealistic material-focused ASMR. Macro close-up, stable camera,
+vertical 9:16 composition, shallow depth of field, clean dark charcoal or warm neutral surface,
+soft directional studio lighting and accurate material colour, texture and physical response.
+One continuous 8-second shot with one deliberate, controlled, material-appropriate action.
+Show believable contact, resistance, deformation, separation and gravity. Capture intimate natural
+foley only; no music, speech, text, logos, jump cuts or surreal physics."""
 class StyleBibleRequest(BaseModel):
     content: str = Field(min_length=40, max_length=5000)
 
@@ -314,7 +315,7 @@ def ai_provider_config() -> dict[str, str]:
 def compose_builtin_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     output = []
     for subject in THEME_SUBJECTS[theme]:
-        prompt = (f"{bible.strip()}\n\\nSTYLE: {THEME_DIRECTIONS[theme]}\\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
+        prompt = (f"{bible.strip()}\nSTYLE: {THEME_DIRECTIONS[theme]}\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
                   "Create a distinctive material-specific cutting or satisfying action, visually different from the other four clips. "
                   "Use one continuous controlled action with realistic contact, resistance, gravity and texture. "
                   "Vertical 9:16, one standalone 8-second shot. No speech, music, text, logos, unsafe hand placement or impossible physics.")
