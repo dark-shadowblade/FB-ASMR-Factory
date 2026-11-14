@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import sqlite3
 import os
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -204,3 +207,22 @@ def test_desktop_config_accepts_opaque_origin_only_with_per_launch_secret(tmp_pa
             "Origin": "null", "X-ASMR-Desktop-Token": "test-desktop-secret"
         })
         assert allowed.status_code == 200
+
+
+class DesktopConfigAuthTests(unittest.TestCase):
+    def test_opaque_origin_requires_desktop_secret(self):
+        with TemporaryDirectory() as temp:
+            client, _, _ = make_client(Path(temp))
+            response = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+            self.assertEqual(response.status_code, 403)
+
+    def test_opaque_origin_accepts_matching_launch_secret(self):
+        with TemporaryDirectory() as temp:
+            client, _, _ = make_client(Path(temp))
+            with patch.dict(os.environ, {"ASMR_FACTORY_DESKTOP_TOKEN": "test-desktop-secret"}):
+                denied = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+                self.assertEqual(denied.status_code, 403)
+                allowed = client.get("/api/v1/extension/desktop-config", headers={
+                    "Origin": "null", "X-ASMR-Desktop-Token": "test-desktop-secret"
+                })
+                self.assertEqual(allowed.status_code, 200)
