@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FB-ASMR Flow Worker</title><style>
+body{font:14px system-ui;background:#10141c;color:#e8edf5;max-width:720px;margin:32px auto;padding:0 20px}h1{font-size:22px}label{display:block;margin:16px 0 6px;color:#aab7c9}input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #344154;border-radius:8px;background:#1a2230;color:#fff}button{margin-top:20px;padding:11px 18px;border:0;border-radius:8px;background:#70a7ff;color:#07101e;font-weight:700}small{color:#aab7c9}#status{margin-top:14px}
+</style></head>
+<body><h1>FB-ASMR Factory — Flow Worker</h1>
+<p>Configure this extension separately in each of the five persistent Chrome profiles. The selected profile ID is the isolation key; tasks for other profiles are rejected.</p>
+<label>Local orchestrator URL</label><input id="baseUrl" value="http://127.0.0.1:8765">
+<label>Bridge token (from the desktop app's local data folder)</label><input id="bridgeToken" type="password" autocomplete="off">
+<label>Assigned profile</label><select id="profileId"><option>flow-1</option><option>flow-2</option><option>flow-3</option><option>flow-4</option><option>flow-5</option></select>
+<label><input id="enabled" type="checkbox" style="width:auto"> Enable task polling in this profile</label>
+<hr>
+<h2>Live Flow selector configuration</h2>
+<p><small>Automation is disabled until the selectors are verified against the current Google Flow UI. Do not guess these values. Use Chrome DevTools on the Flow page to inspect the actual accessible controls.</small></p>
+<label>Prompt field CSS selector</label><input id="promptSelector" placeholder="Leave blank until verified">
+<label>Generate button CSS selector</label><input id="generateSelector" placeholder="Leave blank until verified">
+<label>Download button CSS selector</label><input id="downloadSelector" placeholder="Leave blank until verified">
+<label><input id="selectorsVerified" type="checkbox" style="width:auto"> I verified these selectors on the current Flow page</label>
+<button id="save">Save settings</button><div id="status"></div>
+<script src="options.js"></script></body></html>
