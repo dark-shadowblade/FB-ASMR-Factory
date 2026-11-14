@@ -36,8 +36,10 @@ def _check_response(response: httpx.Response, action: str) -> dict[str, Any]:
     return data
 
 
-def verify_page(timeout: float = 20.0) -> dict[str, Any]:
+def verify_page(page_id: str | None = None, page_access_token: str | None = None, timeout: float = 20.0) -> dict[str, Any]:
     cfg = meta_config()
+    cfg["page_id"] = (page_id or cfg["page_id"]).strip()
+    cfg["page_access_token"] = (page_access_token or cfg["page_access_token"]).strip()
     if not cfg["page_id"] or not cfg["page_access_token"]:
         raise MetaPublishError("Configure ASMR_META_PAGE_ID and ASMR_META_PAGE_ACCESS_TOKEN before connecting a Facebook Page")
     response = httpx.get(
@@ -49,11 +51,13 @@ def verify_page(timeout: float = 20.0) -> dict[str, Any]:
     return {"connected": True, "page_id": str(data.get("id", cfg["page_id"])), "page_name": data.get("name", "Facebook Page"), "graph_version": GRAPH_VERSION}
 
 
-def publish_reel(video_path: str | Path, title: str, description: str, timeout: float = 120.0) -> dict[str, Any]:
+def publish_reel(video_path: str | Path, title: str, description: str, page_id: str | None = None, page_access_token: str | None = None, timeout: float = 120.0) -> dict[str, Any]:
     """Publish a local MP4 to a Facebook Page using Meta's three-stage Reels API."""
     cfg = meta_config()
+    cfg["page_id"] = (page_id or cfg["page_id"]).strip()
+    cfg["page_access_token"] = (page_access_token or cfg["page_access_token"]).strip()
     if not cfg["page_id"] or not cfg["page_access_token"]:
-        raise MetaPublishError("Facebook Page is not connected. Configure the Page ID and Page access token.")
+        raise MetaPublishError("Facebook Page is not connected. Add a Page ID and Page access token.")
     candidate = Path(video_path).expanduser()
     if candidate.suffix.lower() != ".mp4":
         raise MetaPublishError("The final video must be an MP4 file")
@@ -110,8 +114,9 @@ def publish_reel(video_path: str | Path, title: str, description: str, timeout: 
     return {"video_id": video_id, "post_id": completed.get("post_id"), "success": True, "state": "processing"}
 
 
-def get_reel_status(video_id: str, timeout: float = 20.0) -> dict[str, Any]:
+def get_reel_status(video_id: str, page_access_token: str | None = None, timeout: float = 20.0) -> dict[str, Any]:
     cfg = meta_config()
+    cfg["page_access_token"] = (page_access_token or cfg["page_access_token"]).strip()
     if not cfg["page_access_token"]:
         raise MetaPublishError("Facebook Page access token is not configured")
     response = httpx.get(
