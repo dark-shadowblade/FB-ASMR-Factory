@@ -241,7 +241,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         if profile_id not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unknown profile ID")
         with connect() as conn:
-            rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id,)).fetchall()
+            rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND task_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id, task_id)).fetchall()
             ids = [r["id"] for r in rows]
             if ids:
                 conn.executemany("UPDATE extension_commands SET status='delivered' WHERE id=?", [(i,) for i in ids])
