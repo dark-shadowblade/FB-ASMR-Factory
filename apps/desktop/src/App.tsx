@@ -7,6 +7,7 @@ type LibraryVideo = { job_id: string; output_path: string; duration_seconds: num
 type FacebookStatus = { configured: boolean; connected?: boolean; page_name?: string; message?: string; account_id?: string; label?: string };
 type FacebookAccount = { account_id: string; label: string; page_id: string; page_name: string; is_active: boolean; created_at?: string };
 type FacebookPublication = { status: string; video_id?: string | null; post_id?: string | null; error?: string | null; created_at?: string };
+type DiagnosticLog = { id: number; source: string; level: string; message: string; profile_id?: string | null; task_id?: string | null; created_at: string };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
@@ -75,6 +76,7 @@ export default function App() {
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
   const [debugUpdatedAt, setDebugUpdatedAt] = useState(new Date().toISOString());
   const [debugFilter, setDebugFilter] = useState("all");
+  const [diagnosticLogs, setDiagnosticLogs] = useState<DiagnosticLog[]>([]);
 
   async function refresh() {
     try {
@@ -100,6 +102,8 @@ export default function App() {
       }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
+      const diagnosticsResponse = await fetch(`${API}/extension/diagnostics/logs?limit=500`);
+      if (diagnosticsResponse.ok) setDiagnosticLogs((await diagnosticsResponse.json()).logs ?? []);
       setDebugUpdatedAt(new Date().toISOString());
       if (selected) {
         const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
@@ -437,6 +441,7 @@ export default function App() {
   }
 
   const debugEntries = [
+    ...diagnosticLogs.map(log=>({key:"diagnostic-"+log.id,time:new Date(log.created_at).toLocaleTimeString(),level:log.level==="error"?"error":log.level==="warn"?"warn":"info",source:log.source,message:log.message+(log.profile_id?" · "+log.profile_id:"")+(log.task_id?" · "+log.task_id:"")})),
     {key:"service",time:new Date(debugUpdatedAt).toLocaleTimeString(),level:health==="offline"?"error":"info",source:"BACKEND",message:health==="online"?"Local API health check passed":"Local API is unreachable"},
     ...flowAutomation.profiles.map(p=>({key:"worker-"+p.profile_id,time:p.last_seen?new Date(p.last_seen).toLocaleTimeString():"—",level:p.registered?"info":"warn",source:"FLOW",message:p.profile_id+" · "+(p.registered?"extension registered":"worker not connected")+(p.extension_version?" · extension "+p.extension_version:"")})),
     ...flowAutomation.tasks.map(t=>({key:"task-"+t.task_id,time:new Date(t.updated_at).toLocaleTimeString(),level:["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status)?"error":"info",source:"TASK",message:t.profile_id+" · "+t.status.replaceAll("_"," ")+(t.last_error?" · "+t.last_error:"")+(t.download_path?" · "+t.download_path:"")})),
@@ -507,7 +512,7 @@ export default function App() {
         </div>
         <div className="panel debug-panel"><div className="panel-head"><div><div className="eyebrow">LIVE EVENT FEED</div><h2>System activity</h2></div><select className="theme-select debug-filter" value={debugFilter} onChange={e=>setDebugFilter(e.target.value)}><option value="all">All events</option><option value="error">Errors only</option><option value="worker">Flow workers</option><option value="task">Clip tasks</option></select></div>
           <div className="debug-feed">{debugEntries.filter(e=>debugFilter==="all"||(debugFilter==="error"&&e.level==="error")||(debugFilter==="worker"&&e.source==="FLOW")||(debugFilter==="task"&&e.source==="TASK")).map((entry,i)=><div className="debug-entry" key={entry.key}><time>{entry.time}</time><span className={"debug-level "+entry.level}>{entry.level.toUpperCase()}</span><b>{entry.source}</b><p>{entry.message}</p></div>)}{debugEntries.filter(e=>debugFilter==="all"||(debugFilter==="error"&&e.level==="error")||(debugFilter==="worker"&&e.source==="FLOW")||(debugFilter==="task"&&e.source==="TASK")).length===0&&<div className="empty">No events match this filter.</div>}</div>
-          <small className="debug-foot">Last status refresh: {new Date(debugUpdatedAt).toLocaleString()} · This feed is reconstructed from persisted task state and current service status; it is not a raw Electron or Chrome console stream.</small>
+          <small className="debug-foot">Last status refresh: {new Date(debugUpdatedAt).toLocaleString()} · Feed combines captured Electron, renderer, backend and Flow extension diagnostics with current task state. FFmpeg output is included when emitted by the backend process.</small>
         </div>
       </section>}
       {activePage === "home" && <>
