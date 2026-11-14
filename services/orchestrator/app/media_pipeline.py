@@ -70,6 +70,7 @@ def assemble_five_clips(
     ffmpeg: str = "ffmpeg",
     ffprobe: str = "ffprobe",
     expected_clip_duration: float = 8.0,
+    output_height: int = 1280,
 ) -> dict[str, Any]:
     """Normalize five vertical clips to a common H.264/AAC format, then concatenate."""
     if len(clip_paths) != 5:
@@ -78,6 +79,9 @@ def assemble_five_clips(
         raise MediaPipelineError(f"Required media tool not found: {ffmpeg}")
     if not shutil.which(ffprobe):
         raise MediaPipelineError(f"Required media tool not found: {ffprobe}")
+    if output_height not in (1280, 1920):
+        raise MediaPipelineError("Output height must be 1280 (720p vertical) or 1920 (1080p vertical)")
+    output_width = output_height * 9 // 16
     clips = [probe_video(Path(path), ffprobe=ffprobe) for path in clip_paths]
     for index, clip in enumerate(clips, start=1):
         if abs(clip["duration"] - expected_clip_duration) > max(1.0, expected_clip_duration * 0.15):
@@ -99,7 +103,7 @@ def assemble_five_clips(
             normalized: list[Path] = []
             for index, clip in enumerate(clips, start=1):
                 target = Path(temp_dir) / f"clip-{index:02d}.mp4"
-                video_filter = "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p"
+                video_filter = f"scale={output_width}:{output_height}:force_original_aspect_ratio=decrease,pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p"
                 if clip["audio_codec"]:
                     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(clip["path"]),
                         "-map", "0:v:0", "-map", "0:a:0", "-vf", video_filter,
@@ -126,7 +130,7 @@ def assemble_five_clips(
         expected_duration = sum(clip["duration"] for clip in clips)
         if abs(final["duration"] - expected_duration) > max(1.0, expected_duration * 0.03):
             raise MediaPipelineError("Final video duration does not match the five source clips")
-        if final["width"] != 720 or final["height"] != 1280 or final["video_codec"] != "h264" or final["audio_codec"] != "aac":
+        if final["width"] != output_width or final["height"] != output_height or final["video_codec"] != "h264" or final["audio_codec"] != "aac":
             raise MediaPipelineError("Final video failed normalized 720x1280 H.264/AAC validation")
     except Exception:
         output.unlink(missing_ok=True)
