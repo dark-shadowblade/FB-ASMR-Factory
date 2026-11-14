@@ -164,11 +164,7 @@ async function pollCommands() {
     for (const item of (result.commands || [])) {
       if (item.task_id !== activeTask.taskId) continue;
       if (activeTabId) await chrome.tabs.sendMessage(activeTabId, { type: item.command }).catch(() => {});
-      if (item.command === "CANCEL") {
-        activeTask = null;
-        activeTabId = null;
-        await chrome.storage.local.remove(["activeTask", "activeTabId"]);
-      }
+
     }
   } catch (error) { console.warn("[ASMR Flow] command poll failed", error.message); }
 }
