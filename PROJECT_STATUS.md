@@ -38,11 +38,15 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] Five isolated persistent Chrome profile directories and profile manager.
 - [x] SQLite-backed saved Flow project URL per profile (five account slots).
 - [x] Desktop UI to paste/save each project's URL and open it directly.
+- [x] One-click endpoint opens all five saved Flow projects in parallel in their isolated Chrome profiles; desktop production start waits up to 60 seconds for all five extension workers before dispatch.
 - [x] Reuse each profile's persistent Chrome session; first sign-in is required once per profile.
 - [x] Reference-informed Flow prompt discovery and guarded prompt insertion / Generate code path (live interaction still needs an authenticated Flow verification).
 - [x] DOM-observation generation-state monitor and safe reload/duplicate-generation guards (live Flow behavior not yet verified).
 - [x] Configurable selected-value checks for Veo 3.1 Lite, 720p and 8 seconds (requires real selectors to be configured).
-- [ ] Automatic selection/change of model, resolution, duration and 9:16 aspect ratio in the live Flow UI.
+- [x] Redesigned responsive Flow Worker options page with per-profile setup, validated local bridge settings, explicit selector-verification toggle, read-only tab diagnostic and JSON copy.
+- [x] Extension settings save preserves active task/download state and blocks profile reassignment during an active task.
+- [x] Improved generation-state detection to require playable video plus a download control before treating output as ready; interrupted/non-video downloads are reported as retryable failures.
+- [ ] Automatic selection/change of model, resolution, duration and 9:16 aspect ratio in the live Flow UI; current extension only checks configured selected-value selectors, and aspect-ratio verification is optional.
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
 - [x] FFprobe validates all five downloaded MP4 files during assembly, enforces approximately 8 seconds per source clip, and marks clips ready only after the final MP4 also passes validation.
 - [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
@@ -54,16 +58,16 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
-- [x] GitHub Actions backend tests and Flow extension/bridge tests passed on current HEAD `466d128` (14 Nov 2026). The desktop TypeScript build, extension protocol/bridge checks and Windows installer build all passed on code commit `0a2ae59`.
-- [ ] Full job recovery and retry behavior.
+- [x] GitHub Actions backend tests, extension protocol tests, extension bridge tests and desktop build passed on commit `eb1fae1` (14 Nov 2026). Newest HEAD `4ef0a82` has fresh backend and extension/bridge workflows running; Chrome extension tests already passed on `4ef0a82`.
+- [ ] Full job recovery and retry behavior; current per-task retry and interrupted-download reporting are implemented, but restart reconciliation and automatic retry/backoff are not.
 - [x] Basic local Video Library API and UI, including inline MP4 playback and download; thumbnails, search/filtering and richer library browsing remain.
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
-- [x] A Windows installer artifact was successfully built for code commit `0a2ae59`, including social metadata and eight-second source validation. Artifact: `ASMR-Factory-Windows-Installer` in Actions run `43598548348`.
+- [x] Windows installer artifact successfully built for commit `f380ca1` (run `43600477183`) and an earlier artifact for `0a2ae59` (run `43598548348`). A newer installer build for commit `ee26516`, including the one-click five-profile launch, is still running; it does not yet include the latest Flow Worker options polish.
 - [ ] Full five-account end-to-end test on the user's Windows PC.
 
-**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing and a full five-account end-to-end test remain outstanding.
+**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. The current content script inserts a prompt and clicks Generate after configured selectors/settings pass, but it does not yet clear the prompt after confirmed submission; the live state detector and download association still need real-account testing. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing, actual Facebook publishing and a full five-account end-to-end test remain outstanding.
 
 ## 2. Product rules that must not be lost
 
