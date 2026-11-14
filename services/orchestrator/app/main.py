@@ -84,7 +84,8 @@ def init_db() -> None:
             clip_order INTEGER NOT NULL,
             UNIQUE(job_id, clip_order)
         );
-        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS job_events (
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS job_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
             event TEXT NOT NULL,
@@ -193,7 +194,7 @@ def ai_provider_config() -> dict[str, str]:
 def compose_builtin_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     output = []
     for subject in THEME_SUBJECTS[theme]:
-        prompt = (f"{bible.strip()}\\n\\nSTYLE: {THEME_DIRECTIONS[theme]}\\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
+        prompt = (f"{bible.strip()}\n\\nSTYLE: {THEME_DIRECTIONS[theme]}\\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
                   "Create a distinctive material-specific cutting or satisfying action, visually different from the other four clips. "
                   "Use one continuous controlled action with realistic contact, resistance, gravity and texture. "
                   "Vertical 9:16, one standalone 8-second shot. No speech, music, text, logos, unsafe hand placement or impossible physics.")
@@ -300,6 +301,8 @@ def approve_prompts(job_id: str) -> dict[str, Any]:
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five " + THEME_LABELS[job["theme"]] + " prompts approved; Flow automation is next", utc_now()))
         return {"job": serialize_job(conn, job_id)}
-\n\nif __name__ == "__main__":
+
+
+if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=8765, reload=True)
