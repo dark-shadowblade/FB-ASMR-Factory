@@ -38,6 +38,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings">("home");
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState(todaysTheme());
+  const [themeOverride, setThemeOverride] = useState(false);
   const [flowSettings, setFlowSettings] = useState({ model: "Veo 3.1 Lite", resolution: "720p", duration_seconds: 8, aspect_ratio: "9:16" });
   const [savingFlowSettings, setSavingFlowSettings] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -162,18 +163,21 @@ export default function App() {
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
+    const themeToCreate = themeOverride ? theme : todaysTheme();
     setBusy(true);
     try {
       const response = await fetch(`${API}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), theme })
+        body: JSON.stringify({ topic: topic.trim(), theme: themeToCreate })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
       setTopic("");
+      setTheme(todaysTheme());
+      setThemeOverride(false);
       setSelected(data.job);
-      setNotice("Draft " + (THEMES.find(t => t.value === theme)?.label || theme) + " job created with five clip tasks.");
+      setNotice("Draft " + (THEMES.find(t => t.value === themeToCreate)?.label || themeToCreate) + " job created with five clip tasks.");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
@@ -527,8 +531,8 @@ export default function App() {
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
           <input id="topic" value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createJob()} placeholder="e.g. tropical fruit cutting" />
           <label htmlFor="theme">GENERATION STYLE · 7 AVAILABLE</label>
-          <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
-          <div className="style-hint">Scheduled today: {THEMES.find(t => t.value === todaysTheme())?.label} · five different subjects · {flowSettings.duration_seconds} seconds each</div>
+          <select id="theme" className="theme-select" value={theme} onChange={e=>{setTheme(e.target.value);setThemeOverride(true);}}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
+          <div className="style-hint">{themeOverride ? "Manual style: " + (THEMES.find(t => t.value === theme)?.label || theme) : "Scheduled today: " + (THEMES.find(t => t.value === todaysTheme())?.label || "Fruits")} · five different subjects · {flowSettings.duration_seconds} seconds each</div>
           <div className="settings-row"><div><small>MODEL</small><b>{flowSettings.model}</b></div><div><small>QUALITY</small><b>{flowSettings.resolution}</b></div><div><small>DURATION</small><b>{flowSettings.duration_seconds} seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
           <p className="helper">Creates a saved five-clip plan. Flow settings are checked when the five browser tasks start.</p>
