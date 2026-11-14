@@ -4,6 +4,7 @@ const POLL_ALARM = "asmr-flow-poll";
 let activeTask = null;
 let pollBusy = false;
 let activeTabId = null;
+let activeDownloadId = null;
 let activeDownloadIds = new Set();
 async function restoreTask() {
   if (!activeTask) {
@@ -105,7 +106,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
         activeTabId = null;
-        await chrome.storage.local.remove(["activeTask", "activeTabId"]);
+        await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadId"]);
       }
       sendResponse({ ok: true });
       return;
