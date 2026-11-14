@@ -160,13 +160,13 @@ chrome.downloads.onChanged.addListener(async delta => {
   activeDownloadIds.delete(delta.id);
   activeTask = null;
   activeTabId = null;
-  await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds"]);
+  await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
     activeTask = null;
     activeTabId = null;
-    chrome.storage.local.remove(["activeTask", "activeTabId"]);
+    chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
     poll();
     sendResponse({ ok: true });
   }
