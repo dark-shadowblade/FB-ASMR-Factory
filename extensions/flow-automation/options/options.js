@@ -1,4 +1,4 @@
-const ids = ["baseUrl","bridgeToken","profileId","enabled","promptSelector","generateSelector","downloadSelector","selectorsVerified"];
+const ids = ["baseUrl","bridgeToken","profileId","enabled","promptSelector","generateSelector","downloadSelector","modelSelector","resolutionSelector","durationSelector","aspectRatioSelector","selectorsVerified"];
 async function load(){const v=await chrome.storage.local.get(ids);for(const id of ids){const el=document.getElementById(id);if(v[id]!==undefined){if(el.type==="checkbox")el.checked=v[id];else el.value=v[id];}}}
 document.getElementById("save").addEventListener("click",async()=>{const v={};for(const id of ids){const el=document.getElementById(id);v[id]=el.type==="checkbox"?el.checked:el.value.trim();}await chrome.storage.local.set(v);document.getElementById("status").textContent="Settings saved for this Chrome profile.";chrome.runtime.sendMessage({type:"CONFIG_UPDATED"});});
 load();
