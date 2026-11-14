@@ -29,8 +29,10 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Windows development setup guide.
 - [x] One-click `INSTALL.bat` launcher committed; it prepares the Python virtual environment, installs dependencies, starts the backend and launches the desktop dashboard (not yet tested on the user's PC).
 - [x] Initial unit tests for five-clip job rules (written; execution still needs local verification).
-- [ ] AI prompt generation provider integration.
-- [ ] Persistent ASMR Style Bible and Prompt Studio.
+- [x] AI prompt generation API with OpenAI-compatible provider support and built-in fallback composer.
+- [x] Persistent ASMR Style Bible stored in local SQLite.
+- [x] Prompt Studio UI with five editable fruit prompts and explicit approval/locking.
+- [x] AI Director API tests added (local execution still pending).
 - [ ] Chrome Manifest V3 extension.
 - [ ] Chrome profile/session management.
 - [ ] Saved Flow project URL per profile.
@@ -92,15 +94,15 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 **Exit condition:** User can create a job, inspect five persisted clip tasks, see progress and reopen the app without losing job state. This milestone is scaffolded but not yet verified end-to-end.
 
 ### Milestone 2 — AI Director and Prompt Studio
-- [ ] Define and store the shared ASMR Style Bible.
-- [ ] Define a structured prompt schema.
-- [ ] Implement exactly five distinct fruit concepts per Fruits job.
-- [ ] Add configurable OpenAI-compatible provider settings.
-- [ ] Add manual prompt fallback.
-- [ ] Add prompt review, editing, approval and per-prompt regeneration.
-- [ ] Save the exact approved prompt text and provider metadata.
+- [x] Define and store the shared ASMR Style Bible.
+- [x] Define a structured five-prompt response contract.
+- [x] Implement exactly five distinct fruit prompts per Fruits job.
+- [x] Add configurable OpenAI-compatible provider settings via environment variables.
+- [x] Add built-in prompt composer fallback when no provider is configured.
+- [x] Add prompt review, editing, approval and regeneration before approval.
+- [x] Save exact prompt text and generation source in job events.
 
-**Exit condition:** Five distinct approved fruit prompts are stored and tied to one job.
+**Exit condition:** Five distinct prompts can be generated, edited, approved and persisted per job. Provider-based generation requires the user to configure their own compatible API credentials.
 
 ### Milestone 3 — Chrome extension and browser sessions
 - [ ] Build Manifest V3 extension skeleton.
@@ -179,11 +181,10 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 ## 4. Recommended immediate next actions
 
-1. Run the Windows setup in `docs/DEVELOPMENT_SETUP.md`.
-2. Verify backend tests and fix any dependency/runtime issues.
-3. Exercise create/list/approve job flows from the Electron dashboard.
-4. Add persistent queue controls, proper state transition rules and test coverage.
-5. Continue Milestone 1 until its exit condition is verified; then implement AI Director/Prompt Studio.
+1. Pull the latest repository changes and restart the local backend and desktop app.
+2. Generate, review, edit and approve the five prompts for the existing Tropical Fruits job.
+3. Run backend tests and fix any issues found on Windows.
+4. Continue with Chrome extension/profile management and Flow session connection.
 
 ## 5. Working rules for contributors and AI coding agents
 
