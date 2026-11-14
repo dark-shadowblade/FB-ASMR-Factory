@@ -5,3 +5,12 @@
 .director-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;background:#191d28;border:1px solid #303747;border-radius:9px;margin-bottom:14px}.director-toolbar b,.director-toolbar small{display:block}.director-toolbar b{font-size:11px}.director-toolbar small{font-size:9px;color:#8c96a8;margin-top:4px}.primary.compact{width:auto;min-width:170px;padding:0 16px;height:36px}.prompt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.prompt-card{min-width:0;background:#0d1017;border:1px solid #2a3040;border-radius:9px;padding:12px}.prompt-card>b{display:block;font-size:12px;margin:10px 0}.prompt-card textarea,.style-editor{display:block;width:100%;min-height:150px;resize:vertical;background:#11151e;border:1px solid #303747;border-radius:7px;color:#dce1eb;padding:10px;font:10px/1.55 'DM Sans',sans-serif;outline:none}.prompt-card textarea:focus,.style-editor:focus{border-color:#d9955f}.prompt-save{margin-top:8px;background:#252c3a;border:1px solid #3b4558;color:#e9edf5;border-radius:6px;padding:7px 11px;font-size:9px;cursor:pointer}.prompt-save:disabled{opacity:.35;cursor:not-allowed}.style-panel .muted{margin:-8px 0 12px}.style-editor{min-height:125px;margin-bottom:10px}.approved-note{margin-top:12px;color:#70d5a2;font-size:10px}.saved-label{color:#70d5a2;font-size:9px;margin-left:10px}
 
 .theme-select{width:100%;height:42px;border:1px solid #303747;border-radius:8px;background:#0d1017;color:#f3f4f8;padding:0 12px;font:12px 'DM Sans',sans-serif}.style-hint{font-size:9px;color:#8993a4;margin-top:8px}
+
+/* Five isolated Google Flow account profiles */
+.flow-account-row{height:auto;min-height:78px;padding:10px 0;align-items:flex-start}
+.flow-account-fields{flex:1;min-width:0}
+.flow-account-fields>b{font-size:10px}
+.flow-account-fields .flow-url-input{display:block;width:100%;height:30px;margin:6px 0 4px;padding:0 8px;border:1px solid #303747;border-radius:6px;background:#0d1017;color:#e9edf5;font:9px 'DM Sans',sans-serif;outline:none}
+.flow-account-fields .flow-url-input:focus{border-color:#e89a5e}
+.flow-account-actions{display:flex;gap:5px;align-items:center;padding-top:18px}
+.flow-account-actions .secondary.compact{height:27px;margin:0;padding:0 9px;font-size:8px;min-width:0}
