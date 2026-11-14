@@ -27,6 +27,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] SQLite persistence for jobs, clips and job events.
 - [x] Backend API to create/list/read jobs and approve the five-clip placeholder plan.
 - [x] Windows development setup guide.
+- [x] One-click `INSTALL.bat` launcher committed; it prepares the Python virtual environment, installs dependencies, starts the backend and launches the desktop dashboard (not yet tested on the user's PC).
 - [x] Initial unit tests for five-clip job rules (written; execution still needs local verification).
 - [ ] AI prompt generation provider integration.
 - [ ] Persistent ASMR Style Bible and Prompt Studio.
@@ -45,7 +46,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Initial desktop/backend scaffold committed. The local job-planning path is implemented in code, but it has not yet been run or verified on the user's Windows machine. Flow generation, media processing and Facebook publishing remain unimplemented.
+**Current truthful milestone:** Initial desktop/backend scaffold and one-click Windows development launcher committed. The local job-planning path is implemented in code, but it has not yet been run or verified on the user's Windows machine. Flow generation, media processing and Facebook publishing remain unimplemented.
 
 ## 2. Product rules that must not be lost
 
@@ -70,7 +71,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Add README.
 - [x] Add detailed product specification.
 - [x] Add progress tracker.
-- [ ] Add architecture decision records and development setup guide.
+- [x] Add Windows development setup guide and one-click launcher.
 
 **Exit condition:** Requirements and first milestone are clear enough to implement without guessing.
 
@@ -82,7 +83,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Implement topic input and Fruits-only theme selection.
 - [x] Implement job creation with exactly five placeholder clip records and unique IDs.
 - [x] Implement job listing/detail retrieval and draft-plan approval endpoint.
-- [x] Add Windows setup instructions.
+- [x] Add Windows setup instructions and one-click `INSTALL.bat` launcher.
 - [ ] Install dependencies and run the desktop app on Windows.
 - [ ] Execute backend unit tests and fix any failures.
 - [ ] Add safe job pause/resume/cancel and robust state transition rules.
