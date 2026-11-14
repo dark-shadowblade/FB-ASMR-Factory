@@ -199,7 +199,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
           "GENERATION_COMPLETED": "generation_completed", "GENERATION_ALREADY_ACTIVE": "generating", "GENERATION_ALREADY_COMPLETE": "generation_completed", "DOWNLOAD_STARTED": "downloading",
           "DOWNLOAD_COMPLETED": "downloaded", "DOWNLOAD_FAILED": "failed", "SESSION_REQUIRED": "needs_login", "PROMPT_ALREADY_PRESENT": "blocked_ui",
           "FLOW_UI_UNVERIFIED": "blocked_ui", "DOWNLOAD_SELECTOR_UNVERIFIED": "blocked_ui", "PROJECT_URL_MISMATCH": "blocked_ui", "SETTINGS_UNVERIFIED": "blocked_settings", "PROMPT_INSERT_FAILED": "failed",
-          "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_CANCELLED": "cancelled"
+          "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_RESUMED": "generating", "TASK_CANCELLED": "cancelled"
         }
         with connect() as conn:
             task = conn.execute("SELECT * FROM extension_tasks WHERE task_id=?", (request.taskId,)).fetchone()
