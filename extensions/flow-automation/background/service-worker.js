@@ -74,7 +74,12 @@ async function poll() {
     activeTask = result.task;
     await chrome.storage.local.set({ instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
       activeTask });
-    const tab = await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
+    const projectTabs = await chrome.tabs.query({ url: "https://flow.google.com/project/*" });
+    const expectedPath = activeTask.projectUrl.split("?")[0];
+    const existing = projectTabs.find(tab => (tab.url || "").split("?")[0] === expectedPath);
+    const tab = existing
+      ? await chrome.tabs.update(existing.id, { url: activeTask.projectUrl, active: true })
+      : await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
     activeTabId = tab.id;
     await chrome.storage.local.set({ activeTabId });
     await report("TASK_ACCEPTED", { projectUrl: activeTask.projectUrl });
