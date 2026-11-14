@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
 from app.extension_bridge import create_extension_router
+from app.media_pipeline import MediaPipelineError, assemble_five_clips
 from app import media_pipeline
 
 APP_DIR = Path(__file__).resolve().parent
@@ -132,6 +133,8 @@ def serialize_job(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
     ).fetchall()
     result = dict(job)
     result["clips"] = [dict(row) for row in clips]
+    artifact = conn.execute("SELECT output_path,duration_seconds,width,height,video_codec,audio_codec,created_at FROM media_outputs WHERE job_id=?", (job_id,)).fetchone()
+    result["final_video"] = dict(artifact) if artifact else None
     return result
 
 
@@ -177,6 +180,63 @@ def create_job(request: CreateJobRequest) -> dict[str, Any]:
 def get_job(job_id: str) -> dict[str, Any]:
     with connect() as conn:
         return {"job": serialize_job(conn, job_id)}
+
+@app.post("/api/v1/jobs/{job_id}/assemble")
+def assemble_job(job_id: str) -> dict[str, Any]:
+    """Assemble the five browser-downloaded clips after all downloads are confirmed."""
+    with connect() as conn:
+        job = conn.execute("SELECT topic,status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        existing = conn.execute("SELECT output_path FROM media_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if existing and Path(existing["output_path"]).is_file():
+            return {"job": serialize_job(conn, job_id), "already_assembled": True}
+
+        clips = conn.execute(
+            """SELECT c.id,c.status,c.clip_order,t.download_path,t.status AS task_status
+               FROM clips c LEFT JOIN extension_tasks t ON t.clip_id=c.id
+               WHERE c.job_id=? ORDER BY c.clip_order""", (job_id,)
+        ).fetchall()
+        if len(clips) != 5:
+            raise HTTPException(status_code=409, detail="Exactly five clips are required")
+        pending = [str(row["clip_order"]) for row in clips
+                   if row["status"] != "downloaded" or row["task_status"] != "downloaded"]
+        if pending:
+            raise HTTPException(status_code=409, detail="Five completed downloads are required; clips still pending: " + ", ".join(pending))
+
+        clip_paths = []
+        for row in clips:
+            raw_path = (row["download_path"] or "").strip()
+            if not raw_path:
+                raise HTTPException(status_code=409, detail=f"Clip {row['clip_order']} has no recorded download path")
+            path = Path(raw_path).expanduser()
+            if not path.is_absolute() or not path.is_file():
+                raise HTTPException(status_code=409, detail=f"Downloaded file for clip {row['clip_order']} is not accessible: {raw_path}")
+            clip_paths.append(path)
+
+        output_dir = DATA_DIR / "jobs" / job_id
+        output_path = output_dir / (safe_topic_slug(job["topic"]) + "-asmr.mp4")
+        try:
+            result = assemble_five_clips(
+                clip_paths, output_path,
+                ffmpeg=os.environ.get("ASMR_FFMPEG", "ffmpeg"),
+                ffprobe=os.environ.get("ASMR_FFPROBE", "ffprobe"),
+            )
+        except MediaPipelineError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        conn.execute(
+            """INSERT INTO media_outputs(job_id,output_path,duration_seconds,width,height,video_codec,audio_codec,created_at)
+               VALUES(?,?,?,?,?,?,?,?)
+               ON CONFLICT(job_id) DO UPDATE SET output_path=excluded.output_path,
+               duration_seconds=excluded.duration_seconds,width=excluded.width,height=excluded.height,
+               video_codec=excluded.video_codec,audio_codec=excluded.audio_codec,created_at=excluded.created_at""",
+            (job_id, result["output"], result["duration_seconds"], result["width"], result["height"],
+             result["video_codec"], result["audio_codec"], utc_now()),
+        )
+        conn.execute("UPDATE jobs SET status='assembled',updated_at=? WHERE id=?", (utc_now(), job_id))
+        conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                     (job_id, "Five validated Flow clips assembled into " + result["output"], utc_now()))
+        return {"job": serialize_job(conn, job_id), "already_assembled": False}
 
 
 @app.post("/api/v1/jobs/{job_id}/approve")
