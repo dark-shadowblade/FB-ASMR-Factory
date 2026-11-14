@@ -60,7 +60,8 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
-- [ ] Windows installer and end-to-end tests.
+- [x] GitHub Actions Windows installer workflow built and uploaded an installer artifact on the automatic-production integration commit; a rebuild containing the latest metadata and duration-validation changes is still running.
+- [ ] Full five-account end-to-end test on the user's Windows PC.
 
 **Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search/playback UI and a full five-account end-to-end test remain outstanding.
 
