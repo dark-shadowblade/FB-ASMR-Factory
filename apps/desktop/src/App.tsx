@@ -54,6 +54,8 @@ export default function App() {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiKeySaved, setAiKeySaved] = useState(false);
   const [savingAi, setSavingAi] = useState(false);
+  const [verifyingAi, setVerifyingAi] = useState(false);
+  const [aiVerifyMessage, setAiVerifyMessage] = useState("");
   const [styleBible, setStyleBible] = useState("");
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus>({ configured: false });
   const [facebookAccounts, setFacebookAccounts] = useState<FacebookAccount[]>([]);
@@ -374,6 +376,23 @@ export default function App() {
     finally { setPublishing(false); }
   }
 
+  async function verifyAiProvider() {
+    setVerifyingAi(true);
+    setAiVerifyMessage("");
+    try {
+      const response = await fetch(API + "/settings/ai/verify", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "AI provider verification failed");
+      setAiVerifyMessage("✓ " + data.message + " (" + data.model + ")");
+      setAiConfigured(true);
+      setNotice("AI provider connection verified successfully.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI provider verification failed.";
+      setAiVerifyMessage("× " + message);
+      setNotice(message);
+    } finally { setVerifyingAi(false); }
+  }
+
   async function saveAiProvider() {
     setSavingAi(true);
     try {
@@ -499,12 +518,12 @@ export default function App() {
           <div className="ai-account-panel">
             <div className="ai-account-heading"><div><b>AI Provider Account</b><small>Connect Gemini when you're ready. Your key is stored in the computer's secure credential vault.</small></div><span className={aiKeySaved ? "ai-status connected" : "ai-status"}>{aiKeySaved ? "KEY SAVED" : "NOT CONNECTED"}</span></div>
             <div className="ai-account-grid">
-              <label>PROVIDER<select value={aiProvider} onChange={e=>{setAiProvider(e.target.value);setAiBaseUrl(e.target.value==="gemini"?"https://generativelanguage.googleapis.com/v1beta/openai":"https://api.openai.com/v1");setAiModel(e.target.value==="gemini"?"gemini-2.0-flash":"gpt-4o-mini");}}><option value="gemini">Google Gemini</option><option value="openai">OpenAI-compatible</option></select></label>
+              <label>PROVIDER<select value={aiProvider} onChange={e=>{setAiProvider(e.target.value);setAiBaseUrl(e.target.value==="gemini"?"https://generativelanguage.googleapis.com/v1beta/openai":"https://api.openai.com/v1");setAiModel(e.target.value==="gemini"?"gemini-2.0-flash":"gpt-4o-mini");}}><option value="gemini">Google Gemini</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
               <label>MODEL<input value={aiModel} onChange={e=>setAiModel(e.target.value)} placeholder="Model name"/></label>
               <label className="ai-key-field">API KEY<input type="password" autoComplete="off" value={aiApiKey} onChange={e=>setAiApiKey(e.target.value)} placeholder={aiKeySaved ? "Saved securely · enter to replace" : "Paste API key later"}/></label>
             </div>
             <label className="ai-url-label">API BASE URL<input value={aiBaseUrl} onChange={e=>setAiBaseUrl(e.target.value)} /></label>
-            <div className="ai-account-footer"><span>{aiConfigured ? "AI generation enabled" : "Built-in prompt and metadata generation stays available without an API key."}</span><button className="secondary compact" onClick={saveAiProvider} disabled={savingAi || !aiModel.trim()}>{savingAi ? "Saving…" : "Save AI account"}</button></div>
+            <div className="ai-account-footer"><span>{aiConfigured ? "AI generation enabled" : "Built-in prompt and metadata generation stays available without an API key."}</span><div className="ai-account-buttons"><button className="secondary compact" onClick={saveAiProvider} disabled={savingAi || !aiModel.trim()}>{savingAi ? "Saving…" : "Save AI account"}</button><button className="primary compact" onClick={verifyAiProvider} disabled={verifyingAi || !aiKeySaved}>{verifyingAi ? "Verifying…" : "Verify connection"}</button></div></div>{aiVerifyMessage && <div className={aiVerifyMessage.startsWith("✓") ? "ai-verify-message success" : "ai-verify-message error"}>{aiVerifyMessage}</div>}
           </div>
 
           <div className="extension-pairing">
