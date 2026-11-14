@@ -254,6 +254,104 @@
     if (chrome.runtime.lastError || !response?.task) return;
     execute(response.task);
   });
+
+  // Read-only DOM diagnostic. It never clicks controls, changes settings or reads prompt contents.
+  function diagnosticSelector(el) {
+    const unique = selector => {
+      try { return document.querySelectorAll(selector).length === 1 && document.querySelector(selector) === el; }
+      catch (_) { return false; }
+    };
+    if (el.id) {
+      const selector = "#" + CSS.escape(el.id);
+      if (unique(selector)) return { selector, confidence: "high", basis: "unique id" };
+    }
+    for (const attr of ["data-testid", "data-test-id", "aria-label", "placeholder", "name", "title"]) {
+      const value = el.getAttribute(attr);
+      if (!value) continue;
+      const selector = el.tagName.toLowerCase() + "[" + attr + "=\"" + CSS.escape(value) + "\"]";
+      if (unique(selector)) return { selector, confidence: attr.startsWith("data-") || attr === "id" ? "high" : "medium", basis: "unique " + attr };
+    }
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement) {
+      let part = node.tagName.toLowerCase();
+      if (node.id) {
+        part += "#" + CSS.escape(node.id);
+        parts.unshift(part);
+        break;
+      }
+      const parent = node.parentElement;
+      if (parent) {
+        const siblings = [...parent.children].filter(x => x.tagName === node.tagName);
+        if (siblings.length > 1) part += ":nth-of-type(" + (siblings.indexOf(node) + 1) + ")";
+      }
+      parts.unshift(part);
+      const candidate = parts.join(" > ");
+      if (unique(candidate)) return { selector: candidate, confidence: "low", basis: "structural path; may change with UI updates" };
+      node = parent;
+    }
+    return { selector: parts.join(" > "), confidence: "low", basis: "structural path; verify manually" };
+  }
+  function diagnosticElement(el) {
+    const rect = el.getBoundingClientRect();
+    const selector = diagnosticSelector(el);
+    return {
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute("role") || "",
+      type: el.getAttribute("type") || "",
+      label: labelOf(el).replace(/\\s+/g, " ").trim().slice(0, 180),
+      placeholder: el.getAttribute("placeholder") || "",
+      ariaLabel: el.getAttribute("aria-label") || "",
+      disabled: Boolean(el.disabled) || el.getAttribute("aria-disabled") === "true",
+      contentEditable: Boolean(el.isContentEditable),
+      visible: visible(el),
+      bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+      selector: selector.selector,
+      selectorConfidence: selector.confidence,
+      selectorBasis: selector.basis
+    };
+  }
+  function runDomDiagnostic() {
+    const visibleElements = selector => [...document.querySelectorAll(selector)].filter(visible);
+    const promptNodes = visibleElements('textarea, input, [contenteditable="true"], [role="textbox"]');
+    const buttonNodes = visibleElements('button, [role="button"]');
+    const settingNodes = visibleElements('select, [role="combobox"], [role="listbox"], [role="option"], [role="menuitem"], button, [role="button"]');
+    const videoNodes = visibleElements("video");
+    const promptCandidates = promptNodes.map(diagnosticElement);
+    const buttonCandidates = buttonNodes.map(diagnosticElement);
+    const downloadCandidates = buttonCandidates.filter(x => /download|save|export/i.test(x.label));
+    const settingCandidates = settingNodes.map(diagnosticElement).filter(x => /model|veo|quality|resolution|720|1080|duration|seconds|aspect|ratio|vertical|portrait|landscape|8s/i.test(x.label));
+    return {
+      schemaVersion: 1,
+      capturedAt: new Date().toISOString(),
+      page: { url: location.href, title: document.title, hostname: location.hostname, readyState: document.readyState },
+      safety: { readOnly: true, clickedAnything: false, changedAnything: false, promptTextCaptured: false },
+      counts: { prompts: promptCandidates.length, buttons: buttonCandidates.length, settings: settingCandidates.length, videos: videoNodes.length },
+      promptCandidates,
+      generateCandidates: buttonCandidates.filter(x => /generate|create|submit|make video/i.test(x.label)),
+      downloadCandidates,
+      settingCandidates,
+      otherButtons: buttonCandidates.filter(x => !/generate|create|submit|make video|download|save|export/i.test(x.label)).slice(0, 100),
+      videos: videoNodes.map(v => ({
+        selector: diagnosticSelector(v).selector,
+        readyState: v.readyState,
+        durationSeconds: Number.isFinite(v.duration) ? v.duration : null,
+        hasCurrentSource: Boolean(v.currentSrc),
+        sourceProtocol: v.currentSrc ? (() => { try { return new URL(v.currentSrc).protocol; } catch (_) { return "unknown"; } })() : ""
+      }))
+    };
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type !== "RUN_DOM_DIAGNOSTIC") return false;
+    if (location.hostname !== "flow.google.com") {
+      sendResponse({ ok: false, error: "Active tab is not Google Flow." });
+      return false;
+    }
+    try { sendResponse({ ok: true, report: runDomDiagnostic() }); }
+    catch (error) { sendResponse({ ok: false, error: String(error).slice(0, 300) }); }
+    return false;
+  });
   chrome.runtime.onMessage.addListener(message => {
     if (!currentTask) return;
     if (message?.type === "TASK_ASSIGNED" && message.task) execute(message.task);
