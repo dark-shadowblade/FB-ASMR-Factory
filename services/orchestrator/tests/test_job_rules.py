@@ -33,8 +33,10 @@ class JobRulesTests(unittest.TestCase):
             status_code = 200
             def json(self):
                 return {"choices": [{"message": {"content": "OK"}}]}
-        with patch.object(main_module.keyring, "get_password", return_value="test-secret"), \\
-             patch.object(main_module.httpx, "post", return_value=FakeResponse()) as request:
+        with (
+            patch.object(main_module.keyring, "get_password", return_value="test-secret"),
+            patch.object(main_module.httpx, "post", return_value=FakeResponse()) as request,
+        ):
             response = self.client.post("/api/v1/settings/ai/verify")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["verified"])
@@ -47,8 +49,10 @@ class JobRulesTests(unittest.TestCase):
             status_code = 401
             def json(self):
                 return {"error": {"message": "Invalid API key"}}
-        with patch.object(main_module.keyring, "get_password", return_value="bad-secret"), \\
-             patch.object(main_module.httpx, "post", return_value=FakeResponse()):
+        with (
+            patch.object(main_module.keyring, "get_password", return_value="bad-secret"),
+            patch.object(main_module.httpx, "post", return_value=FakeResponse()),
+        ):
             response = self.client.post("/api/v1/settings/ai/verify")
         self.assertEqual(response.status_code, 502)
         self.assertIn("Invalid API key", response.json()["detail"])
