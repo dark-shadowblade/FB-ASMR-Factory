@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 type Clip = { id: string; subject: string; prompt: string; status: string; order: number };
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[] };
+type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean };
 
 const API = "http://127.0.0.1:8765/api/v1";
 const THEMES = [
@@ -30,6 +31,7 @@ export default function App() {
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
@@ -46,6 +48,8 @@ export default function App() {
       const response = await fetch(`${API}/jobs`);
       const data = await response.json();
       setJobs(data.jobs ?? []);
+      const profilesResponse = await fetch(`${API}/flow/profiles`);
+      if (profilesResponse.ok) { const profilesData = await profilesResponse.json(); setFlowProfiles(profilesData.profiles ?? []); }
       if (selected) {
         const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
         if (updated) setSelected(updated);
@@ -56,6 +60,31 @@ export default function App() {
   }
 
   useEffect(() => { refresh(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+
+  async function saveFlowProfile(profile: FlowProfile) {
+    try {
+      const response = await fetch(`${API}/flow/profiles/${profile.profile_id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: profile.display_name, project_url: profile.project_url })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save Flow account");
+      setNotice(profile.display_name + " project URL saved.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Flow account."); }
+  }
+
+  async function openFlowProfile(profile: FlowProfile) {
+    try {
+      const response = await fetch(`${API}/flow/profiles/${profile.profile_id}/open`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not open Chrome profile");
+      setNotice(data.profile.login_required
+        ? profile.display_name + " opened. Sign in to Google once in that Chrome window; the session will be reused."
+        : profile.display_name + " opened its saved Google Flow project.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open Chrome profile."); }
+  }
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
@@ -173,8 +202,19 @@ export default function App() {
         <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">0 / 5 READY</span></div>
           <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
-          {Array.from({length:5},(_,i)=>i+1).map((name,i)=><div className="session-row" key={name}><div className="session-number">{i+1}</div><div><b>Browser profile {i+1}</b><small>Not configured</small></div><span className="pending">Not connected</span></div>)}
-          <div className="session-foot">Account setup will be added in a later milestone.</div>
+          {flowProfiles.map((profile,i)=><div className="session-row flow-account-row" key={profile.profile_id}>
+            <div className="session-number">{i+1}</div>
+            <div className="flow-account-fields">
+              <b>{profile.display_name}</b>
+              <input className="flow-url-input" value={profile.project_url} onChange={e=>setFlowProfiles(current=>current.map(p=>p.profile_id===profile.profile_id?{...p,project_url:e.target.value}:p))} placeholder="Paste this account's Flow project URL" />
+              <small>{profile.browser_open ? "Chrome profile running" : profile.configured ? "Project saved · Chrome closed" : "Not configured"}</small>
+            </div>
+            <div className="flow-account-actions">
+              <button className="secondary compact" onClick={()=>saveFlowProfile(profile)} disabled={!profile.project_url.trim()}>Save</button>
+              <button className="secondary compact" onClick={()=>openFlowProfile(profile)} disabled={!profile.configured && !profile.project_url.trim()}>Open</button>
+            </div>
+          </div>)}
+          <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
         </section>
       </div>
 
