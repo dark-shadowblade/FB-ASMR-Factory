@@ -66,7 +66,7 @@
     } catch (_) { return ""; }
   }
   function autoSelectedText(expected) {
-    const wanted = String(expected || "").toLowerCase().replace(/\\s+/g, "");
+    const wanted = String(expected || "").toLowerCase().replace(/\s+/g, "");
     if (!wanted) return "";
     const nodes = [
       ...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"],input:checked'),
@@ -74,7 +74,7 @@
     ];
     const matches = [...new Set(nodes)].filter(el => {
       const text = [el.getAttribute?.("aria-label"), el.getAttribute?.("aria-valuetext"),
-        el.value, el.innerText, el.textContent].filter(Boolean).join(" ").toLowerCase().replace(/\\s+/g, "");
+        el.value, el.innerText, el.textContent].filter(Boolean).join(" ").toLowerCase().replace(/\s+/g, "");
       return text.includes(wanted);
     });
     return matches.length === 1
