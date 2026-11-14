@@ -240,6 +240,12 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             download = str(request.payload.get("filename", ""))[:1000] if request.type == "DOWNLOAD_COMPLETED" else task["download_path"]
             conn.execute("UPDATE extension_tasks SET status=?,updated_at=?,last_error=COALESCE(?,last_error),download_path=? WHERE task_id=?",
                          (status, now(), error, download, request.taskId))
+            if request.type == "DOWNLOAD_COMPLETED":
+                conn.execute("UPDATE clips SET status='downloaded' WHERE id=? AND job_id=?",
+                             (request.clipId, request.jobId))
+            elif request.type in ("DOWNLOAD_FAILED", "TASK_FAILED", "PROMPT_INSERT_FAILED"):
+                conn.execute("UPDATE clips SET status='failed' WHERE id=? AND job_id=?",
+                             (request.clipId, request.jobId))
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                          (request.jobId, f"Flow {request.profileId}: {request.type}", now()))
             return {"accepted": True, "duplicate": False, "status": status}
