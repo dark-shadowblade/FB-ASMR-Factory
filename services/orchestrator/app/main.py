@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
+from app.extension_bridge import create_extension_router
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).resolve()
@@ -23,6 +24,7 @@ DB_PATH = DATA_DIR / "asmr_factory.sqlite3"
 FLOW_MANAGER = FlowProfileManager(DATA_DIR / "chrome-profiles")
 
 app = FastAPI(title="ASMR Factory Local Orchestrator", version="0.1.0")
+app.include_router(create_extension_router(DB_PATH, DATA_DIR))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "file://"],
