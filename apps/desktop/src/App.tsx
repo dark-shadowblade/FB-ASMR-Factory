@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 type Clip = { id: string; subject: string; prompt: string; status: string; order: number };
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[] };
 type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean };
+type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
 const THEMES = [
@@ -32,6 +33,8 @@ export default function App() {
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
+  const [flowAutomation, setFlowAutomation] = useState<FlowAutomationStatus>({ profiles: [], registered_count: 0, tasks: [] });
+  const [dispatching, setDispatching] = useState(false);
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
@@ -50,6 +53,8 @@ export default function App() {
       setJobs(data.jobs ?? []);
       const profilesResponse = await fetch(`${API}/flow/profiles`);
       if (profilesResponse.ok) { const profilesData = await profilesResponse.json(); setFlowProfiles(profilesData.profiles ?? []); }
+      const automationResponse = await fetch(`${API}/flow/automation/status`);
+      if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
       if (selected) {
         const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
         if (updated) setSelected(updated);
@@ -140,6 +145,19 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve prompts."); }
   }
 
+  async function dispatchFlowJob(job: Job) {
+    setDispatching(true);
+    try {
+      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
+      setNotice(`Dispatched ${data.dispatched} clips across five independent Flow accounts. The extension workers will pick them up.`);
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not dispatch Flow tasks.");
+    } finally { setDispatching(false); }
+  }
+
   async function saveStyleBible() {
     try {
       const response = await fetch(API + "/style-bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: styleBible }) });
@@ -200,14 +218,14 @@ export default function App() {
         </section>
 
         <section className="panel session-panel">
-          <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">0 / 5 READY</span></div>
+          <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
           <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
           {flowProfiles.map((profile,i)=><div className="session-row flow-account-row" key={profile.profile_id}>
             <div className="session-number">{i+1}</div>
             <div className="flow-account-fields">
               <b>{profile.display_name}</b>
               <input className="flow-url-input" value={profile.project_url} onChange={e=>setFlowProfiles(current=>current.map(p=>p.profile_id===profile.profile_id?{...p,project_url:e.target.value}:p))} placeholder="Paste this account's Flow project URL" />
-              <small>{profile.browser_open ? "Chrome profile running" : profile.configured ? "Project saved · Chrome closed" : "Not configured"}</small>
+              <small>{flowAutomation.profiles.find(p=>p.profile_id===profile.profile_id)?.registered ? "Extension connected" : profile.browser_open ? "Chrome open · extension not connected" : profile.configured ? "Project saved · Chrome closed" : "Not configured"}</small>
             </div>
             <div className="flow-account-actions">
               <button className="secondary compact" onClick={()=>saveFlowProfile(profile)} disabled={!profile.project_url.trim()}>Save</button>
@@ -229,7 +247,7 @@ export default function App() {
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
         {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
-        {active.status==="prompts_approved" && <div className="approved-note">✓ Prompt pack approved. Google Flow generation is the next milestone.</div>}
+        {active.status==="prompts_approved" && <div className="approved-note">✓ Prompt pack approved.</div><div className="dispatch-toolbar"><div><b>Google Flow task queue</b><small>{flowAutomation.registered_count}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div><button className="primary compact" disabled={dispatching || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>dispatchFlowJob(active)}>{dispatching ? "Dispatching…" : "Start five Flow tasks"}</button></div>{flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small></div>)}</div>}}
       </section>}
       <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
 
