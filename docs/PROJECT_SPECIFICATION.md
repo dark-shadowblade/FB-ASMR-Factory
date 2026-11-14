@@ -18,29 +18,17 @@ The system must not pretend that a generation, download or upload succeeded mere
 ## 2. Release scope and theme rules
 
 ### 2.1 First release
-The first end-to-end release implements **Fruits / fruit-cutting ASMR only**.
+The first production system supports **all seven ASMR styles**. Every selected style produces exactly five coordinated but distinct subject prompts; the five clips in a job always belong to that selected style.
 
-For each Fruits job:
-- Create exactly five distinct fruit subjects.
-- Create one prompt per subject.
-- Assign each prompt to one separate Flow session when five sessions are configured.
-- Generate five clips, each targeting eight seconds.
-- Compile the five clips into one video of approximately 40 seconds.
-- Save all inputs, outputs, prompts, statuses and logs under one job identity.
+1. **Fruits:** Watermelon, Kiwi, Orange, Pineapple, Strawberry.
+2. **Soaps:** Rose soap, Transparent soap, Rainbow soap, Marble soap, Glitter soap.
+3. **Clay:** Red clay, Blue clay, Rainbow clay, Pastel clay, Metallic clay.
+4. **Kinetic Sand:** Golden, Blue, Pink, Rainbow and Layered kinetic sand.
+5. **Slime:** Clear, Crunchy, Glossy, Glitter and Fluffy slime.
+6. **Satisfying Objects / Materials:** Jelly, Wax, Soft foam, Coloured blocks and Sensory material.
+7. **Mixed ASMR:** Layered sensory block, Jelly-filled object, Soft wax object, Foam-and-clay object and Multi-texture sensory object.
 
-The fruit subjects must be distinct within the job. The prompt generator must not return five near-identical prompts with only a fruit name swapped; each should have a meaningful subject-specific visual and cutting concept while respecting the common Style Bible.
-
-### 2.2 Reserved theme roadmap
-The interface and data model may reserve seven theme slots:
-1. Fruits
-2. Soaps
-3. Clay
-4. Kinetic Sand
-5. Slime
-6. Satisfying Objects / Materials
-7. Mixed ASMR
-
-Only Fruits is active for the initial generation workflow. Other themes must be marked planned/disabled until explicitly implemented and tested. Do not mix themes inside a Fruits job.
+Each job creates five different subjects and one prompt per subject. Prompts must be materially distinct, not generic duplicates with only a noun swapped. A shared persistent Style Bible maintains camera, lighting, background, pacing and audio identity, while the subject and material-specific action change for each clip. Each clip targets eight seconds; five clips produce an approximately 40-second compilation. Do not mix styles within one job.
 
 ## 3. User journeys
 
@@ -48,7 +36,7 @@ Only Fruits is active for the initial generation workflow. Other themes must be 
 1. User opens the Windows desktop app.
 2. Dashboard displays browser session readiness, recent jobs and library summary.
 3. User enters a topic/theme instruction.
-4. User selects Fruits.
+4. User selects one of the seven ASMR styles.
 5. App requests five distinct fruit concepts/prompts from the configured prompt provider, or opens manual prompt entry if no provider is configured.
 6. AI Director applies the shared ASMR Style Bible and returns structured prompts.
 7. Prompt Studio allows review/edit/approval before generation.
@@ -94,7 +82,7 @@ If API permissions or media publishing support are unavailable, provide a manual
 
 ### FR-02 — Topic and prompt planning
 - Accept a topic or theme instruction.
-- Fruits mode creates exactly five fruit subjects/prompts.
+- Every selected style creates exactly five style-specific subjects/prompts.
 - Prompt records include job ID, subject, prompt text, order, assigned session, approval state and generation status.
 - Provide edit, regenerate-individual-prompt and approve controls.
 - Store the exact approved prompt used for each generation.
@@ -331,7 +319,7 @@ Use sanitized topic slugs and unique job IDs. The database remains the source of
 
 The first release is considered functionally ready only when all of the following are demonstrated:
 
-1. User can create a Fruits job from the desktop dashboard.
+1. User can create a selected-style job from the desktop dashboard.
 2. Exactly five distinct fruit prompts are produced and saved.
 3. Each prompt is assigned to the intended independent Flow session.
 4. Flow defaults are set/verified as Veo 3.1 Lite, 720p and 8 seconds when those options are available to the account.
