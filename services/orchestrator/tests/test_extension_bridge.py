@@ -55,6 +55,7 @@ def test_profile_cannot_poll_another_profiles_task(tmp_path):
     one = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
     two = client.get("/api/v1/extension/next-task?profile_id=flow-2&instance_id=instance-flow-2", headers=headers).json()["task"]
     assert one["taskId"] != two["taskId"]
+    assert client.get("/api/v1/extension/next-task?profile_id=flow-2&instance_id=instance-flow-1", headers=headers).status_code == 409
     assert one["profileId"] == "flow-1"
     assert two["profileId"] == "flow-2"
 
@@ -83,3 +84,30 @@ def test_dispatch_rejects_missing_worker_heartbeat(tmp_path):
     response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
     assert response.status_code == 409
     assert "flow-5" in response.json()["detail"]
+
+
+def test_commands_are_scoped_to_exact_profile_instance_and_task(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task_one = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
+    task_two = client.get("/api/v1/extension/next-task?profile_id=flow-2&instance_id=instance-flow-2", headers=headers).json()["task"]
+    response = client.post(f"/api/v1/extension/tasks/{task_one['taskId']}/command",
+                           headers=headers, json={"command": "PAUSE"})
+    assert response.status_code == 200
+    wrong_instance = client.get(
+        f"/api/v1/extension/commands?profile_id=flow-1&task_id={task_one['taskId']}&instance_id=instance-flow-2",
+        headers=headers,
+    )
+    assert wrong_instance.status_code == 409
+    other_task = client.get(
+        f"/api/v1/extension/commands?profile_id=flow-2&task_id={task_two['taskId']}&instance_id=instance-flow-2",
+        headers=headers,
+    )
+    assert other_task.status_code == 200
+    assert other_task.json()["commands"] == []
+    own_task = client.get(
+        f"/api/v1/extension/commands?profile_id=flow-1&task_id={task_one['taskId']}&instance_id=instance-flow-1",
+        headers=headers,
+    )
+    assert own_task.status_code == 200
+    assert own_task.json()["commands"][0]["command"] == "PAUSE"
