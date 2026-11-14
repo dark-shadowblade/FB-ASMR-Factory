@@ -131,6 +131,38 @@ def test_failed_task_can_be_retried_on_its_live_profile(tmp_path):
     assert next_task["taskId"] == task["taskId"]
 
 
+
+def test_blocked_task_can_be_retried_on_the_same_profile(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    blocked = {
+        "protocolVersion": 1, "messageId": "message-blocked-retry-001",
+        "type": "FLOW_UI_UNVERIFIED", "taskId": task["taskId"],
+        "jobId": task["jobId"], "clipId": task["clipId"],
+        "profileId": "flow-1", "instanceId": "instance-flow-1",
+        "timestamp": "2026-11-14T00:00:00Z",
+        "payload": {"reason": "Selectors need verification"},
+    }
+    event = client.post("/api/v1/extension/events", json=blocked, headers=headers)
+    assert event.status_code == 200
+    assert event.json()["status"] == "blocked_ui"
+
+    retried = client.post(
+        f"/api/v1/extension/tasks/{task['taskId']}/retry",
+        headers=headers, json={},
+    )
+    assert retried.status_code == 200
+    assert retried.json()["profileId"] == "flow-1"
+    next_task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    assert next_task["taskId"] == task["taskId"]
+
 def test_failed_task_can_be_reassigned_to_an_idle_live_profile(tmp_path):
     client, headers, db = make_client(tmp_path)
     client.post("/api/v1/extension/dispatch/job-a", headers=headers)
