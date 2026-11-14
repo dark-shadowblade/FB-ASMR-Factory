@@ -156,8 +156,9 @@ export default function App() {
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
       setTopic("");
       setSelected(data.job);
-      setNotice("Draft " + (THEMES.find(t => t.value === theme)?.label || theme) + " job created with five clip tasks.");
+      setNotice("Job created. Starting the five-account production workflow…");
       await refresh();
+      await startAutomaticProduction(data.job);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
     } finally { setBusy(false); }
@@ -498,22 +499,20 @@ export default function App() {
           <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
-          <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
-          <p className="helper">Creates a saved five-clip plan. Flow settings are checked when the five browser tasks start.</p>
+          <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy || dispatching ? "Starting automated production…" : "▶  Generate Video"}</button>
+          <p className="helper">One click creates the job, generates five prompts, opens profiles 01–05, dispatches generation and continues through download and assembly. First-time extension pairing and verified Flow selectors are still required.</p>
         </section>}
         {activePage === "accounts" && <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
-          <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
+          <p className="muted">Open Google Flow in each dedicated profile once. The extension captures and saves that profile’s project automatically; no URL pasting is needed.</p>
           {flowProfiles.map((profile,i)=><div className="session-row flow-account-row" key={profile.profile_id}>
             <div className="session-number">{i+1}</div>
             <div className="flow-account-fields">
               <b>{profile.display_name}</b>
-              <input className="flow-url-input" value={profile.project_url} onChange={e=>setFlowProfiles(current=>current.map(p=>p.profile_id===profile.profile_id?{...p,project_url:e.target.value}:p))} placeholder="Paste this account's Flow project URL" />
-              <small>{profile.extension_connected ? "Extension connected" : profile.browser_open ? "Chrome open · extension not connected" : profile.configured ? "Project saved · Chrome closed" : "Not configured"}</small>
+              <small>{profile.project_url ? "Flow project detected and saved automatically" : "Waiting for this profile to detect a Flow project"} · {profile.extension_connected ? "Extension connected" : profile.browser_open ? "Browser open · waiting for extension" : "Browser closed"}</small>
             </div>
             <div className="flow-account-actions">
-              <button className="secondary compact" onClick={()=>saveFlowProfile(profile)} disabled={!profile.project_url.trim()}>Save</button>
-              <button className="secondary compact" onClick={()=>openFlowProfile(profile)} disabled={!profile.configured && !profile.project_url.trim()}>Open</button>
+              <button className="secondary compact" onClick={()=>openFlowProfile(profile)} disabled={!profile.configured}>Open browser</button>
             </div>
           </div>)}
           <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
@@ -545,7 +544,7 @@ export default function App() {
           </div>
 
           <div className="extension-pairing">
-            <div><b>Chrome extension bridge</b><small>Paste this token into the extension options in all five profiles. Each profile must use its matching flow-1 … flow-5 ID.</small></div>
+            <div><b>Chrome extension bridge</b><small>Pair the extension once in each dedicated profile using its matching profile ID. After pairing, project detection is automatic.</small></div>
             <input value={bridgeToken} readOnly type="password" aria-label="Extension bridge token" />
             <button className="secondary compact" onClick={copyBridgeToken} disabled={!bridgeToken}>Copy pairing token</button>
           </div>
