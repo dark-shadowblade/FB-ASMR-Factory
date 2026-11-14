@@ -29,14 +29,13 @@ class MediaPipelineTests(unittest.TestCase):
             with self.assertRaises(media_pipeline.MediaPipelineError):
                 media_pipeline.probe_video(text_file)
 
-    def test_probe_requires_audio_and_video_codecs(self):
+    def test_probe_rejects_files_without_a_video_stream(self):
         with tempfile.TemporaryDirectory() as directory:
             clip = Path(directory) / "clip.mp4"
             clip.write_bytes(b"fake")
             invalid = json.dumps({
                 "format": {"duration": "8"},
-                "streams": [{"codec_type": "video", "codec_name": "vp9",
-                             "width": 720, "height": 1280, "r_frame_rate": "30/1"}],
+                "streams": [{"codec_type": "audio", "codec_name": "opus"}],
             })
             with patch.object(media_pipeline, "_run",
                               return_value=CompletedProcess([], 0, invalid, "")):
