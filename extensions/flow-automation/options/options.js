@@ -7,17 +7,46 @@ const diagnosticReport = document.getElementById("diagnosticReport");
 const copyReport = document.getElementById("copyReport");
 let lastDiagnostic = null;
 
+const flowTabSelect = document.getElementById("flowTab");
+async function refreshFlowTabs() {
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const flowTabs = tabs.filter(tab => {
+    try { return new URL(tab.url || "").hostname === "flow.google.com"; } catch (_) { return false; }
+  }).sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  flowTabSelect.replaceChildren();
+  for (const tab of flowTabs) {
+    const option = document.createElement("option");
+    option.value = String(tab.id);
+    let project = "Google Flow";
+    try { project = new URL(tab.url).pathname.split("/").filter(Boolean).slice(-1)[0] || project; } catch (_) {}
+    option.textContent = (tab.title || "Google Flow") + " · " + project + " · tab " + tab.id;
+    flowTabSelect.append(option);
+  }
+  if (!flowTabs.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No Google Flow tabs found in this window";
+    flowTabSelect.append(option);
+  }
+  return flowTabs;
+}
+document.getElementById("refreshTabs").addEventListener("click", async () => {
+  try {
+    const tabs = await refreshFlowTabs();
+    diagnosticStatus.textContent = tabs.length ? tabs.length + " Google Flow tab(s) found." : "Open a Google Flow project in this Chrome profile first.";
+  } catch (error) { diagnosticStatus.textContent = String(error?.message || error); }
+});
 document.getElementById("scan").addEventListener("click", async () => {
-  diagnosticStatus.textContent = "Looking for the active Google Flow tab…";
+  diagnosticStatus.textContent = "Scanning selected Google Flow tab…";
   diagnosticReport.textContent = "Scanning…";
   copyReport.disabled = true;
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    let isFlowTab = false;
-    try { isFlowTab = new URL(tab?.url || "").hostname === "flow.google.com"; } catch (_) {}
-    if (!tab?.id || !isFlowTab) {
-      throw new Error("Open the target Google Flow project in this Chrome profile and make it the active tab.");
+    const tabId = Number(flowTabSelect.value);
+    if (!Number.isInteger(tabId)) throw new Error("Find Flow tabs and select a project first.");
+    const tab = await chrome.tabs.get(tabId);
+    const activeUrl = new URL(tab.url || "");
+    if (activeUrl.protocol !== "https:" || activeUrl.hostname !== "flow.google.com") {
+      throw new Error("The selected tab is no longer a Google Flow page. Refresh the tab list.");
     }
     const response = await chrome.tabs.sendMessage(tab.id, { type: "RUN_DOM_DIAGNOSTIC" });
     if (!response?.ok) throw new Error(response?.error || "The Flow diagnostic did not return a report.");
@@ -54,3 +83,5 @@ copyReport.addEventListener("click", async () => {
     copyReport.disabled = false;
   }
 })();
+
+refreshFlowTabs().catch(error => { diagnosticStatus.textContent = String(error?.message || error); });
