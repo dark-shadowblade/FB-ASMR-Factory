@@ -174,3 +174,16 @@ Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/
 - Availability of Veo 3.1 Lite, 720p and 8-second generation depends on the signed-in account and Flow product availability.
 - Facebook publishing depends on Meta's current Graph API support, Page permissions, app review and token requirements.
 - Scheduler execution requires the computer to be awake and the app/service to be running.
+
+
+## Facebook Page Reels publishing
+
+The desktop app can prepare editable Reel SEO metadata and publish the assembled MP4 to a Facebook **Page** (not a personal profile) through Meta Graph API's Page Reels endpoint. Configure these environment variables for the local orchestrator before launching it:
+
+- `ASMR_META_PAGE_ID`: numeric Facebook Page ID.
+- `ASMR_META_PAGE_ACCESS_TOKEN`: Page access token with `pages_show_list`, `pages_read_engagement` and `pages_manage_posts` permissions, and a Page role/task that allows content creation.
+- `ASMR_META_GRAPH_VERSION`: optional Graph API version; defaults to `v27.0`.
+
+Never commit access tokens to Git or paste them into issue reports. The app does not persist the token in SQLite. The Facebook panel checks the configured Page, lets you edit the title/caption/description/hashtags, uploads the Reel, and polls Meta's processing status. Each job has a publication record; accepted or uncertain uploads are blocked from automatic resubmission to reduce duplicate posts. If an upload becomes uncertain, inspect the Page in Facebook before taking manual action.
+
+Meta's Page Reels API uses a start → binary upload → finish flow. Publishing availability and permissions are controlled by Meta and may require app review/advanced access for the app being used. Official reference: https://developers.facebook.com/docs/graph-api/reference/page/video_reels/ .
