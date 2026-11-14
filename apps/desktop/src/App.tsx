@@ -78,8 +78,6 @@ export default function App() {
         }
         setFlowProfiles((profilesData.profiles ?? []).map((p: FlowProfile) => ({ ...p, extension_connected: extensionByProfile[p.profile_id] || false })));
       }
-      const fbResponse = await fetch(`${API}/facebook/status`);
-      if (fbResponse.ok) setFacebookStatus(await fbResponse.json());
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
       if (selected) {
@@ -91,7 +89,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refresh(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { refresh(); fetch(API + "/facebook/status").then(r=>r.json()).then(setFacebookStatus).catch(()=>{}); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
 
   async function saveFlowProfile(profile: FlowProfile) {
     try {
