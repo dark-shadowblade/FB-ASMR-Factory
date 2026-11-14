@@ -53,6 +53,8 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 ## 2. Product rules that must not be lost
 
+- Weekly rotation: Monday Fruits; Tuesday Soaps; Wednesday Clay; Thursday Kinetic Sand; Friday Slime; Saturday Satisfying Objects / Materials; Sunday Mixed ASMR.
+
 - All seven styles are active: Fruits, Soaps, Clay, Kinetic Sand, Slime, Satisfying Objects / Materials and Mixed ASMR.
 - Every selected style creates exactly **five distinct subject prompts**, all within that style.
 - Weekly rotation: Monday Fruits; Tuesday Soaps; Wednesday Clay; Thursday Kinetic Sand; Friday Slime; Saturday Satisfying Objects / Materials; Sunday Mixed ASMR.
@@ -84,8 +86,8 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Create initial Python FastAPI local service.
 - [x] Add SQLite persistence for jobs, clips and job events.
 - [x] Implement initial dashboard and navigation shell.
-- [x] Implement topic input and Fruits-only theme selection.
-- [x] Implement job creation with exactly five placeholder clip records and unique IDs.
+- [x] Implement topic input and seven-style theme selection.
+- [x] Implement job creation with exactly five style-specific clip records and unique IDs.
 - [x] Implement job listing/detail retrieval and draft-plan approval endpoint.
 - [x] Add Windows setup instructions and one-click `INSTALL.bat` launcher.
 - [ ] Install dependencies and run the desktop app on Windows.
@@ -98,7 +100,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 ### Milestone 2 — AI Director and Prompt Studio
 - [x] Define and store the shared ASMR Style Bible.
 - [x] Define a structured five-prompt response contract.
-- [x] Implement exactly five distinct fruit prompts per Fruits job.
+- [x] Implement exactly five distinct subject prompts for each of the seven styles.
 - [x] Add configurable OpenAI-compatible provider settings via environment variables.
 - [x] Add built-in prompt composer fallback when no provider is configured.
 - [x] Add prompt review, editing, approval and regeneration before approval.
@@ -190,9 +192,9 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 ## 5. Working rules for contributors and AI coding agents
 
-- Read this file and `docs/PROJECT_SPECIFICATION.md` before changing architecture or scope.
-- Preserve the five-fruit / five-clip / eight-second / approximately-40-second first-release rule.
-- Do not implement other ASMR themes in the first generation release.
+- Read this file, `DEVELOPMENT_LOG.md`, `README.md` and `docs/PROJECT_SPECIFICATION.md` before changing architecture or scope.
+- Preserve the seven-style / five-subject-prompts-per-style / eight-second / approximately-40-second production rule.
+- All seven ASMR styles are active; never silently disable or collapse them into Fruits-only.
 - Do not claim a feature is implemented without code and a test or reproducible verification.
 - Do not put API keys, Facebook tokens, Google credentials, browser cookies or personal data in Git.
 - Do not overwrite user data or generated media during retries.
