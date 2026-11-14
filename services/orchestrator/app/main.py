@@ -462,7 +462,10 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
             else:
                 prompts = compose_builtin_prompts(job["topic"], job["theme"], style_bible(conn))
         except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
-            raise HTTPException(status_code=502, detail=f"AI provider failed; existing prompts were not changed: {str(exc)[:200]}")
+            # A provider outage must not strand a one-click production job.
+            prompts = compose_builtin_prompts(job["topic"], job["theme"], style_bible(conn))
+            source = "built-in fallback (AI provider unavailable)"
+            logger.warning("AI prompt provider failed for job %s; using built-in prompts: %s", job_id, str(exc)[:240])
         for item in prompts:
             conn.execute("UPDATE clips SET prompt=?,status='prompt_ready' WHERE job_id=? AND subject=?",
                          (item["prompt"], job_id, item["subject"]))
