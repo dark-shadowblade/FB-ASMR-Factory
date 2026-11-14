@@ -139,16 +139,23 @@ chrome.downloads.onChanged.addListener(async delta => {
   if (!activeTask || !activeDownloadIds.has(delta.id) || !delta.state) return;
   if (delta.state.current === "interrupted") {
     await report("DOWNLOAD_FAILED", { downloadId: delta.id, error: "Browser download interrupted" });
+    await chrome.storage.local.remove("downloadRequestedTaskId");
     activeDownloadIds.delete(delta.id);
     activeTask = null;
     activeTabId = null;
     activeDownloadIds.clear();
-    await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds"]);
+    await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
     return;
   }
   if (delta.state.current !== "complete") return;
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (!item) return;
+  const isVideo = /\\.(mp4|webm|mov|m4v)$/i.test(item.filename || "") || /video\\//i.test(item.mime || "");
+  if (!isVideo) {
+    activeDownloadIds.delete(delta.id);
+    await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
+    return;
+  }
   await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
   activeDownloadIds.delete(delta.id);
   activeTask = null;
