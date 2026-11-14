@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -491,6 +492,18 @@ def get_job_output(job_id: str) -> dict[str, Any]:
         output = dict(row)
         output["metadata"] = json.loads(output.pop("metadata_json"))
         return {"output": output}
+
+
+@app.get("/api/v1/jobs/{job_id}/output/file")
+def download_job_output(job_id: str):
+    with connect() as conn:
+        row = conn.execute("SELECT output_path FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No assembled output exists for this job")
+        path = Path(row["output_path"]).resolve()
+    if not path.is_file() or path.suffix.lower() != ".mp4":
+        raise HTTPException(status_code=404, detail="Assembled MP4 file is missing")
+    return FileResponse(path, media_type="video/mp4", filename=path.name)
 
 
 @app.get("/api/v1/library")
