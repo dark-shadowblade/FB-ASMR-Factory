@@ -49,6 +49,12 @@ Model, quality, duration and aspect-ratio selection are not implemented as verif
 
 ## Protocol
 
+## Project identity and task settings
+
+The extension detects the Google Flow project ID from the signed-in tab URL and stores the most recently detected project in that Chrome profile's local extension storage (`lastFlowProject`). The background worker also records the profile ID, page title and detection timestamp. Project matching uses the Flow project ID rather than a raw URL string, so query parameters or a trailing slash do not make the same project look different. A task is never submitted when its assigned project ID differs from the open project.
+
+Generation settings are read from the assigned task's `settings` object supplied by the desktop/orchestrator bridge: `model`, `resolution`, `durationSeconds`, and optionally `aspectRatio`. The extension does not silently substitute defaults. It verifies those requested values against the configured visible Flow setting selectors and refuses submission if a required value is missing or differs. Each Chrome profile keeps its own selector configuration and saved project detection state.
+
 The worker expects the local API routes:
 
 - `POST /api/v1/extension/register`
