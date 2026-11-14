@@ -44,3 +44,23 @@ test("options page exposes profile, diagnostics and responsive stylesheet", () =
   assert.match(html, /id="scan"/);
   assert.match(html, /href="options.css"/);
 });
+
+test("Flow project identity is persisted and compared by project ID", () => {
+  const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
+  const worker = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/background/service-worker.js"), "utf8");
+  assert.match(content, /function projectIdentity\(url\)/);
+  assert.match(content, /lastFlowProject:/);
+  assert.match(content, /sameProject\(location\.href, task\.projectUrl\)/);
+  assert.match(worker, /function flowProjectIdentity\(url\)/);
+  assert.match(worker, /sameFlowProject\(tab\.url \|\| "", activeTask\.projectUrl\)/);
+  assert.match(worker, /matchesAssignedProject:/);
+});
+
+test("Flow generation settings must come from the assigned desktop task", () => {
+  const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
+  assert.match(content, /requested\.model \|\| ""/);
+  assert.match(content, /requested\.resolution \|\| ""/);
+  assert.match(content, /Number\(requested\.durationSeconds\)/);
+  assert.match(content, /missing model, resolution or duration settings from the desktop app/);
+  assert.doesNotMatch(content, /requested\.model \|\| "Veo 3\.1 Lite"/);
+});
