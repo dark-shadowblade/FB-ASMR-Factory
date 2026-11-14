@@ -246,12 +246,16 @@
       send("PROMPT_INSERT_FAILED", {});
       return;
     }
+    submittedField = configuredField;
+    submissionClicked = true;
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
     lastState = "PROJECT_LOADED";
     startMonitor();
   }
   let downloadRequested = false;
+  let submissionClicked = false;
+  let submittedField = null;
   function requestDownload() {
     if (downloadRequested) return;
     downloadRequested = true;
@@ -286,7 +290,15 @@
       if (state !== lastState) {
         lastState = state;
         if (state === "SESSION_CHECK") send("SESSION_REQUIRED", { url: location.href });
-        if (state === "GENERATING") send("GENERATION_STARTED", {});
+        if (state === "GENERATING") {
+          send("GENERATION_STARTED", {});
+          if (submissionClicked && submittedField && submittedField.isConnected) {
+            setFieldValue(submittedField, "");
+            submittedField = null;
+            submissionClicked = false;
+            send("PROMPT_CLEARED_AFTER_ACCEPTANCE", {});
+          }
+        }
         if (state === "VIDEO_READY") {
           send("GENERATION_COMPLETED", { videoElements: document.querySelectorAll("video").length });
           requestDownload();
