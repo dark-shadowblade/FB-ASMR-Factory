@@ -20,8 +20,15 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(len(job["clips"]), 5)
         self.assertEqual([c["order"] for c in job["clips"]], [1, 2, 3, 4, 5])
 
-    def test_other_themes_are_rejected(self):
-        response = client.post("/api/v1/jobs", json={"topic": "Test", "theme": "slime"})
+    def test_all_seven_themes_create_five_clip_tasks(self):
+        themes = ["fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"]
+        for theme in themes:
+            response = client.post("/api/v1/jobs", json={"topic": "Test " + theme, "theme": theme})
+            self.assertEqual(response.status_code, 200, theme)
+            self.assertEqual(len(response.json()["job"]["clips"]), 5, theme)
+
+    def test_unknown_theme_is_rejected(self):
+        response = client.post("/api/v1/jobs", json={"topic": "Test", "theme": "unknown"})
         self.assertEqual(response.status_code, 422)
 
     def test_blank_topic_is_rejected(self):
@@ -35,9 +42,21 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         job = response.json()["job"]
         self.assertEqual(job["status"], "prompts_ready")
-        self.assertEqual([clip["subject"] for clip in job["clips"]], ["Mango", "Apple", "Kiwi", "Dragon fruit", "Orange"])
+        self.assertEqual([clip["subject"] for clip in job["clips"]], ["Watermelon", "Kiwi", "Orange", "Pineapple", "Strawberry"])
         self.assertTrue(all(len(clip["prompt"]) > 100 for clip in job["clips"]))
         self.assertEqual(len({clip["prompt"] for clip in job["clips"]}), 5)
+
+    def test_every_theme_generates_five_subject_specific_prompts(self):
+        themes = ["fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"]
+        for theme in themes:
+            job = client.post("/api/v1/jobs", json={"topic": "Daily ASMR", "theme": theme}).json()["job"]
+            response = client.post("/api/v1/jobs/" + job["id"] + "/generate-prompts")
+            self.assertEqual(response.status_code, 200, theme)
+            prompts = response.json()["job"]["clips"]
+            self.assertEqual(len(prompts), 5)
+            self.assertEqual(len({p["subject"] for p in prompts}), 5)
+            self.assertEqual(len({p["prompt"] for p in prompts}), 5)
+            self.assertTrue(all(len(p["prompt"]) > 100 for p in prompts))
 
     def test_style_bible_can_be_saved_and_reused(self):
         custom = "Consistent macro camera, warm studio lighting, clean slate board, crisp natural cutting audio, no music or speech."
