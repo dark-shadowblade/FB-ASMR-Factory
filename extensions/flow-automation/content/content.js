@@ -114,7 +114,7 @@
     const text = (document.body?.innerText || "").toLowerCase();
     if (/sign in|choose an account|session expired/.test(text) && location.hostname === "flow.google.com") return "SESSION_CHECK";
     if (/generating|creating video|in progress|queued/.test(text)) return "GENERATING";
-    if (videoReady() || /download video|download/.test(text)) return "VIDEO_READY";
+    if (videoReady()) return "VIDEO_READY";
     return "PROJECT_LOADED";
   }
   function waitForPromptField(resolveField, timeoutMs = 45000) {
@@ -235,8 +235,10 @@
     if (downloadRequested) return;
     downloadRequested = true;
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
+      if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
       if (settings.selectorsVerified !== true || !settings.downloadSelector) {
+        downloadRequested = false;
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
         return;
       }
@@ -364,10 +366,10 @@
       safety: { readOnly: true, clickedAnything: false, changedAnything: false, promptTextCaptured: false },
       counts: { prompts: promptCandidates.length, buttons: buttonCandidates.length, settings: settingCandidates.length, videos: videoNodes.length },
       promptCandidates,
-      generateCandidates: buttonCandidates.filter(x => /generate|create|submit|make video/i.test(x.label)),
+      generateCandidates: buttonCandidates.filter(x => /generate|create|submit|make video|start generation|arrow_forward/i.test(x.label + " " + x.iconText)),
       downloadCandidates,
       settingCandidates,
-      otherButtons: buttonCandidates.filter(x => !/generate|create|submit|make video|download|save|export/i.test(x.label)).slice(0, 100),
+      otherButtons: buttonCandidates.filter(x => !/generate|create|submit|make video|start generation|arrow_forward|download|save|export/i.test(x.label + " " + x.iconText)).slice(0, 100),
       videos: videoNodes.map(v => ({
         selector: diagnosticSelector(v).selector,
         readyState: v.readyState,
