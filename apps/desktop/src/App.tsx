@@ -184,8 +184,8 @@ export default function App() {
   }
 
   async function startAutomaticProduction(job: Job) {
-    if (flowAutomation.registered_count !== 5 || flowProfiles.filter(p=>p.configured).length !== 5) {
-      setNotice("Save all five Flow project URLs and connect all five extension workers first.");
+    if (flowProfiles.filter(p=>p.configured).length !== 5) {
+      setNotice("Save all five Google Flow project URLs first.");
       return;
     }
     if (flowAutomation.tasks.some(t=>t.job_id===job.id)) {
@@ -194,8 +194,39 @@ export default function App() {
     }
     setDispatching(true);
     try {
+      setNotice("Opening Chrome profiles 01–05 and their saved Flow projects…");
+      const opened = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+      const openedData = await opened.json();
+      if (!opened.ok) {
+        const detail = typeof openedData.detail === "string" ? openedData.detail : openedData.detail?.message || "Could not open all five Chrome profiles";
+        throw new Error(detail);
+      }
+      const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
+      if (loginProfiles.length) {
+        setNotice("Chrome 01–05 opened. Sign in to Google in these windows once; waiting for their extensions to connect…");
+      } else {
+        setNotice("Chrome 01–05 opened. Waiting for all five extension workers…");
+      }
+
+      let connected = 0;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const statusResponse = await fetch(API + "/flow/automation/status");
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          setFlowAutomation(statusData);
+          connected = statusData.registered_count || 0;
+          if (connected === 5) break;
+        }
+        if (attempt < 29) await new Promise(resolve => window.setTimeout(resolve, 2000));
+      }
+      if (connected !== 5) {
+        await refresh();
+        throw new Error("All five Chrome windows were opened, but only " + connected + "/5 extension workers connected within 60 seconds. Check that the extension is installed and enabled in profiles 01–05, and complete Google sign-in if requested. Then click Generate Video again.");
+      }
+
       let current = job;
       if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
+        setNotice("All five workers connected. Generating the five unique prompts…");
         const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
         const generatedData = await generated.json();
         if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
@@ -209,11 +240,12 @@ export default function App() {
         current = approvedData.job;
         setSelected(current);
       }
+      setNotice("Dispatching one clip to each of Chrome profiles 01–05…");
       const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
       const dispatchData = await dispatched.json();
       if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
       setSelected(current);
-      setNotice("Automatic production started: five prompts approved and dispatched to five independent Flow accounts.");
+      setNotice("Production started: five Chrome profiles opened, five workers connected, and five prompts dispatched.");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not start automatic production.");
@@ -347,12 +379,12 @@ export default function App() {
         {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
         {["draft","prompts_ready"].includes(active.status) && <div className="dispatch-toolbar">
           <div><b>Automatic five-account production</b><small>Generate missing prompts, approve the pack and dispatch all five clips without a manual preview step.</small></div>
-          <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowProfiles.filter(p=>p.configured).length!==5} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
+          <button className="primary compact" disabled={dispatching || flowProfiles.filter(p=>p.configured).length!==5} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Opening browsers…" : "Generate Video · Open 01–05"}</button>
         </div>}
         {["prompts_approved","running","media_ready"].includes(active.status) && <>
           <div className="approved-note">✓ Prompt pack approved.</div>
           <div className="dispatch-toolbar">
-            <div><b>Google Flow task queue</b><small>{flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
+            <div><b>Google Flow task queue</b><small>Chrome profiles 01–05 open automatically · {flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
             <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
           </div>
           {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
