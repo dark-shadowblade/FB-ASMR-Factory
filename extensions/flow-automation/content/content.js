@@ -42,7 +42,10 @@
     }
   }
   function videoReady() {
-    return [...document.querySelectorAll("video")].some(v => visible(v) && (v.readyState >= 2 || v.currentSrc));
+    const playable = [...document.querySelectorAll("video")].some(v =>
+      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
+    );
+    return playable && !!findButton(/download/);
   }
   function detectState() {
     const text = (document.body?.innerText || "").toLowerCase();
@@ -97,9 +100,13 @@
     }
     // Wait for the Flow app to hydrate. A URL change alone is not treated as a loaded project.
     const settings = await chrome.storage.local.get(["promptSelector", "generateSelector", "downloadSelector", "selectorsVerified"]);
-    const resolveField = () => settings.selectorsVerified === true && settings.promptSelector
-      ? document.querySelector(settings.promptSelector)
-      : findPromptField();
+    const resolveField = () => {
+      try {
+        return settings.selectorsVerified === true && settings.promptSelector
+          ? document.querySelector(settings.promptSelector)
+          : findPromptField();
+      } catch (_) { return null; }
+    };
     const field = await waitForPromptField(resolveField);
     if (!field || !visible(field)) {
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
@@ -115,8 +122,15 @@
       });
       return;
     }
-    const configuredField = document.querySelector(settings.promptSelector);
-    const generate = document.querySelector(settings.generateSelector);
+    let configuredField = null;
+    let generate = null;
+    try {
+      configuredField = document.querySelector(settings.promptSelector);
+      generate = document.querySelector(settings.generateSelector);
+    } catch (_) {
+      send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
+      return;
+    }
     if (!visible(configuredField) || !visible(generate) || !/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") {
       send("FLOW_UI_UNVERIFIED", { reason: "Configured prompt/generate selectors did not resolve to visible controls." });
       return;
@@ -135,8 +149,8 @@
       return;
     }
     generate.click();
-    send("PROMPT_SUBMITTED", { promptLength: task.prompt.length });
-    lastState = "GENERATING";
+    send("GENERATE_CLICKED", { promptLength: task.prompt.length });
+    lastState = "PROJECT_LOADED";
     startMonitor();
   }
   let downloadRequested = false;
@@ -155,7 +169,7 @@
         return;
       }
       button.click();
-      send("DOWNLOAD_STARTED", { source: "configured Flow download control" });
+      send("DOWNLOAD_CLICKED", { source: "configured Flow download control" });
     });
   }
   function startMonitor() {
