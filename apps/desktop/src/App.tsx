@@ -331,7 +331,6 @@ export default function App() {
       setNotice(data.already_assembled ? "Final video is already in your library." : "Five clips validated and merged. Final video saved to the local library.");
       await refresh();
     } catch (error) {
-      setAutoAssemblyAttempted(current => { const next = new Set(current); next.delete(job.id); return next; });
       setNotice(error instanceof Error ? error.message : "Video assembly failed.");
     }
     finally { setAssembling(false); }
