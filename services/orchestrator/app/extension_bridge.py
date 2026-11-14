@@ -124,7 +124,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             online = False
             if row:
                 try:
-                    online = (datetime.now(timezone.utc) - datetime.fromisoformat(row["last_seen"])).total_seconds() <= 90
+                    online = (datetime.now(timezone.utc) - datetime.fromisoformat(row["last_seen"])).total_seconds() <= 120
                 except (ValueError, TypeError):
                     online = False
             profiles.append({"profileId": profile_id, "connected": online,
