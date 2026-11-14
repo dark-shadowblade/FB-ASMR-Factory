@@ -13,7 +13,7 @@ def make_client(tmp_path):
         conn.executescript("""
         CREATE TABLE jobs(id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
         CREATE TABLE clips(id TEXT PRIMARY KEY, job_id TEXT, prompt TEXT, clip_order INTEGER, status TEXT DEFAULT 'planned');
-        CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT);
+        CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT, updated_at TEXT DEFAULT 'now');
         CREATE TABLE job_events(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, event TEXT, created_at TEXT);
         INSERT INTO jobs VALUES('job-a','prompts_approved','now');
         INSERT INTO flow_profiles VALUES('flow-1','https://flow.google.com/project/12345678-abcd');
@@ -185,3 +185,34 @@ def test_commands_are_scoped_to_exact_profile_instance_and_task(tmp_path):
     )
     assert own_task.status_code == 200
     assert own_task.json()["commands"][0]["command"] == "PAUSE"
+
+
+
+def test_extension_auto_detects_and_saves_its_own_flow_project(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    response = client.post("/api/v1/extension/project-detected", headers=headers, json={
+        "protocolVersion": 1,
+        "profileId": "flow-3",
+        "instanceId": "instance-flow-3",
+        "projectUrl": "https://flow.google.com/project/98765432-dcba",
+        "projectTitle": "My Flow project",
+    })
+    assert response.status_code == 200
+    assert response.json()["saved"] is True
+    with sqlite3.connect(db) as conn:
+        saved = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id='flow-3'").fetchone()[0]
+    assert saved == "https://flow.google.com/project/98765432-dcba"
+
+
+def test_extension_cannot_save_a_project_for_another_profile(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    response = client.post("/api/v1/extension/project-detected", headers=headers, json={
+        "protocolVersion": 1,
+        "profileId": "flow-3",
+        "instanceId": "instance-flow-2",
+        "projectUrl": "https://flow.google.com/project/98765432-dcba",
+    })
+    assert response.status_code == 409
+    with sqlite3.connect(db) as conn:
+        saved = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id='flow-3'").fetchone()[0]
+    assert saved == "https://flow.google.com/project/34567890-abcd"
