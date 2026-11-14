@@ -499,7 +499,7 @@ export default function App() {
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
-          <p className="helper">Creates a saved five-clip plan. Generation settings are targets and will be verified against Flow when integration is built.</p>
+          <p className="helper">Creates a saved five-clip plan. Flow settings are checked when the five browser tasks start.</p>
         </section>}
         {activePage === "accounts" && <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
@@ -549,6 +549,24 @@ export default function App() {
             <input value={bridgeToken} readOnly type="password" aria-label="Extension bridge token" />
             <button className="secondary compact" onClick={copyBridgeToken} disabled={!bridgeToken}>Copy pairing token</button>
           </div>
+        </section>}
+        {activePage === "accounts" && <section className="panel facebook-accounts-page">
+          <div className="panel-head"><div><div className="eyebrow">PUBLISHING DESTINATIONS</div><h2>Facebook Pages</h2></div><button className="secondary compact" onClick={()=>setShowAddFacebook(v=>!v)}>{showAddFacebook ? "Close" : "＋ Add Page"}</button></div>
+          <p className="muted">Connect the Facebook Pages that can publish your finished Reels. Page tokens are stored in the computer's secure credential vault.</p>
+          {facebookAccounts.length === 0 && <div className="facebook-empty-account">No Facebook Pages connected yet. Add a Page to enable publishing after video assembly.</div>}
+          {facebookAccounts.map(account=><div className={account.is_active ? "facebook-account active" : "facebook-account"} key={account.account_id}>
+            <div className="facebook-account-avatar">f</div><div className="facebook-account-details"><b>{account.label}</b><span>{account.page_name} · ID {account.page_id}</span><small>{account.is_active ? "Selected for publishing" : "Connected"}</small></div>
+            {!account.is_active && <button className="secondary compact" onClick={()=>selectFacebookAccount(account)}>Use Page</button>}
+            <button className="account-remove" title="Remove account" onClick={()=>removeFacebookAccount(account)}>×</button>
+          </div>)}
+          {showAddFacebook && <div className="facebook-add-form">
+            <div><b>Add a Facebook Page</b><small>Enter the Page ID and a Page access token with publishing permission. The token is verified before saving.</small></div>
+            <label>ACCOUNT LABEL</label><input value={facebookAccountLabel} onChange={e=>setFacebookAccountLabel(e.target.value)} placeholder="e.g. Main ASMR Page"/>
+            <label>FACEBOOK PAGE ID</label><input value={facebookPageId} onChange={e=>setFacebookPageId(e.target.value)} placeholder="Enter Page ID"/>
+            <label>PAGE ACCESS TOKEN</label><input type="password" autoComplete="off" value={facebookPageToken} onChange={e=>setFacebookPageToken(e.target.value)} placeholder="Paste Page access token"/>
+            <button className="primary" disabled={savingFacebookAccount || !facebookAccountLabel.trim() || !facebookPageId.trim() || facebookPageToken.trim().length<20} onClick={addFacebookAccount}>{savingFacebookAccount ? "Verifying with Meta…" : "Connect Page"}</button>
+          </div>}
+          <div className="facebook-account-footer"><span>{facebookStatus.connected ? "Publishing destination ready: " + (facebookStatus.page_name || "selected Page") : facebookStatus.message || "Select a connected Page for publishing."}</span></div>
         </section>}
       </div>}
 
