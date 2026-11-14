@@ -21,6 +21,23 @@ def validate_flow_project_url(value: str) -> str:
     return url
 
 
+def resolve_flow_extension_dir() -> Path:
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+        candidates.append(bundle_root / "extensions" / "flow-automation")
+    source_root = Path(__file__).resolve().parents[3]
+    candidates.extend([
+        source_root / "extensions" / "flow-automation",
+        Path(sys.executable).resolve().parent / "extensions" / "flow-automation",
+    ])
+    for candidate in candidates:
+        if (candidate / "manifest.json").is_file():
+            return candidate
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(f"Flow automation extension was not packaged or found. Searched: {searched}")
+
+
 class FlowProfileManager:
     """Owns five isolated, persistent Chrome profiles and their visible Flow tabs."""
 
@@ -48,19 +65,8 @@ class FlowProfileManager:
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 downloads_dir = profile_dir / "downloads"
                 downloads_dir.mkdir(parents=True, exist_ok=True)
-                extension_candidates = []
-                if getattr(sys, "frozen", False):
-                    bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-                    extension_candidates.append(bundle_root / "extensions" / "flow-automation")
-                source_root = Path(__file__).resolve().parents[3]
-                extension_candidates.extend([
-                    source_root / "extensions" / "flow-automation",
-                    Path(sys.executable).resolve().parent / "extensions" / "flow-automation",
-                ])
-                extension_dir = next((candidate for candidate in extension_candidates if (candidate / "manifest.json").is_file()), None)
-                if extension_dir is None:
-                    searched = ", ".join(str(candidate) for candidate in extension_candidates)
-                    raise RuntimeError(f"Flow automation extension was not packaged or found. Searched: {searched}")
+                extension_dir = resolve_flow_extension_dir()
+
                 try:
                     context = await self._playwright.chromium.launch_persistent_context(
                         user_data_dir=str(profile_dir),
