@@ -44,7 +44,7 @@ def test_dispatch_assigns_one_task_to_each_profile(tmp_path):
     assert response.status_code == 200
     tasks = response.json()["tasks"]
     assert [x["profileId"] for x in tasks] == [f"flow-{i}" for i in range(1, 6)]
-    task = client.get("/api/v1/extension/next-task?profile_id=flow-1", headers=headers).json()["task"]
+    task = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
     assert task["profileId"] == "flow-1"
     assert task["clipId"] == "clip-1"
 
@@ -53,7 +53,7 @@ def test_profile_cannot_poll_another_profiles_task(tmp_path):
     client, headers, _ = make_client(tmp_path)
     client.post("/api/v1/extension/dispatch/job-a", headers=headers)
     one = client.get("/api/v1/extension/next-task?profile_id=flow-1", headers=headers).json()["task"]
-    two = client.get("/api/v1/extension/next-task?profile_id=flow-2", headers=headers).json()["task"]
+    two = client.get("/api/v1/extension/next-task?profile_id=flow-2&instance_id=instance-flow-2", headers=headers).json()["task"]
     assert one["taskId"] != two["taskId"]
     assert one["profileId"] == "flow-1"
     assert two["profileId"] == "flow-2"
@@ -66,7 +66,7 @@ def test_event_identity_mismatch_is_rejected(tmp_path):
     payload = {
         "protocolVersion": 1, "messageId": "message-0001", "type": "GENERATION_STARTED",
         "taskId": task["taskId"], "jobId": task["jobId"], "clipId": task["clipId"],
-        "profileId": "flow-2", "timestamp": "2026-11-14T00:00:00Z", "payload": {}
+        "profileId": "flow-2", "instanceId": "instance-flow-2", "timestamp": "2026-11-14T00:00:00Z", "payload": {}
     }
     assert client.post("/api/v1/extension/events", json=payload, headers=headers).status_code == 409
 
