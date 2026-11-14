@@ -4,6 +4,15 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 
 let backendProcess = null;
+function recordDiagnostic(source, level, message) {
+  const text = String(message).slice(0, 4000);
+  writeStartupLog('[' + source + '] [' + level + '] ' + text);
+  const dataDir = app.isPackaged ? path.join(app.getPath('userData'), 'data') : path.resolve(__dirname, '../../../services/orchestrator/data');
+  try {
+    const token = fs.readFileSync(path.join(dataDir, 'extension-bridge.token'), 'utf8').trim();
+    if (token) fetch('http://127.0.0.1:8765/api/v1/extension/diagnostics/log', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-ASMR-Bridge-Token': token }, body: JSON.stringify({ source, level, message: text }) }).catch(() => {});
+  } catch (_) {}
+}
 
 function writeStartupLog(message) {
   try {
@@ -20,18 +29,20 @@ function startBundledBackend() {
   writeStartupLog("Starting backend: " + executable);
   backendProcess = spawn(executable, [], {
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
       ASMR_FACTORY_DATA: path.join(app.getPath("userData"), "data")
     }
   });
-  backendProcess.on("spawn", () => writeStartupLog("Backend process started."));
+  backendProcess.stdout?.on("data", chunk => recordDiagnostic("BACKEND", "info", chunk.toString("utf8").trim()));
+  backendProcess.stderr?.on("data", chunk => recordDiagnostic("BACKEND", "error", chunk.toString("utf8").trim()));
+  backendProcess.on("spawn", () => recordDiagnostic("ELECTRON", "info", "Backend process started."));
   backendProcess.on("error", error => {
-    writeStartupLog("Backend startup error: " + error.message);
+    recordDiagnostic("ELECTRON", "error", "Backend startup error: " + error.message);
     dialog.showErrorBox("ASMR Factory backend failed to start", error.message + "\n\nSee startup.log in the app's user data folder.");
   });
-  backendProcess.on("exit", (code, signal) => writeStartupLog("Backend exited. code=" + code + " signal=" + signal));
+  backendProcess.on("exit", (code, signal) => recordDiagnostic("ELECTRON", "warn", "Backend exited. code=" + code + " signal=" + signal));
 }
 
 function createWindow() {
@@ -51,21 +62,21 @@ function createWindow() {
 
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
-    writeStartupLog("Renderer load failed. code=" + errorCode + " description=" + errorDescription + " url=" + validatedURL);
+    recordDiagnostic("RENDERER", "error", "Renderer load failed. code=" + errorCode + " description=" + errorDescription + " url=" + validatedURL);
     dialog.showErrorBox("ASMR Factory could not load", errorDescription + " (" + errorCode + ").\n\nSee startup.log in the app's user data folder.");
   });
   win.webContents.on("render-process-gone", (_event, details) => {
-    writeStartupLog("Renderer process gone: " + JSON.stringify(details));
+    recordDiagnostic("RENDERER", "error", "Renderer process gone: " + JSON.stringify(details));
   });
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    if (level >= 2) writeStartupLog("Renderer console error: " + message + " at " + sourceId + ":" + line);
+    if (level >= 2) recordDiagnostic("RENDERER", level >= 3 ? "error" : "warn", message + " at " + sourceId + ":" + line);
   });
 
   const page = app.isPackaged
     ? win.loadFile(path.join(__dirname, "../dist/index.html"))
     : win.loadURL("http://127.0.0.1:5173");
   page.catch(error => {
-    writeStartupLog("Window page load rejected: " + error.message);
+    recordDiagnostic("ELECTRON", "error", "Window page load rejected: " + error.message);
     dialog.showErrorBox("ASMR Factory could not load", error.message + "\n\nSee startup.log in the app's user data folder.");
   });
 }
