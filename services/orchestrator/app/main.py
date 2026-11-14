@@ -707,7 +707,10 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail="Five completed downloads are required before assembly")
         existing = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
         if existing:
-            return {"output": dict(existing), "already_assembled": True}
+            existing_output = dict(existing)
+            auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
+            return {"output": existing_output, "already_assembled": True,
+                    "publication": auto_publication, "auto_publish_error": auto_publish_error}
         subjects = [row["subject"] for row in conn.execute(
             "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
         ).fetchall()]
@@ -750,7 +753,9 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
-        return {"output": result, "already_assembled": False}
+    auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
+    return {"output": result, "already_assembled": False,
+            "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
 
 class FacebookMetadataRequest(BaseModel):
@@ -787,6 +792,27 @@ def _get_facebook_account(account_id: str | None = None) -> tuple[dict[str, Any]
     if not token:
         raise HTTPException(status_code=409, detail="Saved Facebook credential is missing from this computer's secure credential vault. Reconnect this Page.")
     return account, token
+
+
+def _attempt_auto_publish(job_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Publish once when a secure Page is connected; keep assembly successful if Meta is unavailable."""
+    try:
+        if _get_facebook_account() is None:
+            return None, None
+        result = publish_facebook_reel(job_id)
+        return result.get("publication"), None
+    except HTTPException as exc:
+        message = str(exc.detail)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + message, utc_now()))
+        return None, message
+    except (httpx.RequestError, OSError) as exc:
+        message = str(exc)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing failed safely: " + message, utc_now()))
+        return None, message
 
 
 @app.get("/api/v1/facebook/accounts")
@@ -865,13 +891,7 @@ def remove_facebook_account(account_id: str) -> dict[str, Any]:
 def facebook_status() -> dict[str, Any]:
     selected = _get_facebook_account()
     if selected is None:
-        cfg = meta_publisher.meta_config()
-        if cfg["page_id"] and cfg["page_access_token"]:
-            try:
-                return {"configured": True, **meta_publisher.verify_page()}
-            except meta_publisher.MetaPublishError as exc:
-                return {"configured": True, "connected": False, "message": str(exc)}
-        return {"configured": False, "connected": False, "message": "Add a Facebook Page account to get started."}
+        return {"configured": False, "connected": False, "message": "Add and select a Facebook Page account to enable automatic publishing."}
     account, token = selected
     try:
         verified = meta_publisher.verify_page(account["page_id"], token)
@@ -940,7 +960,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
         )
     try:
         result = meta_publisher.publish_reel(output["output_path"], title, seo_description, account["page_id"], page_token)
-    except (meta_publisher.MetaPublishError, OSError) as exc:
+    except (meta_publisher.MetaPublishError, httpx.RequestError, OSError) as exc:
         message = str(exc)[:1000]
         with connect() as conn:
             conn.execute("UPDATE facebook_publications SET status='uncertain',error=?,updated_at=? WHERE job_id=?",
