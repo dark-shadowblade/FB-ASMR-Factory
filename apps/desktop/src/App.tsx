@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 type Clip = { id: string; subject: string; prompt: string; status: string; order: number };
-type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[] };
+type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[]; final_video?: { output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string } | null };
 type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean; extension_connected?: boolean };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
@@ -36,6 +36,7 @@ export default function App() {
   const [bridgeToken, setBridgeToken] = useState("");
   const [flowAutomation, setFlowAutomation] = useState<FlowAutomationStatus>({ profiles: [], registered_count: 0, tasks: [] });
   const [dispatching, setDispatching] = useState(false);
+  const [assembling, setAssembling] = useState(false);
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
@@ -178,6 +179,18 @@ export default function App() {
     } finally { setDispatching(false); }
   }
 
+  async function assembleJob(job: Job) {
+    setAssembling(true);
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/assemble", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Video assembly failed");
+      setNotice(data.already_assembled ? "Final video is already in your library." : "Five clips validated and merged. Final video saved to the local library.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Video assembly failed."); }
+    finally { setAssembling(false); }
+  }
+
   async function saveStyleBible() {
     try {
       const response = await fetch(API + "/style-bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: styleBible }) });
@@ -220,7 +233,7 @@ export default function App() {
       <section className="stats">
         <div className="stat-card"><small>TOTAL JOBS</small><strong>{jobs.length.toString().padStart(2,"0")}</strong><span>Saved locally</span></div>
         <div className="stat-card"><small>CLIPS PLANNED</small><strong>{jobs.reduce((n,j)=>n+j.clips.length,0).toString().padStart(2,"0")}</strong><span>Across all jobs</span></div>
-        <div className="stat-card"><small>COMPLETED VIDEOS</small><strong>00</strong><span>Media pipeline not connected</span></div>
+        <div className="stat-card"><small>COMPLETED VIDEOS</small><strong>{jobs.filter(j=>Boolean(j.final_video)).length.toString().padStart(2,"0")}</strong><span>Saved in local library</span></div>
         <div className="stat-card"><small>FLOW SESSIONS</small><strong>05</strong><span>Target capacity</span></div>
       </section>
 
@@ -279,6 +292,8 @@ export default function App() {
             <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>dispatchFlowJob(active)}>{dispatching ? "Dispatching…" : flowAutomation.registered_count!==5 ? "Connect all five Flow workers" : "Start five Flow tasks"}</button>
           </div>
           {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small></div>)}</div>}
+          {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
+          {active.final_video && <div className="approved-note">✓ Final video saved · {Math.round(active.final_video.duration_seconds)}s · {active.final_video.width}×{active.final_video.height}<br/><small>{active.final_video.output_path}</small></div>}
         </>}
       </section>}
       <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
