@@ -2,6 +2,9 @@ const { app, BrowserWindow, dialog } = require("electron");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
+
+let desktopToken = "";
 
 let backendProcess = null;
 
@@ -23,7 +26,8 @@ function startBundledBackend() {
     stdio: "ignore",
     env: {
       ...process.env,
-      ASMR_FACTORY_DATA: path.join(app.getPath("userData"), "data")
+      ASMR_FACTORY_DATA: path.join(app.getPath("userData"), "data"),
+      ASMR_FACTORY_DESKTOP_TOKEN: desktopToken
     }
   });
   backendProcess.on("spawn", () => writeStartupLog("Backend process started."));
@@ -49,6 +53,14 @@ function createWindow() {
     }
   });
 
+  win.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ["http://127.0.0.1:8765/*"] },
+    (details, callback) => {
+      details.requestHeaders["X-ASMR-Desktop-Token"] = desktopToken;
+      callback({ requestHeaders: details.requestHeaders });
+    }
+  );
+
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
     writeStartupLog("Renderer load failed. code=" + errorCode + " description=" + errorDescription + " url=" + validatedURL);
@@ -71,6 +83,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  desktopToken = crypto.randomBytes(32).toString("hex");
   startBundledBackend();
   createWindow();
   app.on("activate", () => {
