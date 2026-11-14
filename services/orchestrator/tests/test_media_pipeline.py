@@ -81,7 +81,7 @@ class MediaPipelineTests(unittest.TestCase):
                 normalized_commands.append(command)
                 Path(command[-1]).write_bytes(b"normalized")
                 return CompletedProcess(command, 0, "", "")
-            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \\
+            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \
                  patch.object(media_pipeline, "_run", side_effect=fake_run):
                 result = media_pipeline.assemble_five_clips(clips, root / "final.mp4")
             self.assertEqual(result["width"], 720)
