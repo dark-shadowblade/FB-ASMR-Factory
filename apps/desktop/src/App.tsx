@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 type Clip = { id: string; subject: string; prompt: string; status: string; order: number };
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[] };
-type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean };
+type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean; extension_connected?: boolean };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
@@ -32,7 +32,7 @@ export default function App() {
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
+  const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);\n  const [bridgeToken, setBridgeToken] = useState("");
   const [flowAutomation, setFlowAutomation] = useState<FlowAutomationStatus>({ profiles: [], registered_count: 0, tasks: [] });
   const [dispatching, setDispatching] = useState(false);
   const [selected, setSelected] = useState<Job | null>(null);
@@ -52,7 +52,17 @@ export default function App() {
       const data = await response.json();
       setJobs(data.jobs ?? []);
       const profilesResponse = await fetch(`${API}/flow/profiles`);
-      if (profilesResponse.ok) { const profilesData = await profilesResponse.json(); setFlowProfiles(profilesData.profiles ?? []); }
+      if (profilesResponse.ok) {
+        const profilesData = await profilesResponse.json();
+        const pairingResponse = await fetch(`${API}/extension/desktop-config`);
+        let extensionByProfile: Record<string, boolean> = {};
+        if (pairingResponse.ok) {
+          const pairing = await pairingResponse.json();
+          setBridgeToken(pairing.bridgeToken || "");
+          extensionByProfile = Object.fromEntries((pairing.profiles || []).map((p: any) => [p.profileId, Boolean(p.connected)]));
+        }
+        setFlowProfiles((profilesData.profiles ?? []).map((p: FlowProfile) => ({ ...p, extension_connected: extensionByProfile[p.profile_id] || false })));
+      }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
       if (selected) {
@@ -89,6 +99,27 @@ export default function App() {
         : profile.display_name + " opened its saved Google Flow project.");
       await refresh();
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open Chrome profile."); }
+  }
+
+  async function copyBridgeToken() {
+    try {
+      await navigator.clipboard.writeText(bridgeToken);
+      setNotice("Extension bridge token copied. Paste it into the options page in each Chrome profile.");
+    } catch {
+      setNotice("Clipboard access was unavailable. Copy the token from the field manually.");
+    }
+  }
+
+  async function dispatchFlow(job: Job) {
+    try {
+      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
+      setNotice(`Dispatched ${data.dispatched} clip tasks: one prompt to each of the five independent Flow profiles.`);
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Flow task dispatch failed.");
+    }
   }
 
   async function createJob() {
@@ -233,6 +264,11 @@ export default function App() {
             </div>
           </div>)}
           <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
+          <div className="extension-pairing">
+            <div><b>Chrome extension bridge</b><small>Paste this token into the extension options in all five profiles. Each profile must use its matching flow-1 … flow-5 ID.</small></div>
+            <input value={bridgeToken} readOnly type="password" aria-label="Extension bridge token" />
+            <button className="secondary compact" onClick={copyBridgeToken} disabled={!bridgeToken}>Copy pairing token</button>
+          </div>
         </section>
       </div>
 
