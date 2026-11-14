@@ -164,15 +164,15 @@ Example task (illustrative contract only):
 }
 ```
 
-The extension emits distinct events for task accepted, project opened, prompt submitted, generation observed, download started/completed and task blocked/failed. Events are idempotently processed by message ID. The current bridge routes through authenticated loopback HTTP (127.0.0.1:8765), with a random token generated into the orchestrator data directory. Each independently running Chrome profile stores its own profile ID and bridge token in extension storage. The backend validates the full task/profile/job/clip tuple before accepting an event.
+The extension emits distinct events for task accepted, project opened, Generate clicked, generation observed, download started/completed and task blocked/failed. Events are idempotently processed by message ID. Every registration, poll, command and event is bound to the unique extension instance ID stored in that Chrome profile; if another Chrome profile is incorrectly configured with the same profile ID, the older instance is rejected. The current bridge routes through authenticated loopback HTTP (127.0.0.1:8765), with a random token generated into the orchestrator data directory. Each independently running Chrome profile stores its own profile ID and bridge token in extension storage. The backend validates the full task/profile/job/clip tuple before accepting an event.
 
 The bridge API currently includes:
 - `POST /api/v1/extension/register`
 - `POST /api/v1/extension/dispatch/{job_id}`
-- `GET /api/v1/extension/next-task?profile_id=flow-N`
+- `GET /api/v1/extension/next-task?profile_id=flow-N&instance_id=...`
 - `POST /api/v1/extension/events`
 - `POST /api/v1/extension/tasks/{task_id}/command`
-- `GET /api/v1/extension/commands?profile_id=flow-N`
+- `GET /api/v1/extension/commands?profile_id=flow-N&task_id=...&instance_id=...`
 
 The bridge token is stored at `<ASMR_FACTORY_DATA>/extension-bridge.token`. Do not commit or expose it in logs. This is a local pairing step, not a Google credential; Google login remains in the relevant Chrome profile.
 
