@@ -513,7 +513,6 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
         ).fetchall()]
 
-    social_metadata = compose_social_metadata(job["topic"], job["theme"], subjects)
     downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
     clip_paths: list[Path] = []
     for row in tasks:
@@ -529,6 +528,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail=f"Download for {row['clip_id']} is not an MP4 file")
         clip_paths.append(resolved)
 
+    social_metadata = compose_social_metadata(job["topic"], job["theme"], subjects)
     output_dir = DATA_DIR / "outputs" / safe_topic_slug(job["topic"]) / job_id
     output_path = output_dir / "final.mp4"
     try:
