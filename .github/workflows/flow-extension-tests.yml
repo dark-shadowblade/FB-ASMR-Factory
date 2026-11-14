@@ -1,0 +1,35 @@
+name: Flow extension and bridge tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  extension-protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test extension protocol
+        run: node --test tests/extension-protocol.test.cjs
+
+  extension-bridge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bridge test dependencies
+        run: python -m pip install fastapi==0.115.8 httpx==0.28.1 pydantic==2.10.6 pytest
+      - name: Test authenticated bridge and five-profile isolation
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests/test_extension_bridge.py
