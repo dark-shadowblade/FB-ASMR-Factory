@@ -4,7 +4,15 @@ type Clip = { id: string; subject: string; prompt: string; status: string; order
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
-const fruitFallback = ["Mango", "Apple", "Kiwi", "Dragon fruit", "Orange"];
+const THEMES = [
+  { value: "fruits", label: "Fruits", emoji: "🍉" },
+  { value: "soaps", label: "Soaps", emoji: "🧼" },
+  { value: "clay", label: "Clay", emoji: "🟣" },
+  { value: "kinetic_sand", label: "Kinetic Sand", emoji: "🏖️" },
+  { value: "slime", label: "Slime", emoji: "🫧" },
+  { value: "satisfying_objects", label: "Satisfying Objects / Materials", emoji: "🧊" },
+  { value: "mixed_asmr", label: "Mixed ASMR", emoji: "✨" },
+];
 
 
 function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; onSave: (value: string) => void }) {
@@ -20,6 +28,7 @@ function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; o
 
 export default function App() {
   const [topic, setTopic] = useState("");
+  const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
@@ -55,13 +64,13 @@ export default function App() {
       const response = await fetch(`${API}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), theme: "fruits" })
+        body: JSON.stringify({ topic: topic.trim(), theme })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
       setTopic("");
       setSelected(data.job);
-      setNotice("Draft job created with five fruit clip tasks. Prompt generation is the next milestone.");
+      setNotice("Draft " + (THEMES.find(t => t.value === theme)?.label || theme) + " job created with five clip tasks.");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
@@ -153,8 +162,9 @@ export default function App() {
           <div className="panel-head"><div><div className="eyebrow">NEW PRODUCTION</div><h2>Create a video job</h2></div><span className="step-tag">STEP 01 / 05</span></div>
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
           <input id="topic" value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createJob()} placeholder="e.g. tropical fruit cutting" />
-          <label>GENERATION STYLE</label>
-          <div className="style-choice"><div className="fruit-icon">🍉</div><div><b>Fruit Cutting ASMR</b><small>Five unique fruit clips · 8 seconds each</small></div><span className="selected-check">✓</span></div>
+          <label htmlFor="theme">GENERATION STYLE · 7 AVAILABLE</label>
+          <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
+          <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
           <p className="helper">Creates a saved five-clip plan. Generation settings are targets and will be verified against Flow when integration is built.</p>
@@ -163,7 +173,7 @@ export default function App() {
         <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">0 / 5 READY</span></div>
           <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
-          {fruitFallback.map((name,i)=><div className="session-row" key={name}><div className="session-number">{i+1}</div><div><b>Browser profile {i+1}</b><small>Not configured</small></div><span className="pending">Not connected</span></div>)}
+          {Array.from({length:5},(_,i)=>i+1).map((name,i)=><div className="session-row" key={name}><div className="session-number">{i+1}</div><div><b>Browser profile {i+1}</b><small>Not configured</small></div><span className="pending">Not connected</span></div>)}
           <div className="session-foot">Account setup will be added in a later milestone.</div>
         </section>
       </div>
