@@ -8,7 +8,8 @@ Manifest V3 module for the existing FB-ASMR-Factory repository.
 - Each installation is explicitly bound to one profile ID: `flow-1` … `flow-5`.
 - The Python orchestrator remains the source of truth for task/job state.
 - The extension polls the authenticated loopback bridge and only accepts tasks whose `profileId` matches its configured profile.
-- Every event includes protocol version, message/task/job/clip/profile IDs and a timestamp.
+- Every event includes protocol version, message/task/job/clip/profile IDs, unique Chrome instance ID and a timestamp.
+- The service worker keeps a persistent event outbox and retries unacknowledged events after transient local-service failures.
 - Google authentication remains inside the corresponding Chrome profile. The extension does not handle passwords, cookies, CAPTCHA or account restrictions.
 - The local bridge uses a random token stored in the orchestrator data directory. Configure the same token in the extension options page.
 
@@ -36,10 +37,10 @@ The worker expects the local API routes:
 - `GET /api/v1/extension/next-task?profile_id=flow-N`
 - `POST /api/v1/extension/events`
 
-Required header: `X-ASMR-Bridge-Token`.
+Required header: `X-ASMR-Bridge-Token`. Task polling and command polling also include the unique `instance_id`; the server rejects a different extension instance even if it has been misconfigured with the same profile ID.
 
 Task identity is always the tuple `(profileId, taskId, jobId, clipId)`. Never route an event or downloaded file using only a prompt or tab title.
 
 ## Verification status
 
-The extension package, profile-instance binding, local bridge, task dispatch, selector configuration and selected-setting verification logic are implemented. Real Flow DOM selectors and selected-value elements still require a controlled browser test with an authorised account. Prompt submission stays blocked until the selectors are configured and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
+The extension package, profile-instance binding, local bridge, task dispatch, persistent event outbox, selector configuration and selected-setting verification logic are implemented. Real Flow DOM selectors and selected-value elements still require a controlled browser test with an authorised account. Prompt submission stays blocked until the selectors are configured and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
