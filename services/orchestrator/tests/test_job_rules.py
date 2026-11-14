@@ -1,13 +1,16 @@
 import os
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
+from unittest.mock import patch
 
 TEMP_DATA = tempfile.TemporaryDirectory()
 os.environ["ASMR_FACTORY_DATA"] = TEMP_DATA.name
 
 from fastapi.testclient import TestClient
 from app.main import app
+from app import main as main_module
 
 
 class JobRulesTests(unittest.TestCase):
@@ -105,6 +108,51 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(data["registered_count"], 0)
         self.assertEqual([p["profile_id"] for p in data["profiles"]],
                          ["flow-1", "flow-2", "flow-3", "flow-4", "flow-5"])
+
+    def test_assembly_requires_five_completed_downloads(self):
+        created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
+        response = self.client.post(f"/api/v1/jobs/{created['id']}/assemble")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("exactly five Flow tasks", response.json()["detail"])
+
+    def test_assembly_reconciles_downloads_and_saves_library_output(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
+        job_id = created["id"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clips = []
+            with sqlite3.connect(main_module.DB_PATH) as conn:
+                for index, clip in enumerate(created["clips"], start=1):
+                    source = root / f"clip-{index}.mp4"
+                    source.write_bytes(b"source")
+                    clips.append(source)
+                    conn.execute(
+                        """INSERT INTO extension_tasks(task_id,job_id,clip_id,profile_id,project_url,prompt,
+                           settings_json,status,created_at,updated_at,download_path)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                        (f"task-{job_id}-{index}", job_id, clip["id"], f"flow-{index}",
+                         f"https://flow.google.com/project/{index:08d}-abcd", clip["prompt"],
+                         "{}", "downloaded", "now", "now", str(source))
+                    )
+            def fake_assemble(input_paths, output_path):
+                output = Path(output_path)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_bytes(b"final-mp4")
+                return {"output": str(output), "clip_count": 5, "duration_seconds": 40.0,
+                        "width": 720, "height": 1280, "video_codec": "h264",
+                        "audio_codec": "aac", "size_bytes": output.stat().st_size}
+            with patch.dict(os.environ, {"ASMR_FACTORY_DOWNLOADS_DIR": directory}), \
+                 patch.object(main_module.media_pipeline, "assemble_five_clips", side_effect=fake_assemble):
+                response = self.client.post(f"/api/v1/jobs/{job_id}/assemble")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["output"]["clip_count"], 5)
+            self.assertEqual(self.client.get("/api/v1/library").json()["videos"][0]["job_id"], job_id)
+            output = self.client.get(f"/api/v1/jobs/{job_id}/output")
+            self.assertEqual(output.status_code, 200)
+            self.assertEqual(output.json()["output"]["duration_seconds"], 40.0)
 
     def test_prompt_pack_requires_all_five_before_approval(self):
         created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
