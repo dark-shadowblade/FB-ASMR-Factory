@@ -63,7 +63,7 @@ Pause/cancel do not claim to stop a generation that Google Flow has already acce
 1. Open the intended Google Flow project in the same Chrome profile.
 2. Wait for the Flow interface to finish rendering.
 3. Open the extension's **Details → Extension options** page.
-4. Select **Scan active Flow tab**.
+4. Select the intended project under **Flow tab in this Chrome profile**, then choose **Scan selected Flow tab**.
 5. Review the prompt candidates, Generate candidates, download candidates, settings controls and video metadata.
 6. Select **Copy diagnostic JSON** and share that report for selector review.
 
