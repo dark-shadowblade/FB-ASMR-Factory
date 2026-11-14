@@ -84,6 +84,28 @@ async function report(type, payload = {}) {
   await chrome.storage.local.set({ pendingEvents: queue });
   await flushEvents();
 }
+async function ensureActiveTaskTab() {
+  if (!activeTask) return;
+  const expectedPath = activeTask.projectUrl.split("?")[0];
+  if (Number.isInteger(activeTabId)) {
+    try {
+      const current = await chrome.tabs.get(activeTabId);
+      const currentUrl = current.url || "";
+      if (new URL(currentUrl).hostname === "accounts.google.com") {
+        await report("SESSION_REQUIRED", { url: currentUrl, reason: "Google redirected this profile to sign-in." });
+        return;
+      }
+      if (currentUrl.split("?")[0] === expectedPath) return;
+    } catch (_) {}
+  }
+  const tabs = await chrome.tabs.query({ url: "https://flow.google.com/project/*" });
+  const existing = tabs.find(tab => (tab.url || "").split("?")[0] === expectedPath);
+  const tab = existing
+    ? await chrome.tabs.update(existing.id, { url: activeTask.projectUrl, active: true })
+    : await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
+  activeTabId = tab.id;
+  await chrome.storage.local.set({ activeTabId });
+}
 async function poll() {
   if (pollBusy) return;
   pollBusy = true;
@@ -99,7 +121,10 @@ async function poll() {
       protocolVersion: P.VERSION, profileId: c.profileId,
       instanceId, extensionVersion: chrome.runtime.getManifest().version
     })});
-    if (activeTask) return;
+    if (activeTask) {
+      await ensureActiveTaskTab();
+      return;
+    }
     const result = await api("/api/v1/extension/next-task?profile_id=" + encodeURIComponent(c.profileId) + "&instance_id=" + encodeURIComponent(instanceId));
     if (!result.task) return;
     if (!P.validTask(result.task, c.profileId)) {
@@ -137,7 +162,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await restoreTask();
     if (message?.type === "FLOW_PAGE_READY" && activeTask) {
-      await report("PROJECT_PAGE_READY", { url: sender.tab?.url || "", title: message.title || "" });
+      const senderUrl = sender.tab?.url || "";
+      if (sender.tab?.id && senderUrl.split("?")[0] === activeTask.projectUrl.split("?")[0]) {
+        activeTabId = sender.tab.id;
+        await chrome.storage.local.set({ activeTabId });
+      }
+      await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "" });
       sendResponse({ task: activeTask });
       return;
     }
