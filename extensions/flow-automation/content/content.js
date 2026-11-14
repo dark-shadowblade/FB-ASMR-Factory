@@ -48,10 +48,10 @@
     if (!settings.modelSelector || !settings.resolutionSelector || !settings.durationSelector) {
       return { ok: false, reason: "Model, resolution and duration selectors must all be configured.", actual };
     }
-    if (!/veo\\s*3\\.1\\s*lite/i.test(actual.model)) return { ok: false, reason: "Selected model does not verify as Veo 3.1 Lite.", actual };
-    if (!/720\\s*p/i.test(actual.resolution)) return { ok: false, reason: "Selected resolution does not verify as 720p.", actual };
-    if (!/8\\s*(s|sec|second)/i.test(actual.duration) && !/\\b8\\b/.test(actual.duration)) return { ok: false, reason: "Selected duration does not verify as 8 seconds.", actual };
-    if (settings.aspectRatioSelector && !/(9\\s*:\\s*16|vertical)/i.test(actual.aspectRatio)) {
+    if (!/veo\s*3\.1\s*lite/i.test(actual.model)) return { ok: false, reason: "Selected model does not verify as Veo 3.1 Lite.", actual };
+    if (!/720\s*p/i.test(actual.resolution)) return { ok: false, reason: "Selected resolution does not verify as 720p.", actual };
+    if (!/8\s*(s|sec|second)/i.test(actual.duration) && !/\b8\b/.test(actual.duration)) return { ok: false, reason: "Selected duration does not verify as 8 seconds.", actual };
+    if (settings.aspectRatioSelector && !/(9\s*:\s*16|vertical)/i.test(actual.aspectRatio)) {
       return { ok: false, reason: "Selected aspect ratio does not verify as 9:16/vertical.", actual };
     }
     return { ok: true, actual, aspectRatioVerified: Boolean(settings.aspectRatioSelector) };
