@@ -431,7 +431,7 @@ export default function App() {
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy || dispatching ? "Starting automated production…" : "▶  Generate Video"}</button>
-          <p className="helper">One click creates the job, generates five prompts, opens profiles 01–05, dispatches generation and continues through download and assembly. First-time extension pairing and verified Flow selectors are still required.</p>
+          <p className="helper">One click generates and internally approves five prompts, opens profiles 01–05, dispatches generation, downloads, assembles and publishes automatically. First-time profile pairing, Google sign-in and Facebook Page setup are required; Flow controls are auto-detected when uniquely identifiable.</p>
         </section>}
         {activePage === "accounts" && <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
