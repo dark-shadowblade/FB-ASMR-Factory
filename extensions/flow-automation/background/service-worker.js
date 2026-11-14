@@ -167,7 +167,7 @@ chrome.downloads.onCreated.addListener(async item => {
   if (!activeTask || !Number.isInteger(activeTabId) || item.tabId !== activeTabId) return;
   activeDownloadIds.add(item.id);
   await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
-  chrome.runtime.sendMessage({ type: "DOWNLOAD_CREATED", downloadId: item.id }).catch(() => {});
+  await report("DOWNLOAD_STARTED", { downloadId: item.id, filename: item.filename || "", mime: item.mime || "" });
 });
 chrome.downloads.onChanged.addListener(async delta => {
   await restoreTask();
