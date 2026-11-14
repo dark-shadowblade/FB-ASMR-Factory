@@ -299,6 +299,7 @@
       if (Date.now() - monitorStartedAt > 15 * 60 * 1000) {
         if (monitorTimer) clearInterval(monitorTimer);
         monitorTimer = null;
+        if (observer) observer.disconnect();
         send("MONITOR_TIMEOUT", { reason: "Flow generation was not detected within 15 minutes." });
         return;
       }
@@ -320,6 +321,7 @@
           requestDownload();
           if (monitorTimer) clearInterval(monitorTimer);
           monitorTimer = null;
+          if (observer) observer.disconnect();
         }
       }
     };
