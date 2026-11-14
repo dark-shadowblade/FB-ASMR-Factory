@@ -246,5 +246,14 @@ class JobRulesTests(unittest.TestCase):
         })
         self.assertEqual(allowed.status_code, 200)
 
+    def test_local_cors_allows_prompt_editor_patch_preflight(self):
+        response = self.client.options("/api/v1/jobs/example/clips/example/prompt", headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "content-type",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PATCH", response.headers.get("access-control-allow-methods", ""))
+
 if __name__ == "__main__":
     unittest.main()
