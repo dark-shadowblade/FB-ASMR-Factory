@@ -609,7 +609,21 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
-        return {"output": result, "already_assembled": False}
+
+    # Publishing is automatic when a verified Facebook Page is already connected.
+    # A missing/expired Page connection must not invalidate a successfully assembled video.
+    auto_publication = None
+    auto_publish_error = None
+    try:
+        if _get_facebook_account() is not None:
+            auto_publication = publish_facebook_reel(job_id).get("publication")
+    except HTTPException as exc:
+        auto_publish_error = str(exc.detail)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + auto_publish_error, utc_now()))
+    return {"output": result, "already_assembled": False,
+            "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
 
 class FacebookMetadataRequest(BaseModel):
