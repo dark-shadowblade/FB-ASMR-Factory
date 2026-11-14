@@ -56,6 +56,7 @@ export default function App() {
   const [savingAi, setSavingAi] = useState(false);
   const [verifyingAi, setVerifyingAi] = useState(false);
   const [aiVerifyMessage, setAiVerifyMessage] = useState("");
+  const [showAiSetup, setShowAiSetup] = useState(false);
   const [styleBible, setStyleBible] = useState("");
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus>({ configured: false });
   const [facebookAccounts, setFacebookAccounts] = useState<FacebookAccount[]>([]);
@@ -516,14 +517,30 @@ export default function App() {
           </div>)}
           <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
           <div className="ai-account-panel">
-            <div className="ai-account-heading"><div><b>AI Provider Account</b><small>Connect Gemini when you're ready. Your key is stored in the computer's secure credential vault.</small></div><span className={aiKeySaved ? "ai-status connected" : "ai-status"}>{aiKeySaved ? "KEY SAVED" : "NOT CONNECTED"}</span></div>
-            <div className="ai-account-grid">
-              <label>PROVIDER<select value={aiProvider} onChange={e=>{setAiProvider(e.target.value);setAiBaseUrl(e.target.value==="gemini"?"https://generativelanguage.googleapis.com/v1beta/openai":"https://api.openai.com/v1");setAiModel(e.target.value==="gemini"?"gemini-2.0-flash":"gpt-4o-mini");}}><option value="gemini">Google Gemini</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
-              <label>MODEL<input value={aiModel} onChange={e=>setAiModel(e.target.value)} placeholder="Model name"/></label>
-              <label className="ai-key-field">API KEY<input type="password" autoComplete="off" value={aiApiKey} onChange={e=>setAiApiKey(e.target.value)} placeholder={aiKeySaved ? "Saved securely · enter to replace" : "Paste API key later"}/></label>
+            <div className="ai-account-heading">
+              <div className="ai-provider-icon">✦</div>
+              <div className="ai-provider-summary"><b>AI generation</b><small>{aiKeySaved ? (aiConfigured ? "Your AI provider is connected and ready." : "API key saved · verify the connection to finish setup.") : "Optional · built-in generation works without connecting an AI account."}</small></div>
+              <span className={aiConfigured ? "ai-status connected" : "ai-status"}>{aiConfigured ? "CONNECTED" : aiKeySaved ? "VERIFY" : "OPTIONAL"}</span>
             </div>
-            <label className="ai-url-label">API BASE URL<input value={aiBaseUrl} onChange={e=>setAiBaseUrl(e.target.value)} /></label>
-            <div className="ai-account-footer"><span>{aiConfigured ? "AI generation enabled" : "Built-in prompt and metadata generation stays available without an API key."}</span><div className="ai-account-buttons"><button className="secondary compact" onClick={saveAiProvider} disabled={savingAi || !aiModel.trim()}>{savingAi ? "Saving…" : "Save AI account"}</button><button className="primary compact" onClick={verifyAiProvider} disabled={verifyingAi || !aiKeySaved}>{verifyingAi ? "Verifying…" : "Verify connection"}</button></div></div>{aiVerifyMessage && <div className={aiVerifyMessage.startsWith("✓") ? "ai-verify-message success" : "ai-verify-message error"}>{aiVerifyMessage}</div>}
+            {!showAiSetup ? <div className="ai-provider-collapsed">
+              <span>{aiKeySaved ? (aiProvider === "gemini" ? "Google Gemini" : "OpenAI-compatible provider") + " · " + aiModel : "No AI account added yet"}</span>
+              <button className="secondary compact" onClick={()=>setShowAiSetup(true)}>{aiKeySaved ? "Manage account" : "＋ Add AI account"}</button>
+            </div> : <div className="ai-setup">
+              <div className="ai-setup-title"><b>{aiKeySaved ? "Manage AI account" : "Connect an AI provider"}</b><small>Choose a provider and add its API key. You can do this later.</small></div>
+              <label>AI PROVIDER<select value={aiProvider} onChange={e=>{setAiProvider(e.target.value);setAiBaseUrl(e.target.value==="gemini"?"https://generativelanguage.googleapis.com/v1beta/openai":"https://api.openai.com/v1");setAiModel(e.target.value==="gemini"?"gemini-2.0-flash":"gpt-4o-mini");setAiVerifyMessage("");}}><option value="gemini">Google Gemini</option><option value="openai-compatible">OpenAI-compatible</option></select></label>
+              <label>API KEY<input type="password" autoComplete="off" value={aiApiKey} onChange={e=>setAiApiKey(e.target.value)} placeholder={aiKeySaved ? "Key saved securely · paste only to replace" : "Paste your API key here"} /></label>
+              <details className="ai-advanced"><summary>Advanced settings</summary>
+                <label>MODEL NAME<input value={aiModel} onChange={e=>setAiModel(e.target.value)} placeholder="Model name"/></label>
+                <label>API BASE URL<input value={aiBaseUrl} onChange={e=>setAiBaseUrl(e.target.value)} /></label>
+              </details>
+              <div className="ai-setup-actions">
+                <button className="secondary compact" onClick={()=>{setShowAiSetup(false);setAiApiKey("");setAiVerifyMessage("");}}>Cancel</button>
+                <button className="primary compact" onClick={saveAiProvider} disabled={savingAi || !aiModel.trim() || (!aiKeySaved && !aiApiKey.trim())}>{savingAi ? "Saving securely…" : "Save account"}</button>
+                <button className="secondary compact" onClick={verifyAiProvider} disabled={verifyingAi || !aiKeySaved}>{verifyingAi ? "Checking…" : "Verify"}</button>
+              </div>
+              {aiVerifyMessage && <div className={aiVerifyMessage.startsWith("✓") ? "ai-verify-message success" : "ai-verify-message error"}>{aiVerifyMessage}</div>}
+              <p className="ai-privacy-note">Your API key is stored securely on this computer. It is never displayed again after saving.</p>
+            </div>}
           </div>
 
           <div className="extension-pairing">
