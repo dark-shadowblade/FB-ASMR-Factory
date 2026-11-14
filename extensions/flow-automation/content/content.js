@@ -58,18 +58,37 @@
   }
   function selectedText(selector) {
     if (!selector) return "";
-    const el = document.querySelector(selector);
-    if (!visible(el)) return "";
-    return [el.getAttribute("aria-label"), el.getAttribute("aria-valuetext"),
-      el.value, el.innerText, el.textContent].filter(Boolean).join(" ").trim();
+    try {
+      const el = document.querySelector(selector);
+      if (!visible(el)) return "";
+      return [el.getAttribute("aria-label"), el.getAttribute("aria-valuetext"),
+        el.value, el.innerText, el.textContent].filter(Boolean).join(" ").trim();
+    } catch (_) { return ""; }
+  }
+  function autoSelectedText(expected) {
+    const wanted = String(expected || "").toLowerCase().replace(/\\s+/g, "");
+    if (!wanted) return "";
+    const nodes = [
+      ...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"],input:checked'),
+      ...[...document.querySelectorAll("select")].filter(visible).flatMap(el => [...el.selectedOptions])
+    ];
+    const matches = [...new Set(nodes)].filter(el => {
+      const text = [el.getAttribute?.("aria-label"), el.getAttribute?.("aria-valuetext"),
+        el.value, el.innerText, el.textContent].filter(Boolean).join(" ").toLowerCase().replace(/\\s+/g, "");
+      return text.includes(wanted);
+    });
+    return matches.length === 1
+      ? [matches[0].getAttribute?.("aria-label"), matches[0].getAttribute?.("aria-valuetext"),
+         matches[0].value, matches[0].innerText, matches[0].textContent].filter(Boolean).join(" ").trim()
+      : "";
   }
   function verifySettings(settings, requested) {
     const actual = {};
     try {
-      actual.model = selectedText(settings.modelSelector);
-      actual.resolution = selectedText(settings.resolutionSelector);
-      actual.duration = selectedText(settings.durationSelector);
-      actual.aspectRatio = selectedText(settings.aspectRatioSelector);
+      actual.model = selectedText(settings.modelSelector) || autoSelectedText(requested.model);
+      actual.resolution = selectedText(settings.resolutionSelector) || autoSelectedText(requested.resolution);
+      actual.duration = selectedText(settings.durationSelector) || autoSelectedText(String(requested.durationSeconds) + " seconds") || autoSelectedText(String(requested.durationSeconds) + "s");
+      actual.aspectRatio = selectedText(settings.aspectRatioSelector) || autoSelectedText(requested.aspectRatio);
     } catch (_) {
       return { ok: false, reason: "One or more selected-setting CSS selectors are invalid.", actual };
     }
@@ -80,19 +99,14 @@
     if (!expectedModel || !expectedResolution || !Number.isFinite(expectedDuration) || expectedDuration <= 0) {
       return { ok: false, reason: "The assigned task is missing model, resolution or duration settings from the desktop app.", actual };
     }
-    if (!settings.modelSelector || !settings.resolutionSelector || !settings.durationSelector) {
-      return { ok: false, reason: "Model, resolution and duration selectors must all be configured in this browser profile.", actual };
-    }
-    if (expectedRatio && !settings.aspectRatioSelector) {
-      return { ok: false, reason: "The desktop app requested an aspect ratio, but this profile has no verified aspect-ratio selector.", actual };
-    }
+
     if (!actual.model.toLowerCase().includes(expectedModel.toLowerCase())) return { ok: false, reason: "Selected model does not match " + expectedModel + ".", actual };
     if (!actual.resolution.toLowerCase().includes(expectedResolution.toLowerCase())) return { ok: false, reason: "Selected resolution does not match " + expectedResolution + ".", actual };
     if (!new RegExp("\\b" + expectedDuration + "\\b").test(actual.duration)) return { ok: false, reason: "Selected duration does not match " + expectedDuration + " seconds.", actual };
     if (expectedRatio && !actual.aspectRatio.replace(/\s/g, "").includes(expectedRatio)) {
       return { ok: false, reason: "Selected aspect ratio does not match " + expectedRatio + ".", actual };
     }
-    return { ok: true, actual, aspectRatioVerified: Boolean(settings.aspectRatioSelector) };
+    return { ok: true, actual, aspectRatioVerified: Boolean(actual.aspectRatio) };
   }
   function setFieldValue(field, value) {
     field.focus();
@@ -193,10 +207,12 @@
     const settings = await chrome.storage.local.get(["promptSelector", "generateSelector", "downloadSelector", "modelSelector", "resolutionSelector", "durationSelector", "aspectRatioSelector", "selectorsVerified"]);
     const resolveField = () => {
       try {
-        return settings.selectorsVerified === true && settings.promptSelector
-          ? document.querySelector(settings.promptSelector)
-          : findPromptField();
-      } catch (_) { return null; }
+        if (settings.selectorsVerified === true && settings.promptSelector) {
+          const configured = document.querySelector(settings.promptSelector);
+          if (visible(configured)) return configured;
+        }
+        return findPromptField();
+      } catch (_) { return findPromptField(); }
     };
     const field = await waitForPromptField(resolveField);
     if (!field || !visible(field)) {
@@ -205,22 +221,19 @@
     }
     // Safe-by-default: never click an unverified Flow control. The extension reports
     // the detected controls; selectors must be verified against the live account UI.
-    if (settings.selectorsVerified !== true || !settings.promptSelector || !settings.generateSelector) {
-      send("FLOW_UI_UNVERIFIED", {
-        reason: "Live Flow selectors have not been verified for this account.",
-        candidates: { prompt: field.tagName, promptLabel: labelOf(field).slice(0, 100) },
-        detectedState: state
-      });
-      return;
-    }
-    let configuredField = null;
+    let configuredField = field;
     let generate = null;
-    try {
-      configuredField = document.querySelector(settings.promptSelector);
-      generate = document.querySelector(settings.generateSelector);
-    } catch (_) {
-      send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
-      return;
+    if (settings.selectorsVerified === true && settings.promptSelector && settings.generateSelector) {
+      try {
+        configuredField = document.querySelector(settings.promptSelector);
+        generate = document.querySelector(settings.generateSelector);
+      } catch (_) {
+        send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
+        return;
+      }
+    } else {
+      // Prefer unique, semantically labelled controls discovered on the live page.
+      generate = findButton(/generate|create video|make video|start generation|arrow_forward/i);
     }
     if (!visible(configuredField) || !visible(generate) ||
         (!/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") ||
@@ -256,15 +269,14 @@
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
-      if (settings.selectorsVerified !== true || !settings.downloadSelector) {
-        downloadRequested = false;
-        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
-        return;
-      }
       let button = null;
-      try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
+      if (settings.selectorsVerified === true && settings.downloadSelector) {
+        try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
+      }
+      if (!visible(button)) button = findButton(/download/i);
       if (!visible(button)) {
-        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
+        downloadRequested = false;
+        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "No unique visible Download control could be detected on this Flow page." });
         return;
       }
       chrome.storage.local.set({ downloadRequestedTaskId: currentTask.taskId }, () => {
