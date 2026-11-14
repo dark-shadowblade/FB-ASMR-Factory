@@ -3,6 +3,8 @@
   window.__asmrFlowWorkerInstalled = true;
   let currentTask = null;
   let observer = null;
+  let executingTaskId = null;
+  let executingPromise = null;
   let lastState = "";
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
@@ -106,7 +108,16 @@
       const timeout = setTimeout(() => finish(null), timeoutMs);
     });
   }
-  async function execute(task) {
+  function execute(task) {
+    if (executingPromise) return executingTaskId === task.taskId ? executingPromise : Promise.resolve(false);
+    executingTaskId = task.taskId;
+    executingPromise = runTask(task).finally(() => {
+      executingTaskId = null;
+      executingPromise = null;
+    });
+    return executingPromise;
+  }
+  async function runTask(task) {
     currentTask = task;
     if (location.href.split("?")[0] !== task.projectUrl.split("?")[0]) {
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
@@ -245,6 +256,7 @@
   });
   chrome.runtime.onMessage.addListener(message => {
     if (!currentTask) return;
+    if (message?.type === "TASK_ASSIGNED" && message.task) execute(message.task);
     if (message?.type === "PAUSE") { if (observer) observer.disconnect(); send("TASK_PAUSED", {}); }
     if (message?.type === "RESUME") {
       chrome.storage.local.get("activeDownloadIds", saved => {
