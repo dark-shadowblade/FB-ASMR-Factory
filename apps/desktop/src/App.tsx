@@ -497,7 +497,7 @@ export default function App() {
           <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>
 
-      {active && <section className="panel detail-panel" style={{display: ["overview","prompt","publishing"].includes(activeSection) ? undefined : "none"}}>
+      {active && <section className="panel detail-panel" style={{display: ["overview","prompt"].includes(activeSection) ? undefined : "none"}}>
         <div className="panel-head"><div><div className="eyebrow">AI DIRECTOR · PROMPT STUDIO</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
@@ -547,6 +547,26 @@ export default function App() {
 
         </>}
       </section>}
+      <section className="panel facebook-settings-panel" style={{display: activeSection === "publishing" ? undefined : "none"}}>
+        <div className="panel-head"><div><div className="eyebrow">META GRAPH API</div><h2>Facebook Pages</h2></div><span className="count-pill">{facebookStatus.connected ? "CONNECTED" : "NOT CONNECTED"}</span></div>
+        <p className="muted">{facebookStatus.connected ? "Automatic publishing is enabled for " + (facebookStatus.page_name || "the selected Page") + " after a video passes final validation." : "Connect a Facebook Page once. The factory will publish completed videos automatically when the Page is connected."}</p>
+        <div className="facebook-account-manager">
+          <div className="facebook-account-heading"><div><b>Connected Pages</b><small>Only Pages you are authorised to manage can be connected.</small></div><button className="secondary compact" onClick={()=>setShowAddFacebook(v=>!v)}>{showAddFacebook ? "Close" : "＋ Add account"}</button></div>
+          {facebookAccounts.length === 0 && <div className="facebook-empty-account">No Facebook Pages connected yet.</div>}
+          {facebookAccounts.map(account=><div className={account.is_active ? "facebook-account active" : "facebook-account"} key={account.account_id}>
+            <div className="facebook-account-avatar">f</div><div className="facebook-account-details"><b>{account.label}</b><span>{account.page_name} · ID {account.page_id}</span><small>{account.is_active ? "Selected for automatic publishing" : "Connected"}</small></div>
+            {!account.is_active && <button className="secondary compact" onClick={()=>selectFacebookAccount(account)}>Use Page</button>}
+            <button className="account-remove" title="Remove account" onClick={()=>removeFacebookAccount(account)}>×</button>
+          </div>)}
+          {showAddFacebook && <div className="facebook-add-form">
+            <label>ACCOUNT LABEL</label><input value={facebookAccountLabel} onChange={e=>setFacebookAccountLabel(e.target.value)} placeholder="e.g. Main ASMR Page"/>
+            <label>FACEBOOK PAGE ID</label><input value={facebookPageId} onChange={e=>setFacebookPageId(e.target.value)} placeholder="Enter Page ID"/>
+            <label>PAGE ACCESS TOKEN</label><input type="password" autoComplete="off" value={facebookPageToken} onChange={e=>setFacebookPageToken(e.target.value)} placeholder="Paste Page access token"/>
+            <button className="primary" disabled={savingFacebookAccount || !facebookAccountLabel.trim() || !facebookPageId.trim() || facebookPageToken.trim().length<20} onClick={addFacebookAccount}>{savingFacebookAccount ? "Verifying with Meta…" : "Connect Facebook Page"}</button>
+          </div>}
+        </div>
+      </section>
+
       <section className="panel style-panel" style={{display: activeSection === "settings" ? undefined : "none"}}><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
 
       <div className="notice" role="status">{notice}</div>
