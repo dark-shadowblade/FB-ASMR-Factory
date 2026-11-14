@@ -97,6 +97,15 @@ class JobRulesTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 404)
 
+    def test_flow_automation_status_reports_five_worker_slots(self):
+        response = self.client.get("/api/v1/flow/automation/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["profiles"]), 5)
+        self.assertEqual(data["registered_count"], 0)
+        self.assertEqual([p["profile_id"] for p in data["profiles"]],
+                         ["flow-1", "flow-2", "flow-3", "flow-4", "flow-5"])
+
     def test_prompt_pack_requires_all_five_before_approval(self):
         created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
         response = self.client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
