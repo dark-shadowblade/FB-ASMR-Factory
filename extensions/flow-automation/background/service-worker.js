@@ -150,7 +150,7 @@ chrome.downloads.onChanged.addListener(async delta => {
   if (delta.state.current !== "complete") return;
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (!item) return;
-  const isVideo = /\\.(mp4|webm|mov|m4v)$/i.test(item.filename || "") || /video\\//i.test(item.mime || "");
+  const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(item.filename || "") || /video\//i.test(item.mime || "");
   if (!isVideo) {
     activeDownloadIds.delete(delta.id);
     await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
