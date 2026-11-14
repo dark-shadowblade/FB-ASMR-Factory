@@ -29,7 +29,7 @@ Run **INSTALL.bat** again for later launches. It reuses the installed environmen
 7. Configure and verify the prompt, Generate, download and selected-setting selectors against the actual signed-in Flow page. Do not mark selectors verified based only on suggested selectors. Generation remains blocked until the configured controls and requested values are verified.
 8. Return to the desktop app. Wait until all five workers show as connected.
 
-The one-click **Start automatic production** action generates missing prompts, approves the prompt pack and dispatches one clip to each connected Flow profile. Prompt editing remains available before starting. A connected worker heartbeat only confirms the extension can reach the local bridge; it does not prove that Flow is signed in or that generation is working.
+The one-click **Start automatic production** action opens all five saved Chrome profiles in parallel, waits up to 60 seconds for all five extension workers, generates missing prompts, approves the prompt pack and dispatches one clip to each connected Flow profile. Prompt editing remains available before starting. A connected worker heartbeat only confirms the extension can reach the local bridge; it does not prove that Flow is signed in or that generation is working.
 
 ## 4. Download folder
 
@@ -48,10 +48,10 @@ Implemented in the repository:
 - FFmpeg/FFprobe five-clip validation, vertical 9:16 assembly, output record and basic Video Library details.
 
 Still requiring live verification or implementation:
-- Actual Flow model/resolution/duration/aspect-ratio selection and real generation/download behavior on the user's signed-in accounts.
-- Reliable restart recovery, automatic retry/backoff and full five-account end-to-end tests.
+- Actual Flow model/resolution/duration/aspect-ratio selection and real generation/download behavior on the user's signed-in accounts. Current checks only verify selected values from configured selectors; they do not change settings automatically, and 9:16 verification is optional until configured.
+- Reliable restart recovery, automatic retry/backoff, prompt-field clearing after confirmed submission and full five-account end-to-end tests.
 - Library thumbnails, search/filtering and richer browsing (basic inline playback and MP4 download are already present).
 - Meta authentication, Page selection and automatic Facebook Reel publishing.
-- Optional scheduler and full clean-machine installer verification (the current Windows installer workflow has succeeded, but the installer has not yet been tested on the user's PC).
+- Optional scheduler and full clean-machine installer verification (a Windows installer workflow has succeeded, but the latest five-profile-launch build is still running and no installer has been tested on the user's PC).
 
 Do not treat CI mocks as proof that a real Flow generation or a real FFmpeg merge has been completed on the user's machine.
