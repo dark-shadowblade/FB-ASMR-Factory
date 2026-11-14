@@ -219,8 +219,8 @@
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
     }
-    // Safe-by-default: never click an unverified Flow control. The extension reports
-    // the detected controls; selectors must be verified against the live account UI.
+    // Use an explicitly verified selector when supplied; otherwise act only on a unique,
+    // semantically labelled control discovered in the current Flow page.
     let configuredField = field;
     let generate = null;
     if (settings.selectorsVerified === true && settings.promptSelector && settings.generateSelector) {
