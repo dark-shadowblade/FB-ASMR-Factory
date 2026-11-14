@@ -3,6 +3,8 @@
   window.__asmrFlowWorkerInstalled = true;
   let currentTask = null;
   let observer = null;
+  let monitorTimer = null;
+  let monitorStartedAt = 0;
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
@@ -252,6 +254,8 @@
     }
     submittedField = configuredField;
     submissionClicked = true;
+    submittedField = configuredField;
+    submissionClicked = true;
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
     lastState = "PROJECT_LOADED";
@@ -289,7 +293,15 @@
   }
   function startMonitor() {
     if (observer) observer.disconnect();
-    observer = new MutationObserver(() => {
+    if (monitorTimer) clearInterval(monitorTimer);
+    monitorStartedAt = Date.now();
+    const inspect = () => {
+      if (Date.now() - monitorStartedAt > 15 * 60 * 1000) {
+        if (monitorTimer) clearInterval(monitorTimer);
+        monitorTimer = null;
+        send("MONITOR_TIMEOUT", { reason: "Flow generation was not detected within 15 minutes." });
+        return;
+      }
       const state = detectState();
       if (state !== lastState) {
         lastState = state;
@@ -306,16 +318,15 @@
         if (state === "VIDEO_READY") {
           send("GENERATION_COMPLETED", { videoElements: document.querySelectorAll("video").length });
           requestDownload();
+          if (monitorTimer) clearInterval(monitorTimer);
+          monitorTimer = null;
         }
       }
-    });
+    };
+    observer = new MutationObserver(inspect);
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-    const state = detectState();
-    if (state === "GENERATING") send("GENERATION_STARTED", {});
-    if (state === "VIDEO_READY") {
-      send("GENERATION_COMPLETED", {});
-      requestDownload();
-    }
+    monitorTimer = setInterval(inspect, 2000);
+    inspect();
   }
   const detectedProject = projectIdentity(location.href);
   if (detectedProject) {
