@@ -1,0 +1,119 @@
+importScripts("../shared/protocol.js");
+const P = self.ASMRFlowProtocol;
+const POLL_ALARM = "asmr-flow-poll";
+let activeTask = null;
+let pollBusy = false;
+
+async function config() {
+  const v = await chrome.storage.local.get(["baseUrl", "bridgeToken", "profileId", "enabled"]);
+  return {
+    baseUrl: (v.baseUrl || "http://127.0.0.1:8765").replace(/\/$/, ""),
+    bridgeToken: v.bridgeToken || "",
+    profileId: v.profileId || "",
+    enabled: v.enabled === true
+  };
+}
+async function api(path, options = {}) {
+  const c = await config();
+  if (!c.bridgeToken) throw new Error("BRIDGE_NOT_CONFIGURED");
+  const response = await fetch(c.baseUrl + path, {
+    ...options,
+    headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": c.bridgeToken, ...(options.headers || {}) }
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || ("HTTP_" + response.status));
+  }
+  return response.status === 204 ? null : response.json();
+}
+async function report(type, payload = {}) {
+  const c = await config();
+  if (!c.profileId || !activeTask) return;
+  try {
+    await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify({
+      protocolVersion: P.VERSION, messageId: crypto.randomUUID(), type,
+      taskId: activeTask.taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
+      profileId: c.profileId, timestamp: new Date().toISOString(), payload
+    })});
+  } catch (error) {
+    console.warn("[ASMR Flow] event report failed", error.message);
+  }
+}
+async function poll() {
+  if (pollBusy) return;
+  pollBusy = true;
+  try {
+    const c = await config();
+    if (!c.enabled || !c.bridgeToken || !P.PROFILES.includes(c.profileId)) return;
+    await api("/api/v1/extension/register", { method: "POST", body: JSON.stringify({
+      protocolVersion: P.VERSION, profileId: c.profileId,
+      instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
+      extensionVersion: chrome.runtime.getManifest().version
+    })});
+    if (activeTask) return;
+    const result = await api("/api/v1/extension/next-task?profile_id=" + encodeURIComponent(c.profileId));
+    if (!result.task) return;
+    if (!P.validTask(result.task, c.profileId)) {
+      console.error("[ASMR Flow] rejected task: profile or payload mismatch");
+      return;
+    }
+    activeTask = result.task;
+    await chrome.storage.local.set({ instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
+      activeTask });
+    await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
+    await report("TASK_ACCEPTED", { projectUrl: activeTask.projectUrl });
+  } catch (error) {
+    console.warn("[ASMR Flow] poll failed", error.message);
+  } finally {
+    pollBusy = false;
+  }
+}
+chrome.runtime.onInstalled.addListener(async () => {
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.25 });
+});
+chrome.runtime.onStartup.addListener(() => chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.25 }));
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) poll(); });
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  (async () => {
+    if (message?.type === "FLOW_PAGE_READY" && activeTask) {
+      await report("PROJECT_PAGE_READY", { url: sender.tab?.url || "", title: message.title || "" });
+      sendResponse({ task: activeTask });
+      return;
+    }
+    if (message?.type === "FLOW_EVENT" && activeTask) {
+      await report(message.event, message.payload || {});
+      if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
+        activeTask = null;
+        await chrome.storage.local.remove("activeTask");
+      }
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message?.type === "GET_ACTIVE_TASK") {
+      sendResponse({ task: activeTask });
+      return;
+    }
+    sendResponse({ ok: false, error: "UNKNOWN_MESSAGE" });
+  })().catch(error => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
+chrome.downloads.onCreated.addListener(item => {
+  if (!activeTask) return;
+  chrome.runtime.sendMessage({ type: "DOWNLOAD_CREATED", downloadId: item.id }).catch(() => {});
+});
+chrome.downloads.onChanged.addListener(async delta => {
+  if (!activeTask || !delta.state || delta.state.current !== "complete") return;
+  const c = await config();
+  const [item] = await chrome.downloads.search({ id: delta.id });
+  if (!item) return;
+  await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
+  activeTask = null;
+  await chrome.storage.local.remove("activeTask");
+});
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "CONFIG_UPDATED") {
+    activeTask = null;
+    poll();
+    sendResponse({ ok: true });
+  }
+});
