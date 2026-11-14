@@ -56,3 +56,15 @@ The extension package, profile-instance binding, local bridge, task dispatch, pe
 - `CANCEL`: cancel the extension-side task and stop its monitoring.
 
 Pause/cancel do not claim to stop a generation that Google Flow has already accepted. The extension will only use a Flow-native cancel control after that control has been inspected and explicitly implemented. No authentication, CAPTCHA or account restrictions are bypassed.
+
+
+## Read-only live DOM diagnostic
+
+1. Open the intended Google Flow project in the same Chrome profile.
+2. Wait for the Flow interface to finish rendering.
+3. Open the extension's **Details → Extension options** page.
+4. Select **Scan active Flow tab**.
+5. Review the prompt candidates, Generate candidates, download candidates, settings controls and video metadata.
+6. Select **Copy diagnostic JSON** and share that report for selector review.
+
+The scan is read-only. It does not click controls, change settings, submit prompts, or read the value/text entered into prompt fields. Suggested CSS selectors include a confidence level; structural selectors are fragile. A diagnostic scan does not mark selectors verified or enable automation. Review the current page and test selectors against the live account before enabling task execution.
