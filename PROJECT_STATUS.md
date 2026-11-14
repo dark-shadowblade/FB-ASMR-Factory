@@ -34,23 +34,23 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Prompt Studio UI with five editable prompts and explicit approval/locking.
 - [x] Dashboard selector exposes all seven styles.
 - [x] Backend tests cover all seven styles and five unique prompts per style (execution on user's Windows PC still pending).
-- [ ] Chrome Manifest V3 extension (not used in the initial direct-Chrome implementation).
+- [x] Chrome Manifest V3 extension worker package with profile binding and authenticated local bridge.
 - [x] Five isolated persistent Chrome profile directories and profile manager.
 - [x] SQLite-backed saved Flow project URL per profile (five account slots).
 - [x] Desktop UI to paste/save each project's URL and open it directly.
 - [x] Reuse each profile's persistent Chrome session; first sign-in is required once per profile.
-- [ ] Actual Flow prompt insertion, generation action and completion detection.
+- [ ] Actual Flow prompt insertion, generation action and completion detection (content script remains safe-by-default until live selectors are verified).
 - [ ] Veo 3.1 Lite / 720p / 8-second settings detection and selection.
 - [ ] Download association and validation.
 - [ ] FFmpeg/FFprobe media pipeline.
-- [ ] Job recovery and retry behavior.
+- [x] Initial extension task queue, five-profile dispatch, task/event identity validation and pause/resume/cancel command queue.\n- [ ] Full job recovery and retry behavior.
 - [ ] Video Library and thumbnails.
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Prompt submission/completion detection, downloads, media processing and Facebook publishing remain unimplemented.
+**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Five-profile task dispatch and worker heartbeat visibility are implemented. Actual Flow selectors/settings, prompt submission/completion, reliable downloads, media processing and Facebook publishing remain unverified or unimplemented.
 
 ## 2. Product rules that must not be lost
 
@@ -184,6 +184,18 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Document user setup and troubleshooting.
 
 **Exit condition:** A clean Windows installation can complete the documented workflow reliably with recoverable failures.
+
+### Milestone 4 — Extension dispatch and live worker status
+- [x] Expose extension worker registration and task status to the desktop app.
+- [x] Show live worker count (heartbeat must be within two minutes).
+- [x] Add a Start five Flow tasks action for approved prompt packs.
+- [x] Prevent dispatch until all five extension workers are connected.
+- [x] Show per-clip task status and last error/download path in the job panel.
+- [x] Add backend coverage for the five worker status slots.
+- [ ] Verify all five unpacked extensions are paired and polling on the user's Windows installation.
+- [ ] Verify live Flow prompt field, Generate and Download controls before enabling clicks.
+
+**Exit condition:** An approved five-prompt job can be dispatched only when all five profile-bound extension workers are recently connected, and task state is visible in the desktop app.
 
 ## 4. Recommended immediate next actions
 
