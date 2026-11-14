@@ -159,7 +159,9 @@ The folders are a target structure; create them as implementation begins.
 
 ## Getting started
 
-At this stage this repository contains project documentation and planning. There is not yet a runnable application. Follow [PROJECT_STATUS.md](PROJECT_STATUS.md) and [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md) for the next implementation steps.
+An initial desktop/backend scaffold is now in the repository. Follow [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) to run it on Windows. The current build supports local Fruits job planning with five persisted placeholder clip tasks; it does not yet generate AI prompts, automate Flow, compile videos or publish to Facebook.
+
+Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md).
 
 ## Important limitations
 
