@@ -34,23 +34,31 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Prompt Studio UI with five editable prompts and explicit approval/locking.
 - [x] Dashboard selector exposes all seven styles.
 - [x] Backend tests cover all seven styles and five unique prompts per style (execution on user's Windows PC still pending).
-- [x] Chrome Manifest V3 extension worker package with profile binding and authenticated local bridge.
+- [x] Chrome Manifest V3 extension package with profile binding, persistent worker state and authenticated localhost bridge.
 - [x] Five isolated persistent Chrome profile directories and profile manager.
 - [x] SQLite-backed saved Flow project URL per profile (five account slots).
 - [x] Desktop UI to paste/save each project's URL and open it directly.
 - [x] Reuse each profile's persistent Chrome session; first sign-in is required once per profile.
-- [ ] Actual Flow prompt insertion, generation action and completion detection (content script remains safe-by-default until live selectors are verified).
-- [ ] Veo 3.1 Lite / 720p / 8-second settings detection and selection.
-- [ ] Download association and validation.
+- [ ] Actual Flow prompt insertion and Generate action (code path is implemented but remains blocked until real selectors are verified in an authenticated Flow session).
+- [x] DOM-observation generation-state monitor and safe reload/duplicate-generation guards (live Flow behavior not yet verified).
+- [x] Configurable selected-value checks for Veo 3.1 Lite, 720p and 8 seconds (requires real selectors to be configured).
+- [ ] Automatic selection/change of model, resolution, duration and 9:16 aspect ratio in the live Flow UI.
+- [x] Associate browser downloads with the active Flow tab and report completed video path/size.
+- [ ] Verify download contents with FFprobe and mark clips ready only after media validation.
 - [ ] FFmpeg/FFprobe media pipeline.
-- [x] Initial extension task queue, five-profile dispatch, task/event identity validation and pause/resume/cancel command queue.\n- [ ] Full job recovery and retry behavior.
+- [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation and pause/resume/cancel command queue.
+- [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
+- [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
+- [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
+- [x] CI workflow added for extension protocol and backend bridge tests (first run pending).
+- [ ] Full job recovery and retry behavior.
 - [ ] Video Library and thumbnails.
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Five-profile task dispatch and worker heartbeat visibility are implemented. Actual Flow selectors/settings, prompt submission/completion, reliable downloads, media processing and Facebook publishing remain unverified or unimplemented.
+**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Five-profile task dispatch, worker heartbeat visibility, unique extension-instance binding, and authenticated local task/event/command messaging are implemented. The extension safely refuses to submit until real Flow selectors and visible selected-setting values are configured. Live Flow behavior, actual setting selection, prompt submission, download correctness, FFprobe validation, media processing and Facebook publishing remain unverified or unimplemented.
 
 ## 2. Product rules that must not be lost
 
@@ -123,14 +131,15 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 **Exit condition:** App can open five configured Flow projects in five independent persistent Chrome profiles without mixing account sessions.
 
 ### Milestone 4 — Google Flow generation
-- [ ] Inspect and document the current Flow UI.
-- [ ] Implement robust page-state detection and selectors.
-- [ ] Detect/select Veo 3.1 Lite, 720p and 8 seconds when available.
-- [ ] Submit one job-scoped prompt exactly once.
-- [ ] Clear the input after confirmed submission.
-- [ ] Wait for observable generation completion.
-- [ ] Initiate and track download.
-- [ ] Report success/failure to the orchestrator.
+- [ ] Inspect and document the current Flow UI in an authenticated browser.
+- [x] Implement safe DOM discovery, hydration wait, mutation-observer state monitoring and profile/task identity checks.
+- [x] Add configurable CSS selectors and selected-value verification for Veo 3.1 Lite, 720p and 8 seconds.
+- [ ] Implement and verify automatic setting selection where values are not already correct.
+- [ ] Verify selectors and settings against the live Flow UI.
+- [ ] Enable prompt submission only after selector and settings verification.
+- [ ] Clear the input after confirmed generation start.
+- [x] Track downloads initiated by the active Flow tab and report completed video files.
+- [ ] Validate downloads with FFprobe and recover incomplete/incorrect files.
 - [ ] Test each of the five independent sessions.
 
 **Exit condition:** Five test prompts can be generated and downloaded into the correct job/clip records without prompt/account mix-ups.
@@ -241,3 +250,10 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 2. Install extension into each of the five persistent Chrome profiles and pair each profile ID.
 3. Inspect the live Flow DOM on an authorised account, then add verified selectors and settings interaction.
 4. Implement download reconciliation and FFprobe validation before marking any clip ready.
+
+
+## 2026-11-14 — Extension integration update
+
+The Manifest V3 worker is now connected to the existing desktop/orchestrator flow. The desktop can display the locally generated bridge token, show which of the five extension workers have sent a recent heartbeat, and dispatch an approved five-prompt job only when all five workers are online. Each Chrome profile has a persistent instance ID; backend polling, commands and events are checked against both the profile ID and instance ID. The extension reuses the exact saved Flow project tab, waits for the app DOM to hydrate, monitors state changes, and correlates completed video downloads with the active Flow tab. Selected model/resolution/duration checks are configurable, but real Flow selectors are not verified. The extension remains fail-closed until those controls are configured and match the target values.
+
+A GitHub Actions workflow was added for the Node protocol tests and Python bridge tests. The workflow has been committed but its run result has not yet been observed in this session.
