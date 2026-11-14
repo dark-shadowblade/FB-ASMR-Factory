@@ -70,3 +70,27 @@ These are initial default subjects and can be refined later; do not reduce the s
 2. Verify one profile launch, saved session reuse and direct project navigation on Windows.
 3. Implement guarded prompt insertion and Generate interaction using observable Flow page controls.
 4. Add per-clip task persistence and generation/download recovery before enabling five-way automatic production.
+
+## 2026-11-14 — Flow worker status and dispatch UI
+
+### Implemented
+- Added local desktop API endpoint `GET /api/v1/flow/automation/status` to report five profile workers, recent heartbeats and task statuses.
+- Worker connection is considered live only when its extension heartbeat is within two minutes; an old registration is not shown as connected.
+- Added a live worker count to the Flow Sessions panel.
+- Added a Start five Flow tasks action for approved prompt packs, calling the existing authenticated extension dispatch endpoint.
+- Dispatch UI stays disabled until all five profile-bound extension workers are connected.
+- Added per-clip task status rows with profile, status and last error/download path.
+- Added a backend test asserting the status endpoint always returns five stable worker slots.
+- Existing extension dispatch maps clip 1–5 deterministically to flow-1–flow-5 and the bridge checks task/profile/job/clip identity.
+
+### Verification boundaries
+- This wires the desktop UI to the existing extension queue; it does not make the Flow content script submit prompts yet.
+- The content script deliberately blocks Generate until selectors have been verified against the live Google Flow UI. Requested model/quality/duration settings are still reported as unverified.
+- A connected heartbeat means the extension can reach the local bridge; it does not mean Google Flow is signed in or that generation works.
+- New backend and Windows Actions runs are triggered by the latest commits; confirm their final results before calling this milestone build-verified.
+
+### Next
+1. Verify desktop TypeScript build and backend tests.
+2. Pair the extension separately in all five persistent Chrome profiles and confirm live heartbeats.
+3. Capture actual accessible prompt/settings/generate/download controls from a signed-in Flow project, then implement and test guarded interaction.
+4. Capture completed download paths and validate each file with FFprobe before marking a clip downloaded/ready.
