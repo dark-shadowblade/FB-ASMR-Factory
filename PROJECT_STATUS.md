@@ -6,6 +6,40 @@
 
 This file is the project handover and live progress tracker. Update it whenever implementation or testing changes. A planned feature is not complete merely because it is described in the specification.
 
+## Latest hardening update — 14 Nov 2026
+
+**Working branch:** \`fix/production-hardening-2026-11-14\`  
+**Draft PR:** https://github.com/dark-shadowblade/FB-ASMR-Factory/pull/5  
+**Main branch:** unchanged; no merge performed.
+
+### Implemented on the feature branch
+- Opaque-origin Electron requests require a per-launch desktop secret; extension-origin requests require the extension bridge token. PATCH preflight is enabled for prompt editing.
+- Five persistent Chrome profiles load the Flow extension; the Windows PyInstaller build includes the extension and resolves it from the frozen bundle.
+- Main-app Flow settings persist model, resolution and clip duration. Defaults remain Veo 3.1 Lite / 720p / 8 seconds / 9:16.
+- Weekly style defaults rotate Monday–Sunday: Fruits, Soaps, Clay, Kinetic Sand, Slime, Satisfying Objects / Materials, Mixed ASMR. Manual style choice overrides the scheduled default.
+- Flow result baselines persist per task. Resumed tasks can identify their own new video; if the baseline is missing but an existing video is present, automation blocks rather than risking duplicate generation/download.
+- Pause/resume/cancel commands remain pending until the extension confirms handling. Download start has a bounded timeout.
+- Five downloaded clips trigger automatic assembly. FFmpeg normalizes portrait sources to consistent 30fps vertical H.264/AAC, pads silent/short audio, and respects selected output resolution and clip duration.
+- Assembly automatically attempts Facebook Reel publishing when a secure Page account is connected. Network-uncertain uploads are marked uncertain and duplicate upload is blocked.
+- Job selection refresh, history-to-details navigation and task pause/resume/cancel/retry controls were corrected.
+
+### CI verification
+- Backend tests: passed on recent PR commits.
+- Chrome extension syntax/protocol tests: passed on recent PR commits.
+- Flow extension/bridge and desktop build tests: passed on recent PR commits.
+- Windows installer: latest check still pending at the time of this update; do not treat the installer as validated until it completes.
+
+### Still requires live/manual verification
+- Google Flow's current DOM/selectors and actual setting selection. The extension verifies configured settings; it does not auto-select unknown controls in a live Flow UI.
+- Five real Google accounts, credits/quotas, generation completion, download paths and recovery on a Windows PC.
+- A real Meta Page upload and post-processing confirmation. CI does not publish to a real Page.
+- Actual FFmpeg execution against representative Flow clips; CI uses mocked FFmpeg/FFprobe in unit tests.
+- Optional scheduled job execution is not implemented; weekday theme rotation is implemented.
+
+This is a hardening milestone, not a production-readiness claim. PR #5 is a draft and must not be merged until remaining live tests pass.
+
+---
+
 ## 1. Current verified state
 
 ### Completed
@@ -68,7 +102,7 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] Windows installer artifact successfully built for commit `f380ca1` (run `43600477183`) and an earlier artifact for `0a2ae59` (run `43598548348`). A newer installer build for commit `ee26516`, including the one-click five-profile launch, is still running; it does not yet include the latest Flow Worker options polish.
 - [ ] Full five-account end-to-end test on the user's Windows PC.
 
-**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. The current content script inserts a prompt and clicks Generate after configured selectors/settings pass, but it does not yet clear the prompt after confirmed submission; the live state detector and download association still need real-account testing. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing, OAuth-based Meta account onboarding/Page selection, real Page upload verification, robust restart recovery, thumbnails/search and richer library browsing, and a full five-account end-to-end test remain outstanding.
+**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under their profile-specific download directories (or an explicit override), probes source streams, normalizes portrait clips and audio with FFmpeg, assembles them, validates the final output, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. The current content script inserts the assigned prompt and clicks Generate after configured selectors/settings pass. Task baselines and command recovery are implemented, but live Flow state detection, settings selectors and download behavior still need real-account testing. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing, OAuth-based Meta account onboarding/Page selection, real Page upload verification, robust restart recovery, thumbnails/search and richer library browsing, and a full five-account end-to-end test remain outstanding.
 
 
 
