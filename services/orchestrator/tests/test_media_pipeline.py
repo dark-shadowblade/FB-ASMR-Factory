@@ -9,6 +9,24 @@ from app import media_pipeline
 
 
 class MediaPipelineTests(unittest.TestCase):
+    def test_media_command_output_is_logged(self):
+        command = ["ffmpeg", "-version"]
+        completed = CompletedProcess(command, 0, "", "ffmpeg diagnostic output")
+        with patch.object(media_pipeline.subprocess, "run", return_value=completed):
+            with self.assertLogs("asmr_factory.media", level="INFO") as captured:
+                result = media_pipeline._run(command)
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(any("ffmpeg diagnostic output" in line for line in captured.output))
+
+    def test_media_command_failure_is_logged(self):
+        command = ["ffmpeg", "-bad-option"]
+        error = media_pipeline.subprocess.CalledProcessError(2, command, output="", stderr="invalid option")
+        with patch.object(media_pipeline.subprocess, "run", side_effect=error):
+            with self.assertLogs("asmr_factory.media", level="ERROR") as captured:
+                with self.assertRaises(media_pipeline.MediaPipelineError):
+                    media_pipeline._run(command)
+        self.assertTrue(any("invalid option" in line for line in captured.output))
+
     def metadata(self, width=720, height=1280, fps="30/1", duration=8.0):
         return json.dumps({
             "format": {"duration": str(duration), "format_name": "mov,mp4"},
