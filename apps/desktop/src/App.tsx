@@ -102,10 +102,10 @@ export default function App() {
       }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
-      if (selected) {
-        const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
-        if (updated) setSelected(updated);
-      }
+      setSelected(current => {
+        if (!current) return current;
+        return (data.jobs ?? []).find((j: Job) => j.id === current.id) ?? current;
+      });
     } catch {
       setHealth("offline");
     }
