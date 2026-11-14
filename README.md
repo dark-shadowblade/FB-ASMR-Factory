@@ -4,7 +4,7 @@
 
 FB-ASMR-Factory is a Windows desktop application under active development that coordinates five independent Google Flow/Veo browser profiles, generates short ASMR clips, validates and combines five clips into a vertical MP4, and is being extended with automatic publishing to a configured Facebook Page through supported Meta APIs.
 
-> **Current implementation status:** Desktop dashboard, seven-style AI Director, five-profile extension bridge, Flow prompt/Generate code path, download event tracking, FFmpeg/FFprobe assembly API and basic local video library details are committed. Live Flow settings and generation still require verification in the user's signed-in accounts. Meta publishing, restart recovery and a richer searchable/playable library remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+> **Current implementation status:** Desktop dashboard, seven-style AI Director, five-profile extension bridge, Flow prompt/Generate code path, download event tracking, FFmpeg/FFprobe assembly API, generated Facebook Reel metadata and basic local video library details are committed. Live Flow settings and generation still require verification in the user's signed-in accounts. Meta authentication and actual Reel publishing, restart recovery and a richer searchable/playable library remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
 
 ## Product goal
 
