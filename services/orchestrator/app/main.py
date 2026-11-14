@@ -349,6 +349,38 @@ def put_ai_settings(request: AISettingsRequest) -> dict[str, Any]:
     cfg = ai_provider_config()
     return {"configured": bool(cfg["api_key"] and cfg["model"]), "provider": cfg["provider"], "model": cfg["model"], "base_url": cfg["base_url"], "key_saved": bool(cfg["api_key"])}
 
+@app.post("/api/v1/settings/ai/verify")
+def verify_ai_settings() -> dict[str, Any]:
+    """Make a minimal authenticated request to confirm the configured key and model work."""
+    cfg = ai_provider_config()
+    if not cfg["api_key"]:
+        raise HTTPException(status_code=409, detail="Add an API key before verifying this provider.")
+    if not cfg["model"]:
+        raise HTTPException(status_code=409, detail="Choose a model before verifying this provider.")
+    try:
+        response = httpx.post(
+            f"{cfg['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg['api_key']}"},
+            json={"model": cfg["model"], "temperature": 0, "max_tokens": 8,
+                  "messages": [{"role": "user", "content": "Reply with OK."}]},
+            timeout=25.0,
+        )
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("error", {}).get("message") or response.json().get("detail")
+            except (ValueError, AttributeError):
+                detail = None
+            raise HTTPException(status_code=502, detail="Provider rejected the request: " + str(detail or f"HTTP {response.status_code}")[:350])
+        payload = response.json()
+        if not payload.get("choices"):
+            raise HTTPException(status_code=502, detail="Provider responded, but did not return a chat completion.")
+        return {"verified": True, "provider": cfg["provider"], "model": cfg["model"],
+                "message": "API key and model verified successfully."}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Provider verification timed out. Check the connection and try again.")
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Could not reach the AI provider: " + str(exc)[:250])
+
 @app.delete("/api/v1/settings/ai/key")
 def delete_ai_key() -> dict[str, bool]:
     try:
