@@ -46,7 +46,7 @@ export default function App() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
+  const [notice, setNotice] = useState("Enter a topic, choose one ASMR style, then click Generate Video.");
   const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [styleBible, setStyleBible] = useState("");
@@ -385,7 +385,7 @@ export default function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Approval failed");
       setSelected(data.job);
-      setNotice("Prompts approved. Real AI prompt generation and Flow automation are not connected yet.");
+      setNotice("Five prompts approved and ready for Flow workers.");
       await refresh();
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve job."); }
   }
