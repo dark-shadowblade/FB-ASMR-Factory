@@ -139,6 +139,64 @@ def serialize_job(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
     return result
 
 
+def compose_social_metadata(topic: str, theme: str, subjects: list[str]) -> dict[str, Any]:
+    """Create platform-ready metadata; fall back locally if the optional AI provider is unavailable."""
+    label = THEME_LABELS.get(theme, theme.replace("_", " ").title())
+    fallback = {
+        "title": f"{topic.strip()} | Satisfying {label} ASMR"[:100],
+        "caption": f"Five satisfying {label.lower()} moments in one relaxing ASMR compilation. Which clip was your favourite?",
+        "description": (
+            f"Enjoy five distinct {label.lower()} ASMR clips inspired by {topic.strip()}. "
+            "A short vertical compilation focused on realistic textures, careful movement and natural satisfying sounds."
+        ),
+        "hashtags": ["#ASMR", "#Satisfying", "#OddlySatisfying", "#RelaxingVideos", "#" + re.sub(r"[^A-Za-z0-9]", "", label.title())],
+        "source": "built-in",
+    }
+    cfg = ai_provider_config()
+    if not (cfg["api_key"] and cfg["model"]):
+        return fallback
+    try:
+        response = httpx.post(
+            f"{cfg['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg['api_key']}"},
+            json={
+                "model": cfg["model"], "temperature": 0.5,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": (
+                        "Return JSON only with title, caption, description and hashtags. "
+                        "Write accurate, concise Facebook Reel metadata for a vertical ASMR video. "
+                        "Do not claim it is trending or viral. Use 5 to 8 relevant hashtags."
+                    )},
+                    {"role": "user", "content": (
+                        f"Topic: {topic}\nStyle: {label}\nFive clip subjects: {', '.join(subjects)}. "
+                        "Keep the title under 100 characters."
+                    )},
+                ],
+            },
+            timeout=45.0,
+        )
+        response.raise_for_status()
+        data = json.loads(response.json()["choices"][0]["message"]["content"])
+        title = str(data.get("title", "")).strip()[:100]
+        caption = str(data.get("caption", "")).strip()
+        description = str(data.get("description", "")).strip()
+        hashtags = data.get("hashtags", [])
+        if not title or not caption or not description or not isinstance(hashtags, list):
+            return fallback
+        cleaned = []
+        for tag in hashtags[:8]:
+            tag = "#" + re.sub(r"[^A-Za-z0-9]", "", str(tag).lstrip("#"))
+            if tag != "#" and tag.lower() not in {x.lower() for x in cleaned}:
+                cleaned.append(tag)
+        if len(cleaned) < 3:
+            return fallback
+        return {"title": title, "caption": caption, "description": description,
+                "hashtags": cleaned, "source": "AI provider"}
+    except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+
+
 def safe_topic_slug(topic: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-")
     return slug[:60] or "untitled"
@@ -469,6 +527,11 @@ def assemble_job(job_id: str) -> dict[str, Any]:
                          (job_id, "Media assembly failed: " + str(exc)[:400], utc_now()))
         raise HTTPException(status_code=422, detail=str(exc))
     metadata = {key: value for key, value in result.items() if key != "output"}
+    with connect() as conn:
+        subjects = [row["subject"] for row in conn.execute(
+            "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
+        ).fetchall()]
+    metadata["social_metadata"] = compose_social_metadata(job["topic"], job["theme"], subjects)
     with connect() as conn:
         conn.execute(
             """INSERT INTO job_outputs(job_id,output_path,duration_seconds,width,height,size_bytes,metadata_json,created_at)
