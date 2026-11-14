@@ -9,12 +9,18 @@ os.environ["ASMR_FACTORY_DATA"] = TEMP_DATA.name
 from fastapi.testclient import TestClient
 from app.main import app
 
-client = TestClient(app)
-
 
 class JobRulesTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.client_context = TestClient(app)
+        cls.client = cls.client_context.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client_context.__exit__(None, None, None)
     def test_fruits_job_has_exactly_five_clip_tasks(self):
-        response = client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
+        response = self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
         self.assertEqual(response.status_code, 200)
         job = response.json()["job"]
         self.assertEqual(len(job["clips"]), 5)
