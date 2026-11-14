@@ -159,7 +159,7 @@ The folders are a target structure; create them as implementation begins.
 
 ## Getting started
 
-An initial desktop/backend scaffold is now in the repository. Follow [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) to run it on Windows. The current build supports local Fruits job planning with five persisted placeholder clip tasks; it does not yet generate AI prompts, automate Flow, compile videos or publish to Facebook.
+An initial desktop/backend scaffold is in the repository. On Windows, install Node.js 20+ and Python 3.10+ once, extract the repository ZIP, then double-click [INSTALL.bat](INSTALL.bat). It prepares the Python environment, installs dependencies, starts the backend and launches the dashboard. See [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) for details. The current build supports local Fruits job planning with five persisted placeholder clip tasks; it does not yet generate AI prompts, automate Flow, compile videos or publish to Facebook.
 
 Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md).
 
