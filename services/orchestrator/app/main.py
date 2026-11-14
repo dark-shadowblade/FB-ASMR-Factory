@@ -347,7 +347,7 @@ class FlowSettingsRequest(BaseModel):
     model: str = Field(min_length=1, max_length=80)
     resolution: str = Field(pattern="^(720p|1080p)$")
     duration_seconds: int = Field(ge=4, le=8)
-    aspect_ratio: str = Field(pattern="^(9:16|16:9|1:1)$")
+    aspect_ratio: str = Field(pattern="^9:16$")
 
 
 @app.get("/api/v1/settings/flow")
@@ -738,7 +738,8 @@ def assemble_job(job_id: str) -> dict[str, Any]:
     output_path = output_dir / "final.mp4"
     try:
         expected_clip_duration = float(json.loads(tasks[0]["settings_json"]).get("durationSeconds", 8))
-        result = media_pipeline.assemble_five_clips(clip_paths, output_path, expected_clip_duration=expected_clip_duration)
+        output_height = 1920 if json.loads(tasks[0]["settings_json"]).get("resolution") == "1080p" else 1280
+        result = media_pipeline.assemble_five_clips(clip_paths, output_path, expected_clip_duration=expected_clip_duration, output_height=output_height)
     except media_pipeline.MediaPipelineError as exc:
         with connect() as conn:
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
