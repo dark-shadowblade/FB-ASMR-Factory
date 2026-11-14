@@ -313,7 +313,7 @@ export default function App() {
   async function retryFlowTask(task: FlowAutomationStatus["tasks"][number]) {
     try {
       const response = await fetch(API + "/extension/tasks/" + task.task_id + "/retry", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+        method: "POST", headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": bridgeToken }, body: JSON.stringify({})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not retry Flow task");
