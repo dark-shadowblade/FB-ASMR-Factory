@@ -49,6 +49,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
 - [x] Guarded retry for failed/blocked individual clip tasks, with live-worker checks and optional profile reassignment at the API layer.
 - [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
+- [x] One-click automatic production start: generates missing prompts, auto-approves the pack and dispatches five Flow tasks once all five project URLs and workers are ready.
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
