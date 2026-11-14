@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +62,10 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         if not value or not secrets.compare_digest(value, bridge_token):
             raise HTTPException(status_code=401, detail="Invalid local extension bridge token")
 
+    def require_desktop_origin(value: str) -> None:
+        if value not in ("http://127.0.0.1:5173", "file://", "null"):
+            raise HTTPException(status_code=403, detail="Desktop-only endpoint")
+
     def init_tables() -> None:
         with connect() as conn:
             conn.executescript("""
@@ -107,9 +111,32 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
               (request.profileId, request.instanceId, request.extensionVersion, now()))
         return {"registered": True, "profileId": request.profileId}
 
+    @router.get("/desktop-config")
+    def desktop_config(origin: str = Header(default="")):
+        require_desktop_origin(origin)
+        with connect() as conn:
+            rows = conn.execute("SELECT profile_id,extension_version,last_seen FROM extension_instances").fetchall()
+        by_id = {r["profile_id"]: dict(r) for r in rows}
+        profiles = []
+        for profile_id in PROFILE_IDS:
+            row = by_id.get(profile_id)
+            online = False
+            if row:
+                try:
+                    online = (datetime.now(timezone.utc) - datetime.fromisoformat(row["last_seen"])).total_seconds() <= 90
+                except (ValueError, TypeError):
+                    online = False
+            profiles.append({"profileId": profile_id, "connected": online,
+                             "extensionVersion": row["extension_version"] if row else None,
+                             "lastSeen": row["last_seen"] if row else None})
+        return {"bridgeToken": bridge_token, "tokenPath": str(token_path), "profiles": profiles}
+
     @router.post("/dispatch/{job_id}")
-    def dispatch(job_id: str, x_asmr_bridge_token: str = Header(default="")):
-        require_token(x_asmr_bridge_token)
+    def dispatch(job_id: str, x_asmr_bridge_token: str = Header(default=""), origin: str = Header(default="")):
+        if x_asmr_bridge_token:
+            require_token(x_asmr_bridge_token)
+        else:
+            require_desktop_origin(origin)
         with connect() as conn:
             job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
             if job is None:
