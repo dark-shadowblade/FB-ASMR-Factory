@@ -695,7 +695,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         tasks = conn.execute(
-            """SELECT t.clip_id,t.profile_id,t.status,t.download_path,c.clip_order
+            """SELECT t.clip_id,t.profile_id,t.status,t.download_path,t.settings_json,c.clip_order
                FROM extension_tasks t JOIN clips c ON c.id=t.clip_id
                WHERE t.job_id=? ORDER BY c.clip_order""", (job_id,)
         ).fetchall()
@@ -737,7 +737,8 @@ def assemble_job(job_id: str) -> dict[str, Any]:
     output_dir = DATA_DIR / "outputs" / safe_topic_slug(job["topic"]) / job_id
     output_path = output_dir / "final.mp4"
     try:
-        result = media_pipeline.assemble_five_clips(clip_paths, output_path)
+        expected_clip_duration = float(json.loads(tasks[0]["settings_json"]).get("durationSeconds", 8))
+        result = media_pipeline.assemble_five_clips(clip_paths, output_path, expected_clip_duration=expected_clip_duration)
     except media_pipeline.MediaPipelineError as exc:
         with connect() as conn:
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
