@@ -135,6 +135,9 @@ async function poll() {
       protocolVersion: P.VERSION, profileId: c.profileId,
       instanceId, extensionVersion: chrome.runtime.getManifest().version
     })});
+    await chrome.storage.local.set({ extensionWorkerStatus: {
+      profileId: c.profileId, connected: true, registeredAt: new Date().toISOString(), error: ""
+    }});
     if (activeTask) {
       await ensureActiveTaskTab();
       return;
@@ -176,6 +179,10 @@ async function poll() {
     await chrome.storage.local.set({ activeTabId });
     await report("TASK_ACCEPTED", { projectUrl: activeTask.projectUrl });
   } catch (error) {
+    const c = await config().catch(() => ({}));
+    await chrome.storage.local.set({ extensionWorkerStatus: {
+      profileId: c.profileId || "", connected: false, error: String(error.message || error), checkedAt: new Date().toISOString()
+    }});
     console.warn("[ASMR Flow] poll failed", error.message);
   } finally {
     pollBusy = false;
@@ -209,6 +216,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message?.type === "FLOW_EVENT" && activeTask) {
+      const snapshot = (await chrome.storage.local.get("extensionTaskSnapshot")).extensionTaskSnapshot || {};
+      await chrome.storage.local.set({ extensionTaskSnapshot: {
+        ...snapshot, state: message.event, lastEvent: message.event,
+        lastEventAt: new Date().toISOString(), lastEventPayload: message.payload || {}
+      }});
       await report(message.event, message.payload || {});
       if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
