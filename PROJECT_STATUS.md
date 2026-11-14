@@ -44,7 +44,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Configurable selected-value checks for Veo 3.1 Lite, 720p and 8 seconds (requires real selectors to be configured).
 - [ ] Automatic selection/change of model, resolution, duration and 9:16 aspect ratio in the live Flow UI.
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
-- [x] FFprobe validates all five downloaded MP4 files during assembly; source clips are marked ready only after the final MP4 also passes validation.
+- [x] FFprobe validates all five downloaded MP4 files during assembly, enforces approximately 8 seconds per source clip, and marks clips ready only after the final MP4 also passes validation.
 - [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
 - [x] Generate Facebook Reel title, caption, description and hashtags after assembly using the configured AI provider with a built-in fallback; expose metadata through job/library APIs and desktop details.
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
