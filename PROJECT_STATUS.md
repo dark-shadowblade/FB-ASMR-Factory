@@ -262,7 +262,7 @@ A GitHub Actions workflow was added for the Node protocol tests and Python bridg
 
 ## 2026-11-14 — Read-only Google Flow DOM diagnostic
 
-Added a diagnostic command to the MV3 content script and a **Scan active Flow tab** panel to extension Options. It inventories visible prompt-entry candidates, Generate-like buttons, download-like buttons, model/quality/duration/aspect-ratio controls, other visible buttons and video metadata. It proposes CSS selectors with confidence/basis annotations. The report is saved in that Chrome profile's local extension storage and can be copied as JSON.
+Added a diagnostic command to the MV3 content script and a **Scan selected Flow tab** panel to extension Options, including a tab picker for multiple open projects. It inventories visible prompt-entry candidates, Generate-like buttons, download-like buttons, model/quality/duration/aspect-ratio controls, other visible buttons and video metadata. It proposes CSS selectors with confidence/basis annotations. The report is saved in that Chrome profile's local extension storage and can be copied as JSON.
 
 Safety properties: the scan is read-only; it does not click, change settings, submit prompts, or include the entered prompt text/value. It does not mark suggested selectors verified or enable automation. Live DOM evidence still needs to be collected from an authorised signed-in Flow session.
 
