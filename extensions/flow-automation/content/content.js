@@ -45,14 +45,18 @@
     } catch (_) {
       return { ok: false, reason: "One or more selected-setting CSS selectors are invalid.", actual };
     }
+    const expectedModel = String(requested.model || "Veo 3.1 Lite");
+    const expectedResolution = String(requested.resolution || "720p");
+    const expectedDuration = Number(requested.durationSeconds || 8);
+    const expectedRatio = String(requested.aspectRatio || "9:16").replace(/\s/g, "");
     if (!settings.modelSelector || !settings.resolutionSelector || !settings.durationSelector) {
       return { ok: false, reason: "Model, resolution and duration selectors must all be configured.", actual };
     }
-    if (!/veo\s*3\.1\s*lite/i.test(actual.model)) return { ok: false, reason: "Selected model does not verify as Veo 3.1 Lite.", actual };
-    if (!/720\s*p/i.test(actual.resolution)) return { ok: false, reason: "Selected resolution does not verify as 720p.", actual };
-    if (!/8\s*(s|sec|second)/i.test(actual.duration) && !/\b8\b/.test(actual.duration)) return { ok: false, reason: "Selected duration does not verify as 8 seconds.", actual };
-    if (settings.aspectRatioSelector && !/(9\s*:\s*16|vertical)/i.test(actual.aspectRatio)) {
-      return { ok: false, reason: "Selected aspect ratio does not verify as 9:16/vertical.", actual };
+    if (!actual.model.toLowerCase().includes(expectedModel.toLowerCase())) return { ok: false, reason: "Selected model does not match " + expectedModel + ".", actual };
+    if (!actual.resolution.toLowerCase().includes(expectedResolution.toLowerCase())) return { ok: false, reason: "Selected resolution does not match " + expectedResolution + ".", actual };
+    if (!new RegExp("\\b" + expectedDuration + "\\b").test(actual.duration)) return { ok: false, reason: "Selected duration does not match " + expectedDuration + " seconds.", actual };
+    if (settings.aspectRatioSelector && !actual.aspectRatio.replace(/\s/g, "").includes(expectedRatio)) {
+      return { ok: false, reason: "Selected aspect ratio does not match " + expectedRatio + ".", actual };
     }
     return { ok: true, actual, aspectRatioVerified: Boolean(settings.aspectRatioSelector) };
   }
@@ -171,6 +175,7 @@
       send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual });
       return;
     }
+    send("SETTINGS_VERIFIED", { actual: settingsCheck.actual, aspectRatioVerified: settingsCheck.aspectRatioVerified });
     if ((configuredField.value || configuredField.textContent || "").trim() === task.prompt.trim()) {
       send("PROMPT_ALREADY_PRESENT", { reason: "Prompt is already present; refusing to click Generate a second time." });
       return;
