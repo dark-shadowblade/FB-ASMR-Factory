@@ -19,17 +19,21 @@ Turn a topic into one finished, publication-ready ASMR video with as little repe
 7. Review the video and publish it to a configured Facebook Page.
 8. Recover safely from interrupted or failed steps without mixing files or publishing duplicates.
 
-## Initial generation scope
+## Seven active ASMR styles
 
-The first working generation mode is **fruit-cutting ASMR only**.
+All seven styles are active in the production planner. Every selected style creates exactly **five unique, coordinated prompts** for five different subjects within that style. The shared Style Bible keeps the visual identity consistent while the subject, material and action vary.
 
-- One job produces exactly **5 different fruit subjects**.
-- Each clip targets **8 seconds**.
-- The expected compilation duration is approximately **40 seconds**.
-- The initial Google Flow defaults are **Veo 3.1 Lite, 720p, 8 seconds**.
-- The target final format is vertical **9:16 MP4**, H.264 video and AAC audio where supported by the source and processing pipeline.
+| Weekly day | Style | Five subjects |
+|---|---|---|
+| Monday | Fruits | Watermelon, Kiwi, Orange, Pineapple, Strawberry |
+| Tuesday | Soaps | Rose, Transparent, Rainbow, Marble, Glitter soap |
+| Wednesday | Clay | Red, Blue, Rainbow, Pastel, Metallic clay |
+| Thursday | Kinetic Sand | Golden, Blue, Pink, Rainbow, Layered kinetic sand |
+| Friday | Slime | Clear, Crunchy, Glossy, Glitter, Fluffy slime |
+| Saturday | Satisfying Objects / Materials | Jelly, Wax, Soft foam, Coloured blocks, Sensory material |
+| Sunday | Mixed ASMR | Layered sensory block, Jelly-filled object, Soft wax object, Foam-and-clay object, Multi-texture sensory object |
 
-The product design reserves seven theme slots for the broader roadmap: Fruits, Soaps, Clay, Kinetic Sand, Slime, Satisfying Objects/Materials and Mixed ASMR. These are future theme options; do not activate their generation in the first release. A Fruits job must not silently include non-fruit subjects.
+Each clip targets **8 seconds**, for an approximately **40-second** compilation. Flow defaults remain **Veo 3.1 Lite, 720p, 8 seconds**, subject to account availability. Final target: vertical **9:16 MP4**, H.264 video and AAC audio where supported. A job never mixes themes.
 
 ## Key capabilities
 
@@ -50,7 +54,7 @@ The product design reserves seven theme slots for the broader roadmap: Fruits, S
 - Do not assume account credits, permissions or availability; show what can actually be observed.
 
 ### Prompt generation and AI Director
-- Produce five distinct fruit subjects for a Fruits job.
+- Produce five distinct subjects for the selected ASMR style.
 - Maintain a shared, persistent **ASMR Style Bible** so the visual language, camera, lighting, sound and quality remain consistent.
 - Generate structured prompts tailored to each subject rather than repeating one generic prompt.
 - Include a Prompt Studio for review, editing and approval.
@@ -159,7 +163,7 @@ The folders are a target structure; create them as implementation begins.
 
 ## Getting started
 
-An initial desktop/backend scaffold is in the repository. On Windows, install Node.js 20+ and Python 3.10+ once, extract the repository ZIP, then double-click [INSTALL.bat](INSTALL.bat). It prepares the Python environment, installs dependencies, starts the backend and launches the dashboard. See [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) for details. The current build supports local Fruits job planning and an AI Director Prompt Studio that creates five fruit-specific prompts, applies a persistent Style Bible, supports editing and approval, and can optionally use an OpenAI-compatible provider. It does not yet automate Flow, compile videos or publish to Facebook. See [docs/AI_DIRECTOR_PROMPT_STUDIO.md](docs/AI_DIRECTOR_PROMPT_STUDIO.md).
+An initial desktop/backend scaffold is in the repository. On Windows, install Node.js 20+ and Python 3.10+ once, extract the repository ZIP, then double-click [INSTALL.bat](INSTALL.bat). It prepares the Python environment, installs dependencies, starts the backend and launches the dashboard. See [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) for details. The current build supports local Fruits job planning and an AI Director Prompt Studio that creates five style-specific prompts for all seven themes, applies a persistent Style Bible, supports editing and approval, and can optionally use an OpenAI-compatible provider. It does not yet automate Flow, compile videos or publish to Facebook. See [docs/AI_DIRECTOR_PROMPT_STUDIO.md](docs/AI_DIRECTOR_PROMPT_STUDIO.md).
 
 Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md).
 
