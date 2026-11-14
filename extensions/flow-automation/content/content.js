@@ -51,6 +51,26 @@
     if (videoReady() || /download video|download/.test(text)) return "VIDEO_READY";
     return "PROJECT_LOADED";
   }
+  function waitForPromptField(resolveField, timeoutMs = 45000) {
+    const immediate = resolveField();
+    if (immediate) return Promise.resolve(immediate);
+    return new Promise(resolve => {
+      let finished = false;
+      const finish = value => {
+        if (finished) return;
+        finished = true;
+        observer.disconnect();
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      const observer = new MutationObserver(() => {
+        const field = resolveField();
+        if (field && visible(field)) finish(field);
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+      const timeout = setTimeout(() => finish(null), timeoutMs);
+    });
+  }
   async function execute(task) {
     currentTask = task;
     if (location.href.split("?")[0] !== task.projectUrl.split("?")[0]) {
@@ -75,14 +95,18 @@
       requestDownload();
       return;
     }
-    const field = findPromptField();
-    if (!field) {
-      send("FLOW_UI_UNVERIFIED", { reason: "Could not identify exactly one accessible prompt field", state });
+    // Wait for the Flow app to hydrate. A URL change alone is not treated as a loaded project.
+    const settings = await chrome.storage.local.get(["promptSelector", "generateSelector", "downloadSelector", "selectorsVerified"]);
+    const resolveField = () => settings.selectorsVerified === true && settings.promptSelector
+      ? document.querySelector(settings.promptSelector)
+      : findPromptField();
+    const field = await waitForPromptField(resolveField);
+    if (!field || !visible(field)) {
+      send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
     }
     // Safe-by-default: never click an unverified Flow control. The extension reports
     // the detected controls; selectors must be verified against the live account UI.
-    const settings = await chrome.storage.local.get(["promptSelector", "generateSelector", "downloadSelector", "selectorsVerified"]);
     if (settings.selectorsVerified !== true || !settings.promptSelector || !settings.generateSelector) {
       send("FLOW_UI_UNVERIFIED", {
         reason: "Live Flow selectors have not been verified for this account.",
