@@ -336,9 +336,23 @@ export default function App() {
 
   useEffect(() => {
     if (!active) { setFacebookPublication(null); return; }
-    fetch(`${API}/jobs/${active.id}/facebook-publication`).then(r=>r.json()).then(d=>setFacebookPublication(d.publication || null)).catch(()=>setFacebookPublication(null));
+    let stopped = false;
+    const loadPublication = async () => {
+      try {
+        let response = await fetch(`${API}/jobs/${active.id}/facebook-publication`);
+        let data = await response.json();
+        if (!stopped && data.publication?.status === "processing") {
+          const verified = await fetch(`${API}/jobs/${active.id}/facebook-publication/refresh`, { method: "POST" });
+          if (verified.ok) data = await verified.json();
+        }
+        if (!stopped) setFacebookPublication(data.publication || null);
+      } catch { if (!stopped) setFacebookPublication(null); }
+    };
+    loadPublication();
+    const timer = window.setInterval(loadPublication, 20000);
     const meta = active.final_video?.social_metadata;
     if (meta) { setSeoTitle(meta.title || ""); setSeoCaption(meta.caption || ""); setSeoDescription(meta.description || ""); setSeoHashtags((meta.hashtags || []).join(" ")); }
+    return () => { stopped = true; window.clearInterval(timer); };
   }, [active?.id, active?.final_video?.created_at]);
 
   return <div className="shell">
