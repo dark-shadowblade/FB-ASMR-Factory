@@ -122,18 +122,20 @@ class JobRulesTests(unittest.TestCase):
         created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
         job_id = created["id"]
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
             clips = []
             with sqlite3.connect(main_module.DB_PATH) as conn:
                 for index, clip in enumerate(created["clips"], start=1):
-                    source = root / f"clip-{index}.mp4"
+                    profile_id = f"flow-{index}"
+                    root = main_module.DATA_DIR / "chrome-profiles" / profile_id / "downloads"
+                    root.mkdir(parents=True, exist_ok=True)
+                    source = root / f"clip-{job_id}-{index}.mp4"
                     source.write_bytes(b"source")
                     clips.append(source)
                     conn.execute(
                         """INSERT INTO extension_tasks(task_id,job_id,clip_id,profile_id,project_url,prompt,
                            settings_json,status,created_at,updated_at,download_path)
                            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                        (f"task-{job_id}-{index}", job_id, clip["id"], f"flow-{index}",
+                        (f"task-{job_id}-{index}", job_id, clip["id"], profile_id,
                          f"https://flow.google.com/project/{index:08d}-abcd", clip["prompt"],
                          "{}", "downloaded", "now", "now", str(source))
                     )
@@ -144,7 +146,7 @@ class JobRulesTests(unittest.TestCase):
                 return {"output": str(output), "clip_count": 5, "duration_seconds": 40.0,
                         "width": 720, "height": 1280, "video_codec": "h264",
                         "audio_codec": "aac", "size_bytes": output.stat().st_size}
-            with patch.dict(os.environ, {"ASMR_FACTORY_DOWNLOADS_DIR": directory}), \
+            with patch.dict(os.environ, {"ASMR_FACTORY_DOWNLOADS_DIR": ""}), \
                  patch.object(main_module.media_pipeline, "assemble_five_clips", side_effect=fake_assemble):
                 response = self.client.post(f"/api/v1/jobs/{job_id}/assemble")
             self.assertEqual(response.status_code, 200, response.text)
