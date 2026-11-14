@@ -20,7 +20,7 @@ class JobRulesTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.client_context.__exit__(None, None, None)
     def test_fruits_job_has_exactly_five_clip_tasks(self):
-        response = self.self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
+        response = self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
         self.assertEqual(response.status_code, 200)
         job = response.json()["job"]
         self.assertEqual(len(job["clips"]), 5)
