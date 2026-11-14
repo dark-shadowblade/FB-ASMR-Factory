@@ -103,7 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message?.type === "FLOW_EVENT" && activeTask) {
       await report(message.event, message.payload || {});
-      if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
+      if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
         activeTabId = null;
         await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadId"]);
