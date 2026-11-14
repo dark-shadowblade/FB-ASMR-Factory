@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "FB-ASMR Factory — Flow Worker",
+  "version": "0.1.0",
+  "description": "Profile-isolated Google Flow task worker for FB-ASMR-Factory.",
+  "permissions": ["storage", "alarms", "downloads", "tabs"],
+  "host_permissions": [
+    "https://flow.google.com/*",
+    "https://accounts.google.com/*",
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+  "background": { "service_worker": "background/service-worker.js" },
+  "content_scripts": [{
+    "matches": ["https://flow.google.com/*"],
+    "js": ["content/content.js"],
+    "run_at": "document_idle"
+  }],
+  "options_page": "options/options.html",
+  "action": { "default_title": "FB-ASMR Flow Worker" }
+}
