@@ -172,6 +172,8 @@ chrome.runtime.onStartup.addListener(() => {
 });
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) poll(); });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // CONFIG_UPDATED is handled by the dedicated transactional handler below.
+  if (message?.type === "CONFIG_UPDATED") return false;
   (async () => {
     await restoreTask();
     if (message?.type === "FLOW_PAGE_READY" && activeTask) {
