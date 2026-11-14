@@ -20,7 +20,7 @@ class JobRulesTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.client_context.__exit__(None, None, None)
     def test_fruits_job_has_exactly_five_clip_tasks(self):
-        response = self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
+        response = self.self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
         self.assertEqual(response.status_code, 200)
         job = response.json()["job"]
         self.assertEqual(len(job["clips"]), 5)
@@ -29,22 +29,22 @@ class JobRulesTests(unittest.TestCase):
     def test_all_seven_themes_create_five_clip_tasks(self):
         themes = ["fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"]
         for theme in themes:
-            response = client.post("/api/v1/jobs", json={"topic": "Test " + theme, "theme": theme})
+            response = self.client.post("/api/v1/jobs", json={"topic": "Test " + theme, "theme": theme})
             self.assertEqual(response.status_code, 200, theme)
             self.assertEqual(len(response.json()["job"]["clips"]), 5, theme)
 
     def test_unknown_theme_is_rejected(self):
-        response = client.post("/api/v1/jobs", json={"topic": "Test", "theme": "unknown"})
+        response = self.client.post("/api/v1/jobs", json={"topic": "Test", "theme": "unknown"})
         self.assertEqual(response.status_code, 422)
 
     def test_blank_topic_is_rejected(self):
-        response = client.post("/api/v1/jobs", json={"topic": "   ", "theme": "fruits"})
+        response = self.client.post("/api/v1/jobs", json={"topic": "   ", "theme": "fruits"})
         self.assertEqual(response.status_code, 422)
 
 
     def test_prompt_generation_creates_five_distinct_prompts(self):
-        created = client.post("/api/v1/jobs", json={"topic": "Tropical Fruits", "theme": "fruits"}).json()["job"]
-        response = client.post(f"/api/v1/jobs/{created['id']}/generate-prompts")
+        created = self.client.post("/api/v1/jobs", json={"topic": "Tropical Fruits", "theme": "fruits"}).json()["job"]
+        response = self.client.post(f"/api/v1/jobs/{created['id']}/generate-prompts")
         self.assertEqual(response.status_code, 200)
         job = response.json()["job"]
         self.assertEqual(job["status"], "prompts_ready")
@@ -55,8 +55,8 @@ class JobRulesTests(unittest.TestCase):
     def test_every_theme_generates_five_subject_specific_prompts(self):
         themes = ["fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"]
         for theme in themes:
-            job = client.post("/api/v1/jobs", json={"topic": "Daily ASMR", "theme": theme}).json()["job"]
-            response = client.post("/api/v1/jobs/" + job["id"] + "/generate-prompts")
+            job = self.client.post("/api/v1/jobs", json={"topic": "Daily ASMR", "theme": theme}).json()["job"]
+            response = self.client.post("/api/v1/jobs/" + job["id"] + "/generate-prompts")
             self.assertEqual(response.status_code, 200, theme)
             prompts = response.json()["job"]["clips"]
             self.assertEqual(len(prompts), 5)
@@ -66,16 +66,16 @@ class JobRulesTests(unittest.TestCase):
 
     def test_style_bible_can_be_saved_and_reused(self):
         custom = "Consistent macro camera, warm studio lighting, clean slate board, crisp natural cutting audio, no music or speech."
-        response = client.put("/api/v1/style-bible", json={"content": custom})
+        response = self.client.put("/api/v1/style-bible", json={"content": custom})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(client.get("/api/v1/style-bible").json()["content"], custom)
+        self.assertEqual(self.client.get("/api/v1/style-bible").json()["content"], custom)
 
     def test_prompt_pack_requires_all_five_before_approval(self):
-        created = client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
-        response = client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
+        created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
+        response = self.client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
         self.assertEqual(response.status_code, 409)
-        generated = client.post(f"/api/v1/jobs/{created['id']}/generate-prompts").json()["job"]
-        approved = client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
+        generated = self.client.post(f"/api/v1/jobs/{created['id']}/generate-prompts").json()["job"]
+        approved = self.client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()["job"]["status"], "prompts_approved")
 
