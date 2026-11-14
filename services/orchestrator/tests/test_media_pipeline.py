@@ -9,9 +9,9 @@ from app import media_pipeline
 
 
 class MediaPipelineTests(unittest.TestCase):
-    def metadata(self, width=720, height=1280, fps="30/1"):
+    def metadata(self, width=720, height=1280, fps="30/1", duration=8.0):
         return json.dumps({
-            "format": {"duration": "8.0", "format_name": "mov,mp4"},
+            "format": {"duration": str(duration), "format_name": "mov,mp4"},
             "streams": [
                 {"codec_type": "video", "codec_name": "h264", "width": width,
                  "height": height, "r_frame_rate": fps},
@@ -58,7 +58,10 @@ class MediaPipelineTests(unittest.TestCase):
 
             def fake_run(command):
                 if command[0] == "ffprobe":
-                    index = int(Path(command[-1]).stem)
+                    probe_path = Path(command[-1])
+                    if probe_path.stem == "final":
+                        return CompletedProcess(command, 0, self.metadata(duration=40.0), "")
+                    index = int(probe_path.stem)
                     metadata = self.metadata(width=640 if index == 4 else 720)
                     return CompletedProcess(command, 0, metadata, "")
                 Path(command[-1]).write_bytes(b"merged")
@@ -80,7 +83,8 @@ class MediaPipelineTests(unittest.TestCase):
 
             def fake_run(command):
                 if command[0] == "ffprobe":
-                    return CompletedProcess(command, 0, self.metadata(), "")
+                    duration = 40.0 if Path(command[-1]).stem == "final" else 8.0
+                    return CompletedProcess(command, 0, self.metadata(duration=duration), "")
                 self.assertIn("-c", command)
                 self.assertIn("copy", command)
                 Path(command[-1]).write_bytes(b"merged-video")
