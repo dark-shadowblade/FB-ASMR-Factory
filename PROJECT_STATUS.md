@@ -34,12 +34,13 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Prompt Studio UI with five editable prompts and explicit approval/locking.
 - [x] Dashboard selector exposes all seven styles.
 - [x] Backend tests cover all seven styles and five unique prompts per style (execution on user's Windows PC still pending).
-- [ ] Chrome Manifest V3 extension.
-- [ ] Chrome profile/session management.
-- [ ] Saved Flow project URL per profile.
-- [ ] Actual Google Flow UI automation.
+- [ ] Chrome Manifest V3 extension (not used in the initial direct-Chrome implementation).
+- [x] Five isolated persistent Chrome profile directories and profile manager.
+- [x] SQLite-backed saved Flow project URL per profile (five account slots).
+- [x] Desktop UI to paste/save each project's URL and open it directly.
+- [x] Reuse each profile's persistent Chrome session; first sign-in is required once per profile.
+- [ ] Actual Flow prompt insertion, generation action and completion detection.
 - [ ] Veo 3.1 Lite / 720p / 8-second settings detection and selection.
-- [ ] Prompt submission, clearing and generation completion detection.
 - [ ] Download association and validation.
 - [ ] FFmpeg/FFprobe media pipeline.
 - [ ] Job recovery and retry behavior.
@@ -49,7 +50,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, and AI Director Prompt Studio are committed. The code supports five distinct subjects/prompts for each style using a shared persistent Style Bible, with optional OpenAI-compatible provider support and a built-in fallback. Local test execution remains pending. Google Flow browser automation, media processing and Facebook publishing remain unimplemented.
+**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Prompt submission/completion detection, downloads, media processing and Facebook publishing remain unimplemented.
 
 ## 2. Product rules that must not be lost
 
@@ -108,17 +109,18 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 **Exit condition:** Five distinct prompts can be generated, edited, approved and persisted per job. Provider-based generation requires the user to configure their own compatible API credentials.
 
-### Milestone 3 — Chrome extension and browser sessions
-- [ ] Build Manifest V3 extension skeleton.
-- [ ] Define typed message contracts between extension and orchestrator.
-- [ ] Register up to five browser profiles.
-- [ ] Provide visible sign-in/readiness checks.
-- [ ] Store a Flow project URL for each profile.
-- [ ] Open the remembered project URL directly.
-- [ ] Show session status in the desktop app.
-- [ ] Add safe manual fallback.
+### Milestone 3 — Persistent Chrome profiles and account configuration
+- [x] Add five stable profile IDs with isolated persistent Chrome user-data directories.
+- [x] Store each account label and Flow project URL in SQLite.
+- [x] Add desktop controls to save and open each configured project.
+- [x] Open the saved project URL directly in its own Chrome profile.
+- [x] Reuse the same profile directory across application restarts.
+- [x] Detect Google sign-in redirects and report when first sign-in is required.
+- [x] Add URL validation restricted to HTTPS flow.google.com/project/ URLs.
+- [x] Add unit tests for profile IDs, URL validation and profile isolation.
+- [ ] Verify five real Chrome sessions on a Windows machine with the user's accounts.
 
-**Exit condition:** App can identify the correct profile and open its configured Flow project without mixing accounts.
+**Exit condition:** App can open five configured Flow projects in five independent persistent Chrome profiles without mixing account sessions.
 
 ### Milestone 4 — Google Flow generation
 - [ ] Inspect and document the current Flow UI.
