@@ -258,3 +258,12 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 The Manifest V3 worker is now connected to the existing desktop/orchestrator flow. The desktop can display the locally generated bridge token, show which of the five extension workers have sent a recent heartbeat, and dispatch an approved five-prompt job only when all five workers are online. Each Chrome profile has a persistent instance ID; backend polling, commands and events are checked against both the profile ID and instance ID. The extension reuses the exact saved Flow project tab, waits for the app DOM to hydrate, monitors state changes, and correlates completed video downloads with the active Flow tab. Selected model/resolution/duration checks are configurable, but real Flow selectors are not verified. The extension remains fail-closed until those controls are configured and match the target values.
 
 A GitHub Actions workflow was added for the Node protocol tests and Python bridge tests. The workflow has been committed but its run result has not yet been observed in this session.
+
+
+## 2026-11-14 — Read-only Google Flow DOM diagnostic
+
+Added a diagnostic command to the MV3 content script and a **Scan active Flow tab** panel to extension Options. It inventories visible prompt-entry candidates, Generate-like buttons, download-like buttons, model/quality/duration/aspect-ratio controls, other visible buttons and video metadata. It proposes CSS selectors with confidence/basis annotations. The report is saved in that Chrome profile's local extension storage and can be copied as JSON.
+
+Safety properties: the scan is read-only; it does not click, change settings, submit prompts, or include the entered prompt text/value. It does not mark suggested selectors verified or enable automation. Live DOM evidence still needs to be collected from an authorised signed-in Flow session.
+
+Validation performed in this development session: JavaScript syntax checks passed for the content script, options script, background worker and shared protocol. Manifest V3 and diagnostic UI wiring were inspected. A real-browser scan and end-to-end Flow interaction were not available here.
