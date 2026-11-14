@@ -488,8 +488,9 @@ export default function App() {
         <div className="stat-card"><small>COMPLETED VIDEOS</small><strong>{jobs.filter(j=>Boolean(j.final_video)).length.toString().padStart(2,"0")}</strong><span>Saved in local library</span></div>
         <div className="stat-card"><small>FLOW SESSIONS</small><strong>05</strong><span>Target capacity</span></div>
       </section>
-
-      <div className="content-grid">
+      </>}
+      {(activePage === "home" || activePage === "accounts") && <div className="content-grid">
+        {activePage === "home" && <section className="panel create-panel">
         <section className="panel create-panel">
           <div className="panel-head"><div><div className="eyebrow">NEW PRODUCTION</div><h2>Create a video job</h2></div><span className="step-tag">STEP 01 / 05</span></div>
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
@@ -500,9 +501,8 @@ export default function App() {
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
           <p className="helper">Creates a saved five-clip plan. Generation settings are targets and will be verified against Flow when integration is built.</p>
-        </section>
-
-        <section className="panel session-panel">
+        </section>}
+        {activePage === "accounts" && <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
           <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
           {flowProfiles.map((profile,i)=><div className="session-row flow-account-row" key={profile.profile_id}>
@@ -550,22 +550,22 @@ export default function App() {
             <input value={bridgeToken} readOnly type="password" aria-label="Extension bridge token" />
             <button className="secondary compact" onClick={copyBridgeToken} disabled={!bridgeToken}>Copy pairing token</button>
           </div>
-        </section>
-      </div>
+        </section>}
+      </div>}
 
-      <section className="panel jobs-panel">
+      {activePage === "library" && <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">FINISHED PRODUCTIONS</div><h2>Video Library</h2></div><span className="count-pill">{library.length} VIDEOS</span></div>
         {library.length===0 ? <div className="empty"><div className="empty-icon">▣</div><b>No finished videos yet</b><span>Once five Flow downloads pass validation and merge, they will appear here.</span></div> :
           <div className="job-list">{library.map(video=><div className="job-row library-row" key={video.job_id}><video className="library-preview" controls preload="metadata" src={API + "/jobs/" + video.job_id + "/output/file"} /><div className="job-info"><b>{video.topic}</b><small>{Math.round(video.duration_seconds)}s · {video.width}×{video.height} · {(video.size_bytes/1024/1024).toFixed(1)} MB</small><small>{video.output_path}</small><a href={API + "/jobs/" + video.job_id + "/output/file"} download>Download MP4</a></div><span className="job-state">READY</span></div>)}</div>}
-      </section>
+      </section>}
 
-      <section className="panel jobs-panel">
+      {activePage === "home" && <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
         {jobs.length===0 ? <div className="empty"><div className="empty-icon">▤</div><b>No productions yet</b><span>Your created jobs will appear here.</span></div> :
           <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
-      </section>
+      </section>}
 
-      {active && <section className="panel detail-panel">
+      {activePage === "prompts" && active && <section className="panel detail-panel">
         <div className="panel-head"><div><div className="eyebrow">AI DIRECTOR · PROMPT STUDIO</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
@@ -615,8 +615,16 @@ export default function App() {
 
         </>}
       </section>}
-      {activePage === "prompts" && <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
+      {activePage === "prompts" && <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>}
 
+      {activePage === "settings" && <section className="panel settings-page">
+        <div className="panel-head"><div><div className="eyebrow">WORKSPACE CONFIGURATION</div><h2>Production settings</h2></div><span className="count-pill">CURRENT DEFAULTS</span></div>
+        <p className="muted">These are production targets. Google Flow must confirm the selected values in each signed-in profile before generation.</p>
+        <div className="settings-summary-grid">
+          <div><small>VIDEO MODEL</small><b>Veo 3.1 Lite</b></div><div><small>RESOLUTION</small><b>720p</b></div><div><small>CLIP DURATION</small><b>8 seconds</b></div><div><small>ASPECT RATIO</small><b>9:16 vertical</b></div><div><small>CLIPS PER VIDEO</small><b>5</b></div><div><small>FINAL TARGET</small><b>~40 seconds</b></div>
+        </div>
+        <div className="settings-info"><b>Local service</b><span>{health === "online" ? "Connected on this computer" : health === "offline" ? "Not connected · start the local service" : "Checking connection…"}</span><b>Media tools</b><span>FFmpeg and FFprobe are used by the local assembly pipeline. Availability is checked when assembly runs.</span><b>Credentials</b><span>AI and Facebook credentials are stored in the operating system credential vault, not in this settings screen.</span></div>
+      </section>}
       <div className="notice">{notice}</div>
       <footer>ASMR FACTORY <span>·</span> EARLY DEVELOPMENT BUILD <span>·</span> LOCAL-FIRST</footer>
     </main>
