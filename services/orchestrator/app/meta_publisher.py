@@ -54,8 +54,11 @@ def publish_reel(video_path: str | Path, title: str, description: str, timeout: 
     cfg = meta_config()
     if not cfg["page_id"] or not cfg["page_access_token"]:
         raise MetaPublishError("Facebook Page is not connected. Configure the Page ID and Page access token.")
-    path = Path(video_path).resolve(strict=True)
-    if path.suffix.lower() != ".mp4" or not path.is_file() or path.stat().st_size == 0:
+    candidate = Path(video_path).expanduser()
+    if candidate.suffix.lower() != ".mp4":
+        raise MetaPublishError("The final video must be an MP4 file")
+    path = candidate.resolve(strict=True)
+    if not path.is_file() or path.stat().st_size == 0:
         raise MetaPublishError("The final MP4 is missing or invalid")
 
     token = cfg["page_access_token"]
