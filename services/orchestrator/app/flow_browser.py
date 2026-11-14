@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Any
@@ -47,9 +48,19 @@ class FlowProfileManager:
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 downloads_dir = profile_dir / "downloads"
                 downloads_dir.mkdir(parents=True, exist_ok=True)
-                extension_dir = Path(__file__).resolve().parents[3] / "extensions" / "flow-automation"
-                if not (extension_dir / "manifest.json").is_file():
-                    raise RuntimeError(f"Flow automation extension was not found at {extension_dir}")
+                extension_candidates = []
+                if getattr(sys, "frozen", False):
+                    bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+                    extension_candidates.append(bundle_root / "extensions" / "flow-automation")
+                source_root = Path(__file__).resolve().parents[3]
+                extension_candidates.extend([
+                    source_root / "extensions" / "flow-automation",
+                    Path(sys.executable).resolve().parent / "extensions" / "flow-automation",
+                ])
+                extension_dir = next((candidate for candidate in extension_candidates if (candidate / "manifest.json").is_file()), None)
+                if extension_dir is None:
+                    searched = ", ".join(str(candidate) for candidate in extension_candidates)
+                    raise RuntimeError(f"Flow automation extension was not packaged or found. Searched: {searched}")
                 try:
                     context = await self._playwright.chromium.launch_persistent_context(
                         user_data_dir=str(profile_dir),
