@@ -442,7 +442,8 @@ export default function App() {
     ...flowAutomation.tasks.map(t=>({key:"task-"+t.task_id,time:new Date(t.updated_at).toLocaleTimeString(),level:["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status)?"error":"info",source:"TASK",message:t.profile_id+" · "+t.status.replaceAll("_"," ")+(t.last_error?" · "+t.last_error:"")+(t.download_path?" · "+t.download_path:"")})),
     ...jobs.slice(0,8).map(j=>({key:"job-"+j.id,time:new Date(j.created_at).toLocaleTimeString(),level:"info",source:"JOB",message:j.topic+" · "+j.status.replaceAll("_"," ")+(j.final_video?" · final video assembled":"")})),
     {key:"notice",time:"now",level:"info",source:"DESKTOP",message:notice}
-  ].sort((a,b)=>b.time.localeCompare(a.time));\n  const active = selected ?? jobs[0] ?? null;
+  ].sort((a,b)=>b.time.localeCompare(a.time));
+  const active = selected ?? jobs[0] ?? null;
   const jobProgress = (job: Job) => {
     const tasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
     const downloaded = tasks.filter(task => task.status === "downloaded").length;
