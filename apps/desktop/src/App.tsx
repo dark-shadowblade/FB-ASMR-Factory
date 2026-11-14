@@ -183,6 +183,44 @@ export default function App() {
     } finally { setDispatching(false); }
   }
 
+  async function startAutomaticProduction(job: Job) {
+    if (flowAutomation.registered_count !== 5 || flowProfiles.filter(p=>p.configured).length !== 5) {
+      setNotice("Save all five Flow project URLs and connect all five extension workers first.");
+      return;
+    }
+    if (flowAutomation.tasks.some(t=>t.job_id===job.id)) {
+      setNotice("This job already has Flow tasks. Use the per-clip retry action for failed clips.");
+      return;
+    }
+    setDispatching(true);
+    try {
+      let current = job;
+      if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
+        const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
+        const generatedData = await generated.json();
+        if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
+        current = generatedData.job;
+        setSelected(current);
+      }
+      if (current.status !== "prompts_approved") {
+        const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
+        const approvedData = await approved.json();
+        if (!approved.ok) throw new Error(approvedData.detail || "Automatic prompt approval failed");
+        current = approvedData.job;
+        setSelected(current);
+      }
+      const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
+      const dispatchData = await dispatched.json();
+      if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
+      setSelected(current);
+      setNotice("Automatic production started: five prompts approved and dispatched to five independent Flow accounts.");
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not start automatic production.");
+      await refresh();
+    } finally { setDispatching(false); }
+  }
+
   async function retryFlowTask(task: FlowAutomationStatus["tasks"][number]) {
     try {
       const response = await fetch(API + "/extension/tasks/" + task.task_id + "/retry", {
@@ -307,11 +345,15 @@ export default function App() {
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
         {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
+        {["draft","prompts_ready"].includes(active.status) && <div className="dispatch-toolbar">
+          <div><b>Automatic five-account production</b><small>Generate missing prompts, approve the pack and dispatch all five clips without a manual preview step.</small></div>
+          <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowProfiles.filter(p=>p.configured).length!==5} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
+        </div>}
         {["prompts_approved","running","media_ready"].includes(active.status) && <>
           <div className="approved-note">✓ Prompt pack approved.</div>
           <div className="dispatch-toolbar">
             <div><b>Google Flow task queue</b><small>{flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
-            <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>dispatchFlowJob(active)}>{dispatching ? "Dispatching…" : flowAutomation.registered_count!==5 ? "Connect all five Flow workers" : "Start five Flow tasks"}</button>
+            <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
           </div>
           {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
