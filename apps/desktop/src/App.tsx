@@ -177,7 +177,7 @@ export default function App() {
     try {
       let current = job;
       if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
-        setNotice("All five workers connected. Generating the five unique prompts…");
+        setNotice("Generating and internally approving the five unique prompts…");
         const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
         const generatedData = await generated.json();
         if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
@@ -206,7 +206,7 @@ export default function App() {
       }
 
       let connected = 0;
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < 300; attempt++) {
         const statusResponse = await fetch(API + "/flow/automation/status");
         if (statusResponse.ok) {
           const statusData = await statusResponse.json();
@@ -214,11 +214,11 @@ export default function App() {
           connected = statusData.registered_count || 0;
           if (connected === 5) break;
         }
-        if (attempt < 29) await new Promise(resolve => window.setTimeout(resolve, 2000));
+        if (attempt < 299) await new Promise(resolve => window.setTimeout(resolve, 2000));
       }
       if (connected !== 5) {
         await refresh();
-        throw new Error("All five Chrome windows were opened, but only " + connected + "/5 extension workers connected within 60 seconds. Check that the extension is installed and enabled in profiles 01–05, and complete Google sign-in if requested. Then click Generate Video again.");
+        throw new Error("All five Chrome windows were opened, but only " + connected + "/5 extension workers connected within 10 minutes. Install/enable the extension in profiles 01–05 and complete Google sign-in in the opened windows. Your generated prompt pack is saved; no prompt approval is needed.");
       }
 
       setNotice("Dispatching one clip to each of Chrome profiles 01–05…");
