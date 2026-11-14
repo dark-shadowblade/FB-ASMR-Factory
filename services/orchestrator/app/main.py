@@ -826,6 +826,12 @@ def _attempt_auto_publish(job_id: str) -> tuple[dict[str, Any] | None, str | Non
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                          (job_id, "Automatic Facebook publishing failed safely: " + message, utc_now()))
         return None, message
+    except Exception as exc:
+        message = "Unexpected publishing error: " + str(exc)[:450]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + message, utc_now()))
+        return None, message
 
 
 @app.get("/api/v1/facebook/accounts")
