@@ -28,6 +28,10 @@ async function config() {
 async function api(path, options = {}) {
   const c = await config();
   if (!c.bridgeToken) throw new Error("BRIDGE_NOT_CONFIGURED");
+  const bridgeUrl = new URL(c.baseUrl);
+  if (bridgeUrl.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(bridgeUrl.hostname) || bridgeUrl.port !== "8765") {
+    throw new Error("BRIDGE_URL_MUST_BE_LOCALHOST_8765");
+  }
   const response = await fetch(c.baseUrl + path, {
     ...options,
     headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": c.bridgeToken, ...(options.headers || {}) }
