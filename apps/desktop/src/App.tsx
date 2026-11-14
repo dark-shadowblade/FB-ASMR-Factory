@@ -295,7 +295,7 @@ export default function App() {
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
         {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
-        {active.status==="prompts_approved" && <>
+        {["prompts_approved","running","media_ready"].includes(active.status) && <>
           <div className="approved-note">✓ Prompt pack approved.</div>
           <div className="dispatch-toolbar">
             <div><b>Google Flow task queue</b><small>{flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
