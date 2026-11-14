@@ -22,17 +22,6 @@ const THEMES = [
 ];
 
 
-function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; onSave: (value: string) => void }) {
-  const [value, setValue] = useState(clip.prompt);
-  useEffect(() => setValue(clip.prompt), [clip.prompt]);
-  return <div className="prompt-card">
-    <div className="clip-top"><span>CLIP 0{clip.order}</span><span>{clip.status.replaceAll("_"," ")}</span></div>
-    <b>{clip.subject}</b>
-    <textarea value={value} onChange={e=>setValue(e.target.value)} placeholder="Generate prompts to begin…" disabled={locked}/>
-    <button className="prompt-save" disabled={locked || value.trim().length<40 || value===clip.prompt} onClick={()=>onSave(value)}>Save edit</button>
-  </div>;
-}
-
 export default function App() {
   const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings" | "debug">("home");
   const [topic, setTopic] = useState("");
@@ -48,7 +37,6 @@ export default function App() {
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
-  const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [aiProvider, setAiProvider] = useState("gemini");
   const [aiModel, setAiModel] = useState("gemini-2.0-flash");
@@ -68,10 +56,6 @@ export default function App() {
   const [facebookPageToken, setFacebookPageToken] = useState("");
   const [savingFacebookAccount, setSavingFacebookAccount] = useState(false);
   const [facebookPublication, setFacebookPublication] = useState<FacebookPublication | null>(null);
-  const [seoTitle, setSeoTitle] = useState("");
-  const [seoCaption, setSeoCaption] = useState("");
-  const [seoDescription, setSeoDescription] = useState("");
-  const [seoHashtags, setSeoHashtags] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
   const [autoPublishAttempted, setAutoPublishAttempted] = useState<Set<string>>(new Set());
@@ -178,52 +162,6 @@ export default function App() {
     } finally { setBusy(false); }
   }
 
-
-  async function generatePrompts(job: Job) {
-    setGenerating(true);
-    try {
-      const response = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Prompt generation failed");
-      setSelected(data.job);
-      setNotice("Five prompts created using " + data.source + ". Review and edit them below.");
-      await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Prompt generation failed."); }
-    finally { setGenerating(false); }
-  }
-
-  async function savePrompt(job: Job, clip: Clip, prompt: string) {
-    try {
-      const response = await fetch(API + "/jobs/" + job.id + "/clips/" + clip.id + "/prompt", {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Could not save prompt");
-      setSelected(data.job); setNotice(clip.subject + " prompt saved."); await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save prompt."); }
-  }
-
-  async function approvePrompts(job: Job) {
-    try {
-      const response = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Prompt approval failed");
-      setSelected(data.job); setNotice("All five prompts approved and locked."); await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve prompts."); }
-  }
-
-  async function dispatchFlowJob(job: Job) {
-    setDispatching(true);
-    try {
-      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
-      setNotice(`Dispatched ${data.dispatched} clips across five independent Flow accounts. The extension workers will pick them up.`);
-      await refresh();
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not dispatch Flow tasks.");
-    } finally { setDispatching(false); }
-  }
 
   async function startAutomaticProduction(job: Job) {
     if (flowProfiles.filter(p=>p.configured).length !== 5) {
@@ -367,19 +305,6 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not remove Page."); }
   }
 
-  async function saveFacebookMetadata(job: Job) {
-    try {
-      const response = await fetch(API + "/jobs/" + job.id + "/facebook-metadata", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: seoTitle, caption: seoCaption, description: seoDescription, hashtags: seoHashtags.split(/\s+/).filter(Boolean) })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Could not save Facebook metadata");
-      setNotice("Facebook title, caption, description and hashtags saved.");
-      await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Facebook metadata."); }
-  }
-
   async function publishFacebook(job: Job) {
     setPublishing(true);
     try {
@@ -436,17 +361,6 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Style Bible."); }
   }
 
-  async function approveJob(job: Job) {
-    try {
-      const response = await fetch(`${API}/jobs/${job.id}/approve`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail ?? "Approval failed");
-      setSelected(data.job);
-      setNotice("Prompts approved. Real AI prompt generation and Flow automation are not connected yet.");
-      await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve job."); }
-  }
-
   const debugEntries = [
     ...diagnosticLogs.map(log=>({key:"diagnostic-"+log.id,time:new Date(log.created_at).toLocaleTimeString(),level:log.level==="error"?"error":log.level==="warn"?"warn":"info",source:log.source,message:log.message+(log.profile_id?" · "+log.profile_id:"")+(log.task_id?" · "+log.task_id:"")})),
     {key:"service",time:new Date(debugUpdatedAt).toLocaleTimeString(),level:health==="offline"?"error":"info",source:"BACKEND",message:health==="online"?"Local API health check passed":"Local API is unreachable"},
@@ -494,8 +408,6 @@ export default function App() {
     };
     loadPublication();
     const timer = window.setInterval(loadPublication, 20000);
-    const meta = active.final_video?.social_metadata;
-    if (meta) { setSeoTitle(meta.title || ""); setSeoCaption(meta.caption || ""); setSeoDescription(meta.description || ""); setSeoHashtags((meta.hashtags || []).join(" ")); }
     return () => { stopped = true; window.clearInterval(timer); };
   }, [active?.id, active?.final_video?.created_at]);
 
