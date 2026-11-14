@@ -29,7 +29,13 @@ def make_client(tmp_path):
     app.include_router(create_extension_router(db, tmp_path))
     client = TestClient(app)
     token = (tmp_path / "extension-bridge.token").read_text().strip()
-    return client, {"X-ASMR-Bridge-Token": token}, db
+    headers = {"X-ASMR-Bridge-Token": token}
+    for index in range(1, 6):
+        client.post("/api/v1/extension/register", headers=headers, json={
+            "protocolVersion": 1, "profileId": f"flow-{index}",
+            "instanceId": f"instance-flow-{index}", "extensionVersion": "0.1.0"
+        })
+    return client, headers, db
 
 
 def test_dispatch_assigns_one_task_to_each_profile(tmp_path):
@@ -68,3 +74,12 @@ def test_event_identity_mismatch_is_rejected(tmp_path):
 def test_bridge_requires_local_secret(tmp_path):
     client, _, _ = make_client(tmp_path)
     assert client.get("/api/v1/extension/health").status_code == 401
+
+
+def test_dispatch_rejects_missing_worker_heartbeat(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("DELETE FROM extension_instances WHERE profile_id='flow-5'")
+    response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    assert response.status_code == 409
+    assert "flow-5" in response.json()["detail"]
