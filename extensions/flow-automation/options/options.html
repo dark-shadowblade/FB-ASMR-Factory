@@ -24,8 +24,20 @@
       <label class="toggle"><input id="enabled" type="checkbox"><span><b>Enable task polling</b><small>Allow this profile to receive its assigned clip tasks.</small></span></label>
     </section>
 
+    <section class="panel live-panel">
+      <div class="section-heading"><div><p class="eyebrow">02 / LIVE PROFILE STATUS</p><h2>Detected project & assigned settings</h2></div><span class="step">Live</span></div>
+      <div class="live-grid">
+        <div class="live-card"><span class="live-label">Worker profile</span><strong id="liveProfile">Not configured</strong><small id="liveConnection">Connection not checked yet</small></div>
+        <div class="live-card"><span class="live-label">Flow project</span><strong id="liveProject">No project detected</strong><small id="liveProjectMeta">Open a project in this managed browser</small></div>
+        <div class="live-card"><span class="live-label">Assigned model</span><strong id="liveModel">Waiting for task</strong><small id="liveQuality">Quality / resolution not received</small></div>
+        <div class="live-card"><span class="live-label">Clip settings</span><strong id="liveDuration">—</strong><small id="liveRatio">Aspect ratio not received</small></div>
+      </div>
+      <div class="live-footer"><span id="liveTaskMeta">No task assigned to this profile.</span><button id="refreshLiveStatus" class="button ghost" type="button">Refresh status</button></div>
+      <p class="help live-help">This panel shows information received by this extension profile. It does not change Flow settings. The worker verifies the visible Flow controls against the assigned task before generation.</p>
+    </section>
+
     <section class="panel">
-      <div class="section-heading"><div><p class="eyebrow">02 / FLOW CONTROLS</p><h2>Verified selectors</h2></div><span class="step">Advanced</span></div>
+      <div class="section-heading"><div><p class="eyebrow">03 / FLOW CONTROLS</p><h2>Verified selectors</h2></div><span class="step">Advanced</span></div>
       <p class="help">Only configure selectors after scanning the real Flow page in this browser profile. Suggested selectors are clues, not proof. Automation remains blocked until you explicitly verify them.</p>
       <div class="field"><label for="promptSelector">Prompt editor</label><input id="promptSelector" placeholder="Unique CSS selector"></div>
       <div class="field"><label for="generateSelector">Generate button</label><input id="generateSelector" placeholder="Unique CSS selector"></div>
@@ -40,7 +52,7 @@
     </section>
 
     <section class="panel diagnostic">
-      <div class="section-heading"><div><p class="eyebrow">03 / INSPECTION</p><h2>Live Flow diagnostic</h2></div><span class="step">Read-only</span></div>
+      <div class="section-heading"><div><p class="eyebrow">04 / INSPECTION</p><h2>Live Flow diagnostic</h2></div><span class="step">Read-only</span></div>
       <p class="help">Scan the project tab in this same browser profile. The diagnostic inventories visible controls and suggests selectors. It does not click controls, change settings, submit prompts or capture prompt text.</p>
       <div class="field"><label for="flowTab">Google Flow project tab</label><select id="flowTab"><option value="">Find Flow tabs first</option></select></div>
       <div class="actions">
