@@ -46,10 +46,11 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
 - [ ] Verify download contents with FFprobe and mark clips ready only after media validation.
 - [ ] FFmpeg/FFprobe media pipeline.
-- [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation and pause/resume/cancel command queue.
+- [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
 - [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
+- [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
 - [x] CI workflow added for extension protocol and backend bridge tests (first run pending).
 - [ ] Full job recovery and retry behavior.
 - [ ] Video Library and thumbnails.
