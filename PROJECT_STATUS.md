@@ -21,11 +21,14 @@ This file is the project handover and live progress tracker. Update it whenever 
 At verification on 2026-11-14, GitHub reported repository visibility as **Public**. The earlier requested setting was Private. This has not been changed automatically. Decide whether to change it in GitHub repository Settings → General → Danger Zone → Change repository visibility.
 
 ### Not yet implemented or verified
-- [ ] Electron desktop application.
-- [ ] React dashboard and navigation.
-- [ ] Python/FastAPI orchestrator.
-- [ ] SQLite schema and migrations.
-- [ ] Prompt generation provider integration.
+- [x] Initial Electron + React + TypeScript desktop scaffold.
+- [x] Initial dashboard UI with Fruits-only job creation and job history.
+- [x] Python/FastAPI local orchestrator scaffold.
+- [x] SQLite persistence for jobs, clips and job events.
+- [x] Backend API to create/list/read jobs and approve the five-clip placeholder plan.
+- [x] Windows development setup guide.
+- [x] Initial unit tests for five-clip job rules (written; execution still needs local verification).
+- [ ] AI prompt generation provider integration.
 - [ ] Persistent ASMR Style Bible and Prompt Studio.
 - [ ] Chrome Manifest V3 extension.
 - [ ] Chrome profile/session management.
@@ -42,7 +45,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Repository setup and documentation baseline. No working application should be claimed yet.
+**Current truthful milestone:** Initial desktop/backend scaffold committed. The local job-planning path is implemented in code, but it has not yet been run or verified on the user's Windows machine. Flow generation, media processing and Facebook publishing remain unimplemented.
 
 ## 2. Product rules that must not be lost
 
@@ -72,16 +75,20 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 **Exit condition:** Requirements and first milestone are clear enough to implement without guessing.
 
 ### Milestone 1 — Desktop foundation and local job engine
-- [ ] Create Electron + React + TypeScript application.
-- [ ] Create Python FastAPI local service.
-- [ ] Add SQLite database and migrations.
-- [ ] Implement dashboard, navigation and settings shell.
-- [ ] Implement topic input and Fruits-only theme selection.
-- [ ] Implement job creation, five prompt records and job IDs.
-- [ ] Implement persistent queue states and event log.
-- [ ] Add sample/mock generation mode so the UI can be tested without Flow.
+- [x] Create initial Electron + React + TypeScript scaffold.
+- [x] Create initial Python FastAPI local service.
+- [x] Add SQLite persistence for jobs, clips and job events.
+- [x] Implement initial dashboard and navigation shell.
+- [x] Implement topic input and Fruits-only theme selection.
+- [x] Implement job creation with exactly five placeholder clip records and unique IDs.
+- [x] Implement job listing/detail retrieval and draft-plan approval endpoint.
+- [x] Add Windows setup instructions.
+- [ ] Install dependencies and run the desktop app on Windows.
+- [ ] Execute backend unit tests and fix any failures.
+- [ ] Add safe job pause/resume/cancel and robust state transition rules.
+- [ ] Add explicit mock-generation mode and better queue controls.
 
-**Exit condition:** User can create a job, inspect five prompt tasks, see persistent progress and reopen the app without losing job state.
+**Exit condition:** User can create a job, inspect five persisted clip tasks, see progress and reopen the app without losing job state. This milestone is scaffolded but not yet verified end-to-end.
 
 ### Milestone 2 — AI Director and Prompt Studio
 - [ ] Define and store the shared ASMR Style Bible.
@@ -171,11 +178,11 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 ## 4. Recommended immediate next actions
 
-1. Add `docs/ARCHITECTURE.md` with concrete process boundaries, IPC contracts and local service design.
-2. Add `docs/DEVELOPMENT_ROADMAP.md` with milestone tasks and test gates.
-3. Create the repository skeleton for desktop app, Python service, extension, shared contracts and tests.
-4. Implement Milestone 1 only. Do not start by automating Flow before the job model and mock workflow are testable.
-5. Keep every change committed in small, understandable commits and update this file after each verified milestone.
+1. Run the Windows setup in `docs/DEVELOPMENT_SETUP.md`.
+2. Verify backend tests and fix any dependency/runtime issues.
+3. Exercise create/list/approve job flows from the Electron dashboard.
+4. Add persistent queue controls, proper state transition rules and test coverage.
+5. Continue Milestone 1 until its exit condition is verified; then implement AI Director/Prompt Studio.
 
 ## 5. Working rules for contributors and AI coding agents
 
