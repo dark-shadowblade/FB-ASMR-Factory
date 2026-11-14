@@ -258,13 +258,12 @@
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
-      if (settings.selectorsVerified !== true || !settings.downloadSelector) {
-        downloadRequested = false;
-        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
-        return;
-      }
       let button = null;
-      try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
+      try {
+        button = settings.selectorsVerified === true && settings.downloadSelector
+          ? document.querySelector(settings.downloadSelector)
+          : findButton(/download/i);
+      } catch (_) {}
       if (!visible(button)) {
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
         return;
