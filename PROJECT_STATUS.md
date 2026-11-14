@@ -2,7 +2,7 @@
 
 **Project:** FB-ASMR-Factory  
 **Repository:** https://github.com/dark-shadowblade/FB-ASMR-Factory  
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-14 (workspace navigation and CI stabilization update)
 
 This file is the project handover and live progress tracker. Update it whenever implementation or testing changes. A planned feature is not complete merely because it is described in the specification.
 
@@ -317,3 +317,17 @@ Changes committed:
 - Improved diagnostic classification for icon-labelled Generate controls and added regression checks for the above behaviors.
 
 Validation performed: all modified JavaScript files pass syntax parsing. Added Node regression tests to the existing extension test suite. These tests have not yet been executed in a local Node environment or confirmed by a GitHub Actions run. No live Flow browser generation test has been performed; actual selectors and settings remain unverified.
+
+
+### Workspace stabilization update (14 Nov 2026)
+- [x] Fixed malformed Python context-manager syntax in the AI verification unit tests.
+- [x] Replaced decorative sidebar navigation with working Home, Prompt Studio, Video Library, Accounts and Settings page switching.
+- [x] Separated the Home production form/history, Prompt Studio editor and Style Bible, Flow/AI account setup, Library and Settings overview into page-specific views.
+- [x] Added Facebook Page connection management to the Accounts page, including add, verify, select and remove actions using the existing backend.
+- [x] Updated the production form helper text to reflect that Flow integration exists and settings are checked when production starts.
+- [x] Latest backend test workflow passed on commit `f237e9b`.
+- [x] Latest extension protocol, five-profile bridge and desktop TypeScript/Vite build workflows passed on commit `f237e9b`.
+- [ ] Windows installer workflow for commit `f237e9b` is still running; do not claim a new installer artifact until its build and artifact upload finish.
+- [ ] Page switching and layout have passed TypeScript/Vite compilation, but still need visual testing in the packaged desktop app.
+- [ ] The Settings page currently documents the active production defaults and local-service/credential behavior; editable Veo controls, folder pickers and diagnostics remain future work.
+- [ ] Real authenticated Google Flow generation/download, full restart recovery, and real Facebook Page Reel publishing remain end-to-end tests requiring the user's accounts and Windows environment.
