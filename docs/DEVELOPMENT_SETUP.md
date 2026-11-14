@@ -50,8 +50,8 @@ Implemented in the repository:
 Still requiring live verification or implementation:
 - Actual Flow model/resolution/duration/aspect-ratio selection and real generation/download behavior on the user's signed-in accounts.
 - Reliable restart recovery, automatic retry/backoff and full five-account end-to-end tests.
-- Library thumbnails, search and in-app playback.
+- Library thumbnails, search/filtering and richer browsing (basic inline playback and MP4 download are already present).
 - Meta authentication, Page selection and automatic Facebook Reel publishing.
-- Optional scheduler and a verified release Windows installer.
+- Optional scheduler and full clean-machine installer verification (the current Windows installer workflow has succeeded, but the installer has not yet been tested on the user's PC).
 
 Do not treat CI mocks as proof that a real Flow generation or a real FFmpeg merge has been completed on the user's machine.
