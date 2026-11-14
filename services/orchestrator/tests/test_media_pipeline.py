@@ -103,8 +103,10 @@ class MediaPipelineTests(unittest.TestCase):
                 if command[0] == "ffprobe":
                     duration = 40.0 if Path(command[-1]).stem == "final" else 8.0
                     return CompletedProcess(command, 0, self.metadata(duration=duration), "")
-                self.assertIn("-c", command)
-                self.assertIn("copy", command)
+                if "concat" in command:
+                    self.assertIn("copy", command)
+                else:
+                    self.assertIn("libx264", command)
                 Path(command[-1]).write_bytes(b"merged-video")
                 return CompletedProcess(command, 0, "", "")
 
