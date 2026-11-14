@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 type Clip = { id: string; subject: string; prompt: string; status: string; order: number };
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[]; final_video?: { output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string } | null };
 type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean; extension_connected?: boolean };
+type LibraryVideo = { job_id: string; output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string; topic: string; theme: string; status: string };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
@@ -32,6 +33,7 @@ export default function App() {
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [library, setLibrary] = useState<LibraryVideo[]>([]);
   const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
   const [bridgeToken, setBridgeToken] = useState("");
   const [flowAutomation, setFlowAutomation] = useState<FlowAutomationStatus>({ profiles: [], registered_count: 0, tasks: [] });
@@ -53,6 +55,8 @@ export default function App() {
       const response = await fetch(`${API}/jobs`);
       const data = await response.json();
       setJobs(data.jobs ?? []);
+      const libraryResponse = await fetch(API + "/library");
+      if (libraryResponse.ok) setLibrary((await libraryResponse.json()).videos ?? []);
       const profilesResponse = await fetch(`${API}/flow/profiles`);
       if (profilesResponse.ok) {
         const profilesData = await profilesResponse.json();
@@ -273,6 +277,12 @@ export default function App() {
           </div>
         </section>
       </div>
+
+      <section className="panel jobs-panel">
+        <div className="panel-head"><div><div className="eyebrow">FINISHED PRODUCTIONS</div><h2>Video Library</h2></div><span className="count-pill">{library.length} VIDEOS</span></div>
+        {library.length===0 ? <div className="empty"><div className="empty-icon">▣</div><b>No finished videos yet</b><span>Once five Flow downloads pass validation and merge, they will appear here.</span></div> :
+          <div className="job-list">{library.map(video=><div className="job-row" key={video.job_id}><div className="job-thumb">▶</div><div className="job-info"><b>{video.topic}</b><small>{Math.round(video.duration_seconds)}s · {video.width}×{video.height} · {(video.size_bytes/1024/1024).toFixed(1)} MB</small><small>{video.output_path}</small></div><span className="job-state">READY</span></div>)}</div>}
+      </section>
 
       <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
