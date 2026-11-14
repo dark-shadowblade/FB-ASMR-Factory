@@ -1,0 +1,39 @@
+name: Chrome extension tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extensions/flow-automation/**"
+      - "tests/extension-protocol.test.cjs"
+      - ".github/workflows/extension-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "extensions/flow-automation/**"
+      - "tests/extension-protocol.test.cjs"
+      - ".github/workflows/extension-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate manifest JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('extensions/flow-automation/manifest.json','utf8'))"
+      - name: Check extension JavaScript syntax
+        run: |
+          node --check extensions/flow-automation/background/service-worker.js
+          node --check extensions/flow-automation/content/content.js
+          node --check extensions/flow-automation/options/options.js
+          node --check extensions/flow-automation/shared/protocol.js
+      - name: Test profile and task protocol
+        working-directory: extensions/flow-automation
+        run: npm test
