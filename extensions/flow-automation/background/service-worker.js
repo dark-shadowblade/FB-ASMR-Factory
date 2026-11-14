@@ -149,8 +149,7 @@ async function poll() {
     await chrome.storage.local.set({ instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
       activeTask });
     const projectTabs = await chrome.tabs.query({ url: "https://flow.google.com/project/*" });
-    const expectedPath = activeTask.projectUrl.split("?")[0];
-    const existing = projectTabs.find(tab => (tab.url || "").split("?")[0] === expectedPath);
+    const existing = projectTabs.find(tab => sameFlowProject(tab.url || "", activeTask.projectUrl));
     const tab = existing
       ? await chrome.tabs.update(existing.id, { url: activeTask.projectUrl, active: true })
       : await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
@@ -177,11 +176,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     await restoreTask();
     if (message?.type === "FLOW_PAGE_READY" && activeTask) {
       const senderUrl = sender.tab?.url || "";
-      if (sender.tab?.id && senderUrl.split("?")[0] === activeTask.projectUrl.split("?")[0]) {
+      const detectedProject = flowProjectIdentity(senderUrl);
+      if (detectedProject) {
+        const c = await config();
+        await chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: senderUrl, title: message.title || "", profileId: c.profileId, detectedAt: new Date().toISOString() } });
+      }
+      if (sender.tab?.id && sameFlowProject(senderUrl, activeTask.projectUrl)) {
         activeTabId = sender.tab.id;
         await chrome.storage.local.set({ activeTabId });
       }
-      await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "" });
+      await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "", projectId: detectedProject?.projectId || null, matchesAssignedProject: sameFlowProject(senderUrl, activeTask.projectUrl) });
       sendResponse({ task: activeTask });
       return;
     }
