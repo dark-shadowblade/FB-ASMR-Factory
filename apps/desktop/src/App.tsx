@@ -56,6 +56,7 @@ export default function App() {
   const [facebookPageToken, setFacebookPageToken] = useState("");
   const [savingFacebookAccount, setSavingFacebookAccount] = useState(false);
   const [facebookPublication, setFacebookPublication] = useState<FacebookPublication | null>(null);
+  const [publicationLoadedFor, setPublicationLoadedFor] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
   const [autoPublishAttempted, setAutoPublishAttempted] = useState<Set<string>>(new Set());
@@ -174,6 +175,22 @@ export default function App() {
     }
     setDispatching(true);
     try {
+      let current = job;
+      if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
+        setNotice("All five workers connected. Generating the five unique prompts…");
+        const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
+        const generatedData = await generated.json();
+        if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
+        current = generatedData.job;
+        setSelected(current);
+      }
+      if (current.status !== "prompts_approved") {
+        const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
+        const approvedData = await approved.json();
+        if (!approved.ok) throw new Error(approvedData.detail || "Automatic prompt approval failed");
+        current = approvedData.job;
+        setSelected(current);
+      }
       setNotice("Opening Chrome profiles 01–05 and their saved Flow projects…");
       const opened = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
       const openedData = await opened.json();
@@ -204,22 +221,6 @@ export default function App() {
         throw new Error("All five Chrome windows were opened, but only " + connected + "/5 extension workers connected within 60 seconds. Check that the extension is installed and enabled in profiles 01–05, and complete Google sign-in if requested. Then click Generate Video again.");
       }
 
-      let current = job;
-      if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
-        setNotice("All five workers connected. Generating the five unique prompts…");
-        const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
-        const generatedData = await generated.json();
-        if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
-        current = generatedData.job;
-        setSelected(current);
-      }
-      if (current.status !== "prompts_approved") {
-        const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
-        const approvedData = await approved.json();
-        if (!approved.ok) throw new Error(approvedData.detail || "Automatic prompt approval failed");
-        current = approvedData.job;
-        setSelected(current);
-      }
       setNotice("Dispatching one clip to each of Chrome profiles 01–05…");
       const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
       const dispatchData = await dispatched.json();
@@ -387,10 +388,10 @@ export default function App() {
   }, [active?.id, active?.final_video?.created_at, flowAutomation.tasks, assembling, autoAssemblyAttempted]);
 
   useEffect(() => {
-    if (!active || !active.final_video || !facebookStatus.connected || facebookPublication || publishing || autoPublishAttempted.has(active.id)) return;
+    if (!active || !active.final_video || !facebookStatus.connected || publicationLoadedFor !== active.id || facebookPublication || publishing || autoPublishAttempted.has(active.id)) return;
     setAutoPublishAttempted(current => new Set(current).add(active.id));
     publishFacebook(active);
-  }, [active?.id, active?.final_video?.created_at, facebookStatus.connected, facebookPublication?.status, publishing, autoPublishAttempted]);
+  }, [active?.id, active?.final_video?.created_at, facebookStatus.connected, publicationLoadedFor, facebookPublication?.status, publishing, autoPublishAttempted]);
 
   useEffect(() => {
     if (!active) { setFacebookPublication(null); return; }
@@ -403,8 +404,8 @@ export default function App() {
           const verified = await fetch(`${API}/jobs/${active.id}/facebook-publication/refresh`, { method: "POST" });
           if (verified.ok) data = await verified.json();
         }
-        if (!stopped) setFacebookPublication(data.publication || null);
-      } catch { if (!stopped) setFacebookPublication(null); }
+        if (!stopped) { setFacebookPublication(data.publication || null); setPublicationLoadedFor(active.id); }
+      } catch { if (!stopped) { setFacebookPublication(null); setPublicationLoadedFor(active.id); } }
     };
     loadPublication();
     const timer = window.setInterval(loadPublication, 20000);
