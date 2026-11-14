@@ -259,11 +259,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Profile reassignment is rejected while a task is active; finish/recover it first.
     (async () => {
       await restoreTask();
-      const c = await config();
-      if (activeTask && activeTask.profileId !== c.profileId) {
+      const next = message.config;
+      if (!next || typeof next !== "object" || !P.PROFILES.includes(next.profileId)) {
+        sendResponse({ ok: false, error: "INVALID_PROFILE_CONFIGURATION" });
+        return;
+      }
+      if (activeTask && activeTask.profileId !== next.profileId) {
         sendResponse({ ok: false, error: "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK" });
         return;
       }
+      // Persist only after the worker confirms the active task keeps its assigned profile.
+      await chrome.storage.local.set(next);
       await poll();
       sendResponse({ ok: true });
     })().catch(error => sendResponse({ ok: false, error: error.message }));
