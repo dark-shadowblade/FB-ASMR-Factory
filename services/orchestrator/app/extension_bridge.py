@@ -331,9 +331,20 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             if registered is None or registered["instance_id"] != instance_id:
                 raise HTTPException(status_code=409, detail="This extension instance is not paired to the selected browser profile")
             rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND task_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id, task_id)).fetchall()
-            ids = [r["id"] for r in rows]
-            if ids:
-                conn.executemany("UPDATE extension_commands SET status='delivered' WHERE id=?", [(i,) for i in ids])
             return {"commands": [dict(r) for r in rows]}
+
+    @router.post("/commands/{command_id}/ack")
+    def acknowledge_command(command_id: int, profile_id: str = Query(...), instance_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if profile_id not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unknown profile ID")
+        with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            if registered is None or registered["instance_id"] != instance_id:
+                raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
+            cursor = conn.execute("UPDATE extension_commands SET status='delivered' WHERE id=? AND profile_id=? AND status='pending'", (command_id, profile_id))
+            if cursor.rowcount == 0:
+                return {"acknowledged": False, "already_handled": True}
+            return {"acknowledged": True}
 
     return router
