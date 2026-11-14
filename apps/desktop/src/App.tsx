@@ -56,10 +56,7 @@ export default function App() {
   const [facebookPageToken, setFacebookPageToken] = useState("");
   const [savingFacebookAccount, setSavingFacebookAccount] = useState(false);
   const [facebookPublication, setFacebookPublication] = useState<FacebookPublication | null>(null);
-  const [publicationLoadedFor, setPublicationLoadedFor] = useState("");
-  const [publishing, setPublishing] = useState(false);
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
-  const [autoPublishAttempted, setAutoPublishAttempted] = useState<Set<string>>(new Set());
   const [debugUpdatedAt, setDebugUpdatedAt] = useState(new Date().toISOString());
   const [debugFilter, setDebugFilter] = useState("all");
   const [diagnosticLogs, setDiagnosticLogs] = useState<DiagnosticLog[]>([]);
@@ -306,19 +303,6 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not remove Page."); }
   }
 
-  async function publishFacebook(job: Job) {
-    setPublishing(true);
-    try {
-      const response = await fetch(API + "/jobs/" + job.id + "/publish-facebook", { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Facebook publishing failed");
-      setFacebookPublication(data.publication);
-      setNotice("Meta accepted the Reel upload. Facebook is processing it; verify its final Page status before assuming it is live.");
-      await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Facebook publishing failed."); }
-    finally { setPublishing(false); }
-  }
-
   async function verifyAiProvider() {
     setVerifyingAi(true);
     setAiVerifyMessage("");
@@ -379,19 +363,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!active || active.final_video || assembling || autoAssemblyAttempted.has(active.id)) return;
-    const downloaded = flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length;
-    if (downloaded === 5) {
-      setAutoAssemblyAttempted(current => new Set(current).add(active.id));
-      assembleJob(active);
+    if (assembling) return;
+    const readyJob = jobs.find(job =>
+      !job.final_video &&
+      !autoAssemblyAttempted.has(job.id) &&
+      flowAutomation.tasks.filter(task => task.job_id === job.id && task.status === "downloaded").length === 5
+    );
+    if (readyJob) {
+      setAutoAssemblyAttempted(current => new Set(current).add(readyJob.id));
+      assembleJob(readyJob);
     }
-  }, [active?.id, active?.final_video?.created_at, flowAutomation.tasks, assembling, autoAssemblyAttempted]);
-
-  useEffect(() => {
-    if (!active || !active.final_video || !facebookStatus.connected || publicationLoadedFor !== active.id || facebookPublication || publishing || autoPublishAttempted.has(active.id)) return;
-    setAutoPublishAttempted(current => new Set(current).add(active.id));
-    publishFacebook(active);
-  }, [active?.id, active?.final_video?.created_at, facebookStatus.connected, publicationLoadedFor, facebookPublication?.status, publishing, autoPublishAttempted]);
+  }, [jobs, flowAutomation.tasks, assembling, autoAssemblyAttempted]);
 
   useEffect(() => {
     if (!active) { setFacebookPublication(null); return; }
@@ -404,8 +386,8 @@ export default function App() {
           const verified = await fetch(`${API}/jobs/${active.id}/facebook-publication/refresh`, { method: "POST" });
           if (verified.ok) data = await verified.json();
         }
-        if (!stopped) { setFacebookPublication(data.publication || null); setPublicationLoadedFor(active.id); }
-      } catch { if (!stopped) { setFacebookPublication(null); setPublicationLoadedFor(active.id); } }
+        if (!stopped) setFacebookPublication(data.publication || null);
+      } catch { if (!stopped) setFacebookPublication(null); }
     };
     loadPublication();
     const timer = window.setInterval(loadPublication, 20000);
