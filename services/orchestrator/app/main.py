@@ -30,7 +30,7 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "file://", "null"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
 )
 
 THEME_SUBJECTS = {
