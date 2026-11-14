@@ -41,6 +41,10 @@ class CommandRequest(BaseModel):
     command: str
 
 
+class RetryTaskRequest(BaseModel):
+    profileId: str | None = None
+
+
 def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
     router = APIRouter(prefix="/api/v1/extension", tags=["chrome-extension"])
     token_path = Path(data_dir) / "extension-bridge.token"
@@ -249,6 +253,49 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                          (request.jobId, f"Flow {request.profileId}: {request.type}", now()))
             return {"accepted": True, "duplicate": False, "status": status}
+
+
+    @router.post("/tasks/{task_id}/retry")
+    def retry_task(task_id: str, request: RetryTaskRequest, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        with connect() as conn:
+            task = conn.execute("SELECT * FROM extension_tasks WHERE task_id=?", (task_id,)).fetchone()
+            if task is None:
+                raise HTTPException(status_code=404, detail="Task not found")
+            if task["status"] not in ("failed", "blocked_ui", "blocked_settings", "needs_login", "cancelled"):
+                raise HTTPException(status_code=409, detail="Only failed or blocked tasks can be retried")
+            profile_id = request.profileId or task["profile_id"]
+            if profile_id not in PROFILE_IDS:
+                raise HTTPException(status_code=422, detail="Unknown Flow profile")
+            profile = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id=?", (profile_id,)).fetchone()
+            if profile is None or not profile["project_url"]:
+                raise HTTPException(status_code=409, detail="Save a Flow project URL for the retry profile first")
+            instance = conn.execute("SELECT last_seen FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            try:
+                online = bool(instance and datetime.now(timezone.utc) - datetime.fromisoformat(instance["last_seen"]) <= timedelta(minutes=2))
+            except (TypeError, ValueError):
+                online = False
+            if not online:
+                raise HTTPException(status_code=409, detail=f"Flow worker {profile_id} is not connected")
+            busy = conn.execute(
+                """SELECT task_id FROM extension_tasks WHERE profile_id=? AND task_id<>?
+                   AND status IN ('queued','leased','project_open','submitted','generating','generation_completed',
+                                  'downloading','settings_verified','paused','needs_login','blocked_ui','blocked_settings')""",
+                (profile_id, task_id),
+            ).fetchone()
+            if busy:
+                raise HTTPException(status_code=409, detail=f"Flow worker {profile_id} already has an active task")
+            conn.execute(
+                """UPDATE extension_tasks SET profile_id=?,project_url=?,status='queued',
+                   updated_at=?,last_error=NULL,download_path=NULL WHERE task_id=?""",
+                (profile_id, profile["project_url"], now(), task_id),
+            )
+            conn.execute("DELETE FROM extension_commands WHERE task_id=? AND status='pending'", (task_id,))
+            conn.execute("UPDATE clips SET status='planned' WHERE id=? AND job_id=?",
+                         (task["clip_id"], task["job_id"]))
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (task["job_id"], f"Flow task retry queued on {profile_id}", now()))
+            return {"queued": True, "taskId": task_id, "profileId": profile_id}
 
     @router.post("/tasks/{task_id}/command")
     def enqueue_command(task_id: str, request: CommandRequest, x_asmr_bridge_token: str = Header(default="")):
