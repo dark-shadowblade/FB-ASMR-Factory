@@ -3,6 +3,14 @@ const P = self.ASMRFlowProtocol;
 const POLL_ALARM = "asmr-flow-poll";
 let activeTask = null;
 let pollBusy = false;
+let activeTabId = null;
+async function restoreTask() {
+  if (!activeTask) {
+    const saved = await chrome.storage.local.get(["activeTask", "activeTabId"]);
+    activeTask = saved.activeTask || null;
+    activeTabId = saved.activeTabId || null;
+  }
+}
 
 async function config() {
   const v = await chrome.storage.local.get(["baseUrl", "bridgeToken", "profileId", "enabled"]);
@@ -43,6 +51,7 @@ async function poll() {
   if (pollBusy) return;
   pollBusy = true;
   try {
+    await restoreTask();
     const c = await config();
     if (!c.enabled || !c.bridgeToken || !P.PROFILES.includes(c.profileId)) return;
     await api("/api/v1/extension/register", { method: "POST", body: JSON.stringify({
@@ -60,7 +69,9 @@ async function poll() {
     activeTask = result.task;
     await chrome.storage.local.set({ instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
       activeTask });
-    await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
+    const tab = await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
+    activeTabId = tab.id;
+    await chrome.storage.local.set({ activeTabId });
     await report("TASK_ACCEPTED", { projectUrl: activeTask.projectUrl });
   } catch (error) {
     console.warn("[ASMR Flow] poll failed", error.message);
@@ -69,12 +80,17 @@ async function poll() {
   }
 }
 chrome.runtime.onInstalled.addListener(async () => {
-  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.25 });
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });
+  poll();
 });
-chrome.runtime.onStartup.addListener(() => chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.25 }));
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });
+  poll();
+});
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) poll(); });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
+    await restoreTask();
     if (message?.type === "FLOW_PAGE_READY" && activeTask) {
       await report("PROJECT_PAGE_READY", { url: sender.tab?.url || "", title: message.title || "" });
       sendResponse({ task: activeTask });
@@ -84,7 +100,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await report(message.event, message.payload || {});
       if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
-        await chrome.storage.local.remove("activeTask");
+        activeTabId = null;
+        await chrome.storage.local.remove(["activeTask", "activeTabId"]);
       }
       sendResponse({ ok: true });
       return;
@@ -113,7 +130,28 @@ chrome.downloads.onChanged.addListener(async delta => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
     activeTask = null;
+    activeTabId = null;
+    chrome.storage.local.remove(["activeTask", "activeTabId"]);
     poll();
     sendResponse({ ok: true });
   }
 });
+
+async function pollCommands() {
+  try {
+    await restoreTask();
+    const c = await config();
+    if (!c.enabled || !activeTask) return;
+    const result = await api("/api/v1/extension/commands?profile_id=" + encodeURIComponent(c.profileId));
+    for (const item of (result.commands || [])) {
+      if (item.task_id !== activeTask.taskId) continue;
+      if (activeTabId) await chrome.tabs.sendMessage(activeTabId, { type: item.command }).catch(() => {});
+      if (item.command === "CANCEL") {
+        activeTask = null;
+        activeTabId = null;
+        await chrome.storage.local.remove(["activeTask", "activeTabId"]);
+      }
+    }
+  } catch (error) { console.warn("[ASMR Flow] command poll failed", error.message); }
+}
+chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) pollCommands(); });
