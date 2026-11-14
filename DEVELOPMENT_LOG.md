@@ -94,3 +94,21 @@ These are initial default subjects and can be refined later; do not reduce the s
 2. Pair the extension separately in all five persistent Chrome profiles and confirm live heartbeats.
 3. Capture actual accessible prompt/settings/generate/download controls from a signed-in Flow project, then implement and test guarded interaction.
 4. Capture completed download paths and validate each file with FFprobe before marking a clip downloaded/ready.
+
+## 2026-11-14 — Download reconciliation and validated video assembly
+
+### Implemented
+- A completed Chrome download event now updates the matching clip row to `downloaded`, preserving task/profile/job/clip identity checks.
+- Added `POST /api/v1/jobs/{job_id}/assemble`. It requires exactly five task-associated downloads, resolves their absolute paths under the configured Downloads directory (`ASMR_FACTORY_DOWNLOADS_DIR`, defaulting to the user's Downloads folder), and refuses missing or non-MP4 files.
+- The media pipeline probes all five inputs with FFprobe, requires vertical 9:16 H.264/AAC clips with matching dimensions and frame rates, concatenates in clip order with FFmpeg, then probes and validates the final MP4 and duration.
+- The output is stored under the app data directory in a job-specific folder and recorded in `job_outputs`; the job becomes `media_ready` and its clips become `ready` only after final validation.
+- Added `GET /api/v1/jobs/{job_id}/output` and `GET /api/v1/library`.
+- The desktop now exposes the merge action after all five task downloads are complete and displays final output details in the job panel.
+- Added backend tests for download-to-clip reconciliation, assembly prerequisites, output persistence and final media validation.
+
+### Verification boundaries
+- The media and API tests use mocked FFmpeg/FFprobe command results; they validate application logic, not real encoded video files.
+- The real Windows installation must have FFmpeg and FFprobe available on PATH.
+- Chrome download paths must be within the configured Downloads directory. Set `ASMR_FACTORY_DOWNLOADS_DIR` if Chrome saves elsewhere.
+- Actual Flow setting selection, prompt acceptance, generation completion and download behavior remain to be verified with a signed-in account.
+- Meta Graph API publishing, restart-safe recovery, library thumbnails/search/playback and five-account end-to-end testing remain outstanding.
