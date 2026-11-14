@@ -44,3 +44,15 @@ Task identity is always the tuple `(profileId, taskId, jobId, clipId)`. Never ro
 ## Verification status
 
 The extension package, profile-instance binding, local bridge, task dispatch, persistent event outbox, selector configuration and selected-setting verification logic are implemented. Real Flow DOM selectors and selected-value elements still require a controlled browser test with an authorised account. Prompt submission stays blocked until the selectors are configured and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
+
+
+## Command semantics and safety
+
+- `OPEN_PROJECT`: reopen the task's exact saved project URL in the matching profile.
+- `SUBMIT_PROMPT`: re-run the guarded prompt workflow; duplicate prompt/generation checks still apply.
+- `CHECK_STATUS`: report the currently detected page state.
+- `DOWNLOAD_VIDEO`: invoke the configured download control, with per-task duplicate-click protection.
+- `PAUSE` / `RESUME`: pause or resume extension-side monitoring/workflow.
+- `CANCEL`: cancel the extension-side task and stop its monitoring.
+
+Pause/cancel do not claim to stop a generation that Google Flow has already accepted. The extension will only use a Flow-native cancel control after that control has been inspected and explicitly implemented. No authentication, CAPTCHA or account restrictions are bypassed.
