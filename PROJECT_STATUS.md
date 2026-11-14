@@ -267,3 +267,16 @@ Added a diagnostic command to the MV3 content script and a **Scan selected Flow 
 Safety properties: the scan is read-only; it does not click, change settings, submit prompts, or include the entered prompt text/value. It does not mark suggested selectors verified or enable automation. Live DOM evidence still needs to be collected from an authorised signed-in Flow session.
 
 Validation performed in this development session: JavaScript syntax checks passed for the content script, options script, background worker and shared protocol. Manifest V3 and diagnostic UI wiring were inspected. A real-browser scan and end-to-end Flow interaction were not available here.
+
+
+## 2026-11-14 — Veo Automation reference integration
+
+Inspected the user-provided Veo Automation 2.0.1 Chrome extension ZIP. Applied only the relevant, auditable Flow DOM patterns to the existing worker:
+
+- Prompt discovery now prioritises the observed ProseMirror and Flow rich-text editor selectors before generic textbox candidates.
+- Contenteditable prompt insertion uses browser editing commands and normal input events rather than direct `textContent` replacement or private React internals.
+- DOM diagnostics now include available icon text so icon-only Generate/Download controls (for example, an `arrow_forward` icon) can be identified more easily.
+- Text-entry labels no longer include entered prompt contents in event/diagnostic labels.
+- README documents the reference-derived selector patterns and why the reference extension's CDP debugger/drag-drop techniques were not copied.
+
+Validation: updated content script and existing background, protocol and options JavaScript files pass syntax parsing. This is not a live Flow test. Current Flow selectors, setting controls, prompt acceptance, generation completion and download behavior remain unverified against an authenticated browser session; selector verification remains required.
