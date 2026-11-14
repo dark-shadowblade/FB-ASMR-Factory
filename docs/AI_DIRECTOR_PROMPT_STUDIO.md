@@ -4,7 +4,7 @@ The first AI Director milestone is implemented in the local orchestrator and des
 
 ## What it does
 
-- Creates exactly five distinct prompts for Mango, Apple, Kiwi, Dragon fruit and Orange.
+- Creates exactly five distinct prompts for the five subjects belonging to the selected one of seven ASMR styles.
 - Applies one persistent ASMR Style Bible to all five prompts for consistent camera, lighting, surface and sound.
 - Uses a built-in prompt composer immediately when no external AI provider is configured.
 - Can use an OpenAI-compatible chat-completions endpoint when configured.
