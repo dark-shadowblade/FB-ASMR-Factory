@@ -694,7 +694,18 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
-        return {"output": result, "already_assembled": False}
+
+    # Publishing is part of the production pipeline, not a UI button. If a Page
+    # is configured, submit the Reel now even if the user navigated away.
+    publication = None
+    try:
+        publication = publish_facebook_reel(job_id).get("publication")
+    except HTTPException as exc:
+        # No connected Page is a setup condition; an uncertain Meta upload is
+        # recorded by publish_facebook_reel and must never be retried blindly.
+        publication = {"status": "not_started" if exc.status_code == 409 else "needs_attention",
+                       "error": str(exc.detail)[:500]}
+    return {"output": result, "already_assembled": False, "publication": publication}
 
 
 class FacebookMetadataRequest(BaseModel):
