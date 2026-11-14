@@ -26,3 +26,21 @@ test("Manifest V3 permissions and Flow host scope are declared", () => {
   assert.ok(manifest.host_permissions.includes("https://flow.google.com/*"));
   assert.ok(manifest.host_permissions.includes("http://127.0.0.1:8765/*"));
 });
+
+test("saving extension settings preserves an in-flight task", () => {
+  const worker = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/background/service-worker.js"), "utf8");
+  const configHandler = worker.slice(worker.indexOf('message?.type === "CONFIG_UPDATED"'));
+  assert.match(configHandler, /Saving options must not discard an in-flight task/);
+  assert.doesNotMatch(configHandler.slice(0, configHandler.indexOf('chrome.runtime.onMessage.addListener', 10)), /activeTask\s*=\s*null/);
+});
+test("Flow ready state requires playable video and a download control", () => {
+  const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
+  assert.match(content, /if \(videoReady\(\)\) return "VIDEO_READY"/);
+  assert.doesNotMatch(content, /download video\|download/);
+});
+test("options page exposes profile, diagnostics and responsive stylesheet", () => {
+  const html = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/options/options.html"), "utf8");
+  assert.match(html, /id="profileId"/);
+  assert.match(html, /id="scan"/);
+  assert.match(html, /href="options.css"/);
+});
