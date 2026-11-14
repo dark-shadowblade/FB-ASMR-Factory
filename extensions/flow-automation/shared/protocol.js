@@ -11,7 +11,7 @@
       typeof task.prompt === "string" && task.prompt.trim().length >= 40;
   }
   function makeMessage(type, task, payload = {}) {
-    return { protocolVersion: VERSION, messageId: crypto.randomUUID(), type,
+    return { protocolVersion: VERSION, messageId: root.crypto?.randomUUID ? root.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`, type,
       taskId: task?.taskId || null, jobId: task?.jobId || null,
       clipId: task?.clipId || null, profileId: task?.profileId || null,
       timestamp: new Date().toISOString(), payload };
