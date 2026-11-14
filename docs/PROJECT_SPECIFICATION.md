@@ -3,7 +3,7 @@
 **Document type:** Product and functional requirements  
 **Project:** FB-ASMR-Factory  
 **Target platform:** Windows 10/11  
-**Primary outcome:** One validated vertical ASMR compilation created from five AI-generated clips and optionally published to a Facebook Page.
+**Primary outcome:** One validated vertical ASMR compilation created from five AI-generated clips and automatically published as a Reel to the configured Facebook Page when Meta publishing is connected.
 
 ---
 
@@ -48,7 +48,7 @@ Each job creates five different subjects and one prompt per subject. Prompts mus
 13. Orchestrator validates all five source clips.
 14. FFmpeg/FFprobe prepare and merge the clips.
 15. App validates the final output and records metadata.
-16. Video appears in the Library with an unpublished status.
+16. The final video and AI-generated metadata are recorded in the Library. If a Facebook Page is configured, the app automatically publishes the Reel without requiring a manual video preview or approval. If Meta is not configured, the finished video remains safely in the Library.
 
 ### Journey B — Configure Flow accounts
 1. User adds or maps up to five Chrome profiles/sessions.
@@ -60,17 +60,16 @@ Each job creates five different subjects and one prompt per subject. Prompts mus
 
 No passwords, session cookies or raw authentication tokens should be requested in chat or embedded in project source code.
 
-### Journey C — Publish to Facebook
-1. User configures Meta/Facebook connection through the supported authentication process.
+### Journey C — Automatic Facebook Reel publishing
+1. User configures the Meta/Facebook connection through the supported authentication process.
 2. App lists Pages the connected identity is authorised to manage, where supported.
-3. User chooses the destination Page.
-4. User opens a completed video and reviews title/caption/description/hashtags.
-5. User explicitly confirms publishing.
-6. App uploads through a supported Meta API workflow.
-7. App stores the response identifiers and final status.
-8. App checks publication status where possible and prevents duplicate attempts.
+3. User chooses the destination Page once in settings.
+4. After the final MP4 passes validation, the app generates the title, caption, description and hashtags automatically. Metadata editing is optional and must not become a mandatory approval gate.
+5. The app automatically uploads the completed video as a Reel through a supported Meta API workflow. Do not require a manual video preview or publishing confirmation in the default workflow.
+6. App stores the response identifiers, destination Page and final publication status.
+7. App checks publication status where possible and prevents duplicate attempts after retries or restarts.
 
-If API permissions or media publishing support are unavailable, provide a manual upload workflow and explain the limitation. Do not scrape or automate private Facebook UI actions as a substitute for unsupported API access.
+If API permissions or media publishing support are unavailable, keep the completed video in the local Library, explain the exact missing permission/configuration and provide a manual upload fallback. Do not scrape or automate private Facebook UI actions as a substitute for unsupported API access.
 
 ## 4. Functional requirements
 
