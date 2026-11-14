@@ -4,11 +4,13 @@ const POLL_ALARM = "asmr-flow-poll";
 let activeTask = null;
 let pollBusy = false;
 let activeTabId = null;
+let activeDownloadIds = new Set();
 async function restoreTask() {
   if (!activeTask) {
-    const saved = await chrome.storage.local.get(["activeTask", "activeTabId"]);
+    const saved = await chrome.storage.local.get(["activeTask", "activeTabId", "activeDownloadIds"]);
     activeTask = saved.activeTask || null;
     activeTabId = saved.activeTabId || null;
+    activeDownloadIds = new Set(saved.activeDownloadIds || []);
   }
 }
 
@@ -114,18 +116,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   })().catch(error => sendResponse({ ok: false, error: error.message }));
   return true;
 });
-chrome.downloads.onCreated.addListener(item => {
-  if (!activeTask) return;
+chrome.downloads.onCreated.addListener(async item => {
+  // Associate only downloads initiated by the tab opened for this task. Never
+  // attribute an unrelated browser download to the active ASMR clip.
+  await restoreTask();
+  if (!activeTask || !Number.isInteger(activeTabId) || item.tabId !== activeTabId) return;
+  activeDownloadIds.add(item.id);
+  await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
   chrome.runtime.sendMessage({ type: "DOWNLOAD_CREATED", downloadId: item.id }).catch(() => {});
 });
 chrome.downloads.onChanged.addListener(async delta => {
-  if (!activeTask || !delta.state || delta.state.current !== "complete") return;
-  const c = await config();
+  await restoreTask();
+  if (!activeTask || !activeDownloadIds.has(delta.id) || !delta.state) return;
+  if (delta.state.current === "interrupted") {
+    await report("DOWNLOAD_FAILED", { downloadId: delta.id, error: "Browser download interrupted" });
+    activeDownloadIds.delete(delta.id);
+    await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
+    return;
+  }
+  if (delta.state.current !== "complete") return;
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (!item) return;
   await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
+  activeDownloadIds.delete(delta.id);
   activeTask = null;
-  await chrome.storage.local.remove("activeTask");
+  activeTabId = null;
+  await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds"]);
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
