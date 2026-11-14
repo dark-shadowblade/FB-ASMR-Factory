@@ -295,11 +295,17 @@
   function diagnosticElement(el) {
     const rect = el.getBoundingClientRect();
     const selector = diagnosticSelector(el);
+    const isTextEntry = /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox";
+    const safeLabel = [
+      el.getAttribute("aria-label"), el.getAttribute("placeholder"),
+      el.getAttribute("data-placeholder"), el.getAttribute("title"),
+      isTextEntry ? "" : el.innerText
+    ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim().slice(0, 180);
     return {
       tag: el.tagName.toLowerCase(),
       role: el.getAttribute("role") || "",
       type: el.getAttribute("type") || "",
-      label: labelOf(el).replace(/\\s+/g, " ").trim().slice(0, 180),
+      label: safeLabel,
       placeholder: el.getAttribute("placeholder") || "",
       ariaLabel: el.getAttribute("aria-label") || "",
       disabled: Boolean(el.disabled) || el.getAttribute("aria-disabled") === "true",
