@@ -237,12 +237,19 @@ chrome.downloads.onChanged.addListener(async delta => {
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
-    activeTask = null;
-    activeTabId = null;
-    activeDownloadIds.clear();
-    chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
-    poll();
-    sendResponse({ ok: true });
+    // Saving options must not discard an in-flight task or its download association.
+    // Profile reassignment is rejected while a task is active; finish/recover it first.
+    (async () => {
+      await restoreTask();
+      const c = await config();
+      if (activeTask && activeTask.profileId !== c.profileId) {
+        sendResponse({ ok: false, error: "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK" });
+        return;
+      }
+      await poll();
+      sendResponse({ ok: true });
+    })().catch(error => sendResponse({ ok: false, error: error.message }));
+    return true;
   }
 });
 
