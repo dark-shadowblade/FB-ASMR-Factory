@@ -20,6 +20,14 @@ document.getElementById("save").addEventListener("click", async () => {
     status.textContent = "To verify automation, provide prompt, Generate, download, model, resolution and duration selectors.";
     return;
   }
+  const savedBefore = await chrome.storage.local.get("profileId");
+  if (savedBefore.profileId && savedBefore.profileId !== v.profileId) {
+    const active = await chrome.runtime.sendMessage({ type: "GET_ACTIVE_TASK" }).catch(() => null);
+    if (active?.task) {
+      status.textContent = "Cannot change this profile assignment while a task is active. Finish or recover the task first.";
+      return;
+    }
+  }
   await chrome.storage.local.set(v);
   status.textContent = "Saving…";
   chrome.runtime.sendMessage({ type: "CONFIG_UPDATED" }, response => {
