@@ -136,6 +136,11 @@ export default function App() {
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
+    if (flowProfiles.filter(profile => profile.configured).length !== 5) {
+      setActiveSection("accounts");
+      setNotice("Set up and save all five Google Flow project URLs in Flow Accounts before starting a production.");
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch(`${API}/jobs`, {
