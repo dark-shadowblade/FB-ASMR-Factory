@@ -9,20 +9,33 @@
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
+  const isTextEntry = el => /^(TEXTAREA|INPUT)$/.test(el?.tagName || "") ||
+    Boolean(el?.isContentEditable) || el?.getAttribute?.("role") === "textbox";
+  // Never include user-entered prompt text in diagnostic/event labels.
   const labelOf = el => [
     el.getAttribute?.("aria-label"), el.getAttribute?.("placeholder"),
-    el.getAttribute?.("data-placeholder"), el.innerText, el.textContent,
-    el.getAttribute?.("title")
-  ].filter(Boolean).join(" ").trim();
+    el.getAttribute?.("data-placeholder"), el.getAttribute?.("title"),
+    isTextEntry(el) ? "" : el.innerText || el.textContent
+  ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim();
 
   function findPromptField() {
     const explicit = document.querySelector("[data-asmr-flow-prompt]");
     if (explicit && visible(explicit)) return explicit;
-    const candidates = [...document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], input:not([type])')]
-      .filter(visible).filter(el => {
-        const label = labelOf(el).toLowerCase();
-        return /prompt|describe|create|video/.test(label) || el.getAttribute("role") === "textbox";
-      });
+    // Selector patterns observed in the supplied Veo Automation reference extension.
+    // Prefer Flow's rich-text editor over generic textboxes, but require uniqueness.
+    const preferred = [
+      "div.ProseMirror[contenteditable='true']",
+      "flow-rich-text-editor [contenteditable='true']",
+      '[contenteditable="true"][role="textbox"]',
+      '[contenteditable="true"]'
+    ];
+    for (const selector of preferred) {
+      const matches = [...document.querySelectorAll(selector)].filter(visible);
+      if (matches.length === 1) return matches[0];
+      if (matches.length > 1) return null;
+    }
+    const candidates = [...document.querySelectorAll('textarea, [role="textbox"], input:not([type])')]
+      .filter(visible).filter(el => /prompt|describe|create|video/.test(labelOf(el).toLowerCase()));
     return candidates.length === 1 ? candidates[0] : null;
   }
   function findButton(regex) {
@@ -65,8 +78,24 @@
   function setFieldValue(field, value) {
     field.focus();
     if (field.isContentEditable) {
-      field.textContent = value;
-      field.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      // Use browser editing commands rather than assigning textContent directly.
+      // This lets the editor's normal input pipeline observe the change without
+      // reaching into private React/framework internals.
+      const selection = window.getSelection();
+      if (selection) {
+        const range = document.createRange();
+        range.selectNodeContents(field);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      try { document.execCommand("delete", false); } catch (_) {}
+      try { document.execCommand("insertText", false, value); } catch (_) {}
+      field.dispatchEvent(new InputEvent("beforeinput", {
+        bubbles: true, cancelable: true, composed: true, inputType: "insertText", data: value
+      }));
+      field.dispatchEvent(new InputEvent("input", {
+        bubbles: true, composed: true, inputType: "insertText", data: value
+      }));
     } else {
       const proto = field.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
@@ -306,6 +335,7 @@
       role: el.getAttribute("role") || "",
       type: el.getAttribute("type") || "",
       label: safeLabel,
+      iconText: isTextEntry(el) ? "" : [...el.querySelectorAll("mat-icon, i, svg")].map(node => (node.textContent || "").trim()).filter(Boolean).join(" ").slice(0, 80),
       placeholder: el.getAttribute("placeholder") || "",
       ariaLabel: el.getAttribute("aria-label") || "",
       disabled: Boolean(el.disabled) || el.getAttribute("aria-disabled") === "true",
@@ -325,7 +355,7 @@
     const videoNodes = visibleElements("video");
     const promptCandidates = promptNodes.map(diagnosticElement);
     const buttonCandidates = buttonNodes.map(diagnosticElement);
-    const downloadCandidates = buttonCandidates.filter(x => /download|save|export/i.test(x.label));
+    const downloadCandidates = buttonCandidates.filter(x => /download|save|export/i.test(x.label + " " + x.iconText));
     const settingCandidates = settingNodes.map(diagnosticElement).filter(x => /model|veo|quality|resolution|720|1080|duration|seconds|aspect|ratio|vertical|portrait|landscape|8s/i.test(x.label));
     return {
       schemaVersion: 1,
