@@ -112,3 +112,15 @@ These are initial default subjects and can be refined later; do not reduce the s
 - Chrome download paths must be within the configured Downloads directory. Set `ASMR_FACTORY_DOWNLOADS_DIR` if Chrome saves elsewhere.
 - Actual Flow setting selection, prompt acceptance, generation completion and download behavior remain to be verified with a signed-in account.
 - Meta Graph API publishing, restart-safe recovery, library thumbnails/search/playback and five-account end-to-end testing remain outstanding.
+
+## 2026-11-14 — Failed Flow clip retry
+
+### Implemented
+- Added an authenticated retry endpoint for a failed, blocked, login-required or cancelled clip task.
+- Retry can stay on its original profile or request another profile. The API verifies the target project URL, recent worker heartbeat and that the target profile has no other active task.
+- Retry requeues the same persisted task ID, clears stale error/download fields, resets the clip state and removes stale pending commands. It does not create a duplicate clip task.
+- Added a desktop Retry action for failed/blocked task rows.
+- Added bridge tests for retrying a failed task on its live profile.
+
+### Verification boundary
+- Retry is a per-clip recovery primitive, not full crash recovery. Reconciliation after a desktop restart, automatic retry limits/backoff, and end-to-end testing across five real Flow sessions remain outstanding.
