@@ -43,6 +43,26 @@ class MediaPipelineTests(unittest.TestCase):
                 with self.assertRaises(media_pipeline.MediaPipelineError):
                     media_pipeline.probe_video(clip)
 
+    def test_assembly_rejects_source_clips_far_from_eight_seconds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clips = []
+            for i in range(5):
+                path = root / f"{i}.mp4"
+                path.write_bytes(b"fake")
+                clips.append(path)
+
+            def fake_run(command):
+                if command[0] == "ffprobe":
+                    duration = 12.0 if Path(command[-1]).stem == "3" else 8.0
+                    return CompletedProcess(command, 0, self.metadata(duration=duration), "")
+                raise AssertionError("FFmpeg must not run for invalid source durations")
+
+            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \\
+                 patch.object(media_pipeline, "_run", side_effect=fake_run):
+                with self.assertRaisesRegex(media_pipeline.MediaPipelineError, "expected approximately 8 seconds"):
+                    media_pipeline.assemble_five_clips(clips, root / "final.mp4")
+
     def test_assembly_requires_exactly_five_clips(self):
         with self.assertRaises(media_pipeline.MediaPipelineError):
             media_pipeline.assemble_five_clips(["a.mp4"] * 4, "out.mp4")
