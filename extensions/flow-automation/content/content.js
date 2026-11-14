@@ -186,7 +186,8 @@
   function requestDownload() {
     if (downloadRequested) return;
     downloadRequested = true;
-    chrome.storage.local.get(["downloadSelector", "selectorsVerified"], settings => {
+    chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
+      if (settings.downloadRequestedTaskId === currentTask.taskId) return;
       if (settings.selectorsVerified !== true || !settings.downloadSelector) {
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
         return;
@@ -197,8 +198,15 @@
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
         return;
       }
-      button.click();
-      send("DOWNLOAD_CLICKED", { source: "configured Flow download control" });
+      chrome.storage.local.set({ downloadRequestedTaskId: currentTask.taskId }, () => {
+        try {
+          button.click();
+          send("DOWNLOAD_CLICKED", { source: "configured Flow download control" });
+        } catch (error) {
+          chrome.storage.local.remove("downloadRequestedTaskId");
+          send("DOWNLOAD_FAILED", { error: String(error).slice(0, 200) });
+        }
+      });
     });
   }
   function startMonitor() {
