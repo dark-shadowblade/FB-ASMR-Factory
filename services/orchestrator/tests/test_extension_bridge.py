@@ -107,6 +107,30 @@ def test_dispatch_rejects_missing_worker_heartbeat(tmp_path):
     assert "flow-5" in response.json()["detail"]
 
 
+def test_failed_task_can_be_retried_on_its_live_profile(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    failure = {
+        "protocolVersion": 1, "messageId": "message-failed-001", "type": "TASK_FAILED",
+        "taskId": task["taskId"], "jobId": task["jobId"], "clipId": task["clipId"],
+        "profileId": "flow-1", "instanceId": "instance-flow-1",
+        "timestamp": "2026-11-14T00:00:00Z", "payload": {"error": "Test failure"},
+    }
+    assert client.post("/api/v1/extension/events", json=failure, headers=headers).status_code == 200
+    retried = client.post(f"/api/v1/extension/tasks/{task['taskId']}/retry", headers=headers, json={})
+    assert retried.status_code == 200
+    assert retried.json()["profileId"] == "flow-1"
+    next_task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    assert next_task["taskId"] == task["taskId"]
+
+
 def test_commands_are_scoped_to_exact_profile_instance_and_task(tmp_path):
     client, headers, _ = make_client(tmp_path)
     client.post("/api/v1/extension/dispatch/job-a", headers=headers)
