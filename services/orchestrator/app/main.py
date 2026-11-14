@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import secrets
 import httpx
 import uuid
 import keyring
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -36,8 +37,20 @@ app.add_middleware(
     allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
+    allow_headers=["Content-Type", "X-ASMR-Bridge-Token", "X-ASMR-Desktop-Token"],
 )
+
+@app.middleware("http")
+async def require_desktop_auth_for_opaque_origins(request, call_next):
+    # Electron's packaged file:// renderer has Origin: null. Require a per-launch
+    # secret on every such request; never treat an opaque origin as trusted by itself.
+    origin = request.headers.get("origin", "")
+    if origin == "null" and request.method != "OPTIONS":
+        expected = os.environ.get("ASMR_FACTORY_DESKTOP_TOKEN", "")
+        supplied = request.headers.get("x-asmr-desktop-token", "")
+        if not expected or not supplied or not secrets.compare_digest(supplied, expected):
+            return JSONResponse(status_code=403, content={"detail": "Desktop authentication required"})
+    return await call_next(request)
 
 THEME_SUBJECTS = {
     "fruits": ["Watermelon", "Kiwi", "Orange", "Pineapple", "Strawberry"],
