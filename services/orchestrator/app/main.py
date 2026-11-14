@@ -137,7 +137,10 @@ def init_db() -> None:
             created_at TEXT NOT NULL
         );
         """)
-        publication_columns = {row["name"] for row in conn.execute("PRAGMA table_info(facebook_publications)").fetchall()}\n        if "account_id" not in publication_columns:\n            conn.execute("ALTER TABLE facebook_publications ADD COLUMN account_id TEXT")\n        for index, profile_id in enumerate(PROFILE_IDS, start=1):
+        publication_columns = {row["name"] for row in conn.execute("PRAGMA table_info(facebook_publications)").fetchall()}
+        if "account_id" not in publication_columns:
+            conn.execute("ALTER TABLE facebook_publications ADD COLUMN account_id TEXT")
+        for index, profile_id in enumerate(PROFILE_IDS, start=1):
             conn.execute(
                 "INSERT OR IGNORE INTO flow_profiles(profile_id, display_name, project_url, updated_at) VALUES(?,?,?,?)",
                 (profile_id, f"Google Flow Account {index}", "", utc_now()),
