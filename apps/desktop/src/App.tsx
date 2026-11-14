@@ -4,6 +4,8 @@ type Clip = { id: string; subject: string; prompt: string; status: string; order
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[]; final_video?: { output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string; social_metadata?: { title: string; caption: string; description: string; hashtags: string[]; source: string } } | null };
 type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean; extension_connected?: boolean };
 type LibraryVideo = { job_id: string; output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string; topic: string; theme: string; status: string };
+type FacebookStatus = { configured: boolean; connected?: boolean; page_name?: string; message?: string };
+type FacebookPublication = { status: string; video_id?: string | null; post_id?: string | null; error?: string | null; created_at?: string };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
@@ -46,6 +48,13 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [styleBible, setStyleBible] = useState("");
+  const [facebookStatus, setFacebookStatus] = useState<FacebookStatus>({ configured: false });
+  const [facebookPublication, setFacebookPublication] = useState<FacebookPublication | null>(null);
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoCaption, setSeoCaption] = useState("");
+  const [seoDescription, setSeoDescription] = useState("");
+  const [seoHashtags, setSeoHashtags] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   async function refresh() {
     try {
@@ -69,6 +78,8 @@ export default function App() {
         }
         setFlowProfiles((profilesData.profiles ?? []).map((p: FlowProfile) => ({ ...p, extension_connected: extensionByProfile[p.profile_id] || false })));
       }
+      const fbResponse = await fetch(`${API}/facebook/status`);
+      if (fbResponse.ok) setFacebookStatus(await fbResponse.json());
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
       if (selected) {
@@ -277,6 +288,32 @@ export default function App() {
     finally { setAssembling(false); }
   }
 
+  async function saveFacebookMetadata(job: Job) {
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/facebook-metadata", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: seoTitle, caption: seoCaption, description: seoDescription, hashtags: seoHashtags.split(/\\s+/).filter(Boolean) })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save Facebook metadata");
+      setNotice("Facebook title, caption, description and hashtags saved.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Facebook metadata."); }
+  }
+
+  async function publishFacebook(job: Job) {
+    setPublishing(true);
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/publish-facebook", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Facebook publishing failed");
+      setFacebookPublication(data.publication);
+      setNotice("Meta accepted the Reel upload. Facebook is processing it; verify its final Page status before assuming it is live.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Facebook publishing failed."); }
+    finally { setPublishing(false); }
+  }
+
   async function saveStyleBible() {
     try {
       const response = await fetch(API + "/style-bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: styleBible }) });
@@ -298,6 +335,13 @@ export default function App() {
   }
 
   const active = selected ?? jobs[0] ?? null;
+
+  useEffect(() => {
+    if (!active) { setFacebookPublication(null); return; }
+    fetch(`${API}/jobs/${active.id}/facebook-publication`).then(r=>r.json()).then(d=>setFacebookPublication(d.publication || null)).catch(()=>setFacebookPublication(null));
+    const meta = active.final_video?.social_metadata;
+    if (meta) { setSeoTitle(meta.title || ""); setSeoCaption(meta.caption || ""); setSeoDescription(meta.description || ""); setSeoHashtags((meta.hashtags || []).join(" ")); }
+  }, [active?.id, active?.final_video?.created_at]);
 
   return <div className="shell">
     <aside className="sidebar">
@@ -389,7 +433,21 @@ export default function App() {
           </div>
           {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
-          {active.final_video && <div className="approved-note">✓ Final video saved · {Math.round(active.final_video.duration_seconds)}s · {active.final_video.width}×{active.final_video.height}<br/><small>{active.final_video.output_path}</small>{active.final_video.social_metadata?.title && <div className="social-metadata"><b>{active.final_video.social_metadata.title}</b><small>{active.final_video.social_metadata.caption}</small><small>{active.final_video.social_metadata.hashtags.join(" ")}</small></div>}</div>}
+          {active.final_video && <div className="facebook-publish-panel">
+            <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS · SEO</div><h3>Publish finished video</h3></div><span className="count-pill">{facebookStatus.connected ? "PAGE CONNECTED" : "NOT CONNECTED"}</span></div>
+            <p className="muted">{facebookStatus.connected ? "Connected Page: " + (facebookStatus.page_name || "Facebook Page") : (facebookStatus.message || "Configure the Meta Page ID and Page access token in the backend environment.")}</p>
+            <label>REEL TITLE</label><input value={seoTitle} maxLength={100} onChange={e=>setSeoTitle(e.target.value)}/>
+            <label>CAPTION</label><textarea value={seoCaption} onChange={e=>setSeoCaption(e.target.value)}/>
+            <label>DESCRIPTION</label><textarea value={seoDescription} onChange={e=>setSeoDescription(e.target.value)}/>
+            <label>HASHTAGS</label><input value={seoHashtags} onChange={e=>setSeoHashtags(e.target.value)} placeholder="#ASMR #OddlySatisfying …"/>
+            <div className="flow-account-actions">
+              <button className="secondary compact" onClick={()=>saveFacebookMetadata(active)}>Save SEO metadata</button>
+              <button className="primary compact" disabled={!facebookStatus.connected || publishing || Boolean(facebookPublication)} onClick={()=>publishFacebook(active)}>{publishing ? "Uploading Reel…" : facebookPublication ? "Upload " + facebookPublication.status : "Publish to Facebook Page"}</button>
+            </div>
+            {facebookPublication && <small>Publication status: {facebookPublication.status}{facebookPublication.video_id ? " · Meta video " + facebookPublication.video_id : ""}{facebookPublication.error ? " · " + facebookPublication.error : ""}</small>}
+            <small>Duplicate protection is enabled: an accepted or uncertain upload cannot be submitted again automatically.</small>
+          </div>}
+
         </>}
       </section>}
       <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
