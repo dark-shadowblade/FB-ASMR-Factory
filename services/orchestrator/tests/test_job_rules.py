@@ -153,6 +153,10 @@ class JobRulesTests(unittest.TestCase):
             output = self.client.get(f"/api/v1/jobs/{job_id}/output")
             self.assertEqual(output.status_code, 200)
             self.assertEqual(output.json()["output"]["duration_seconds"], 40.0)
+            social = output.json()["output"]["metadata"]["social_metadata"]
+            self.assertTrue(social["title"])
+            self.assertTrue(social["caption"])
+            self.assertGreaterEqual(len(social["hashtags"]), 3)
 
     def test_prompt_pack_requires_all_five_before_approval(self):
         created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
