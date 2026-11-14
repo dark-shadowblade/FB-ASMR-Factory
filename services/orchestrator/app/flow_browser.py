@@ -22,12 +22,13 @@ def validate_flow_project_url(value: str) -> str:
 
 
 def resolve_flow_extension_dir() -> Path:
-    candidates: list[Path] = []
+    executable_extension = Path(sys.executable).resolve().parent / "extensions" / "flow-automation"
     if getattr(sys, "frozen", False):
         bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-        candidates.append(bundle_root / "extensions" / "flow-automation")
-    source_root = Path(__file__).resolve().parents[3]
-    candidates.extend([source_root / "extensions" / "flow-automation", Path(sys.executable).resolve().parent / "extensions" / "flow-automation"])
+        candidates = [bundle_root / "extensions" / "flow-automation", executable_extension]
+    else:
+        source_root = Path(__file__).resolve().parents[3]
+        candidates = [source_root / "extensions" / "flow-automation", executable_extension]
     for candidate in candidates:
         if (candidate / "manifest.json").is_file():
             return candidate
