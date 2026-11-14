@@ -236,5 +236,15 @@ class JobRulesTests(unittest.TestCase):
             })
         self.assertEqual(response.status_code, 200)
 
+    def test_extension_origin_requires_bridge_token_for_local_api(self):
+        origin = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        denied = self.client.get("/api/v1/jobs", headers={"Origin": origin})
+        self.assertEqual(denied.status_code, 403)
+        token = (main_module.DATA_DIR / "extension-bridge.token").read_text(encoding="utf-8").strip()
+        allowed = self.client.get("/api/v1/jobs", headers={
+            "Origin": origin, "X-ASMR-Bridge-Token": token
+        })
+        self.assertEqual(allowed.status_code, 200)
+
 if __name__ == "__main__":
     unittest.main()
