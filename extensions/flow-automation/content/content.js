@@ -246,7 +246,13 @@
   chrome.runtime.onMessage.addListener(message => {
     if (!currentTask) return;
     if (message?.type === "PAUSE") { if (observer) observer.disconnect(); send("TASK_PAUSED", {}); }
-    if (message?.type === "RESUME") { startMonitor(); send("TASK_RESUMED", { detectedState: detectState() }); }
+    if (message?.type === "RESUME") {
+      chrome.storage.local.get("activeDownloadIds", saved => {
+        if (!(saved.activeDownloadIds || []).length) downloadRequested = false;
+        execute(currentTask);
+        send("TASK_RESUMED", { detectedState: detectState() });
+      });
+    }
     if (message?.type === "CANCEL") { if (observer) observer.disconnect(); send("TASK_CANCELLED", {}); }
     if (message?.type === "CHECK_STATUS") send("STATUS_CHECKED", { detectedState: detectState(), url: location.href });
     if (message?.type === "DOWNLOAD_VIDEO") requestDownload();
