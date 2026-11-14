@@ -216,3 +216,25 @@ def test_extension_cannot_save_a_project_for_another_profile(tmp_path):
     with sqlite3.connect(db) as conn:
         saved = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id='flow-3'").fetchone()[0]
     assert saved == "https://flow.google.com/project/34567890-abcd"
+
+
+
+def test_diagnostic_logs_are_persisted_and_readable_by_desktop(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    response = client.post("/api/v1/extension/diagnostics/log", headers=headers, json={
+        "source": "FLOW_EXTENSION", "level": "error", "message": "Flow page script failed",
+        "profileId": "flow-2", "taskId": "task-2"
+    })
+    assert response.status_code == 200
+    logs = client.get("/api/v1/extension/diagnostics/logs", headers={"origin": "http://127.0.0.1:5173"})
+    assert logs.status_code == 200
+    assert logs.json()["logs"][-1]["message"] == "Flow page script failed"
+    assert logs.json()["logs"][-1]["profile_id"] == "flow-2"
+
+
+def test_diagnostic_log_ingestion_requires_bridge_secret(tmp_path):
+    client, _, _ = make_client(tmp_path)
+    response = client.post("/api/v1/extension/diagnostics/log", json={
+        "source": "FLOW_EXTENSION", "level": "error", "message": "should be rejected"
+    })
+    assert response.status_code == 401
