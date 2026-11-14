@@ -37,6 +37,14 @@ class EventRequest(BaseModel):
     payload: dict[str, Any] = {}
 
 
+class ProjectDetectedRequest(BaseModel):
+    protocolVersion: int = 1
+    profileId: str
+    instanceId: str = Field(min_length=8, max_length=100)
+    projectUrl: str = Field(min_length=20, max_length=500)
+    projectTitle: str = Field(default="", max_length=200)
+
+
 class CommandRequest(BaseModel):
     command: str
 
@@ -115,6 +123,27 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
               instance_id=excluded.instance_id, extension_version=excluded.extension_version,last_seen=excluded.last_seen""",
               (request.profileId, request.instanceId, request.extensionVersion, now()))
         return {"registered": True, "profileId": request.profileId}
+
+    @router.post("/project-detected")
+    def project_detected(request: ProjectDetectedRequest, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if request.protocolVersion != 1 or request.profileId not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unsupported protocol version or profile ID")
+        from .flow_browser import validate_flow_project_url
+        try:
+            project_url = validate_flow_project_url(request.projectUrl)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (request.profileId,)).fetchone()
+            if registered is None or registered["instance_id"] != request.instanceId:
+                raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
+            conn.execute("UPDATE flow_profiles SET project_url=?,updated_at=? WHERE profile_id=?",
+                         (project_url, now(), request.profileId))
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) SELECT id,?,? FROM jobs ORDER BY created_at DESC LIMIT 1",
+                         (f"Flow project auto-detected for {request.profileId}", now()))
+        return {"saved": True, "profileId": request.profileId, "projectUrl": project_url}
+
 
     @router.get("/desktop-config")
     def desktop_config(origin: str = Header(default="")):
