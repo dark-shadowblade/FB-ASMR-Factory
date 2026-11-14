@@ -35,7 +35,7 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "file://", "null"],
     allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
 )
 
@@ -766,6 +766,10 @@ def get_facebook_publication(job_id: str) -> dict[str, Any]:
 
 @app.post("/api/v1/jobs/{job_id}/publish-facebook")
 def publish_facebook_reel(job_id: str) -> dict[str, Any]:
+    selected = _get_facebook_account()
+    if selected is None:
+        raise HTTPException(status_code=409, detail="Add and select a Facebook Page account before publishing")
+    account, page_token = selected
     with connect() as conn:
         job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
         if job is None:
@@ -787,8 +791,8 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
         seo_description = "\n\n".join(part for part in [caption, description, " ".join(hashtags)] if part)
         now = utc_now()
         conn.execute(
-            "INSERT INTO facebook_publications(job_id,status,created_at,updated_at) VALUES(?,?,?,?)",
-            (job_id, "uploading", now, now),
+            "INSERT INTO facebook_publications(job_id,status,account_id,created_at,updated_at) VALUES(?,?,?,?,?)",
+            (job_id, "uploading", account["account_id"], now, now),
         )
     try:
         result = meta_publisher.publish_reel(output["output_path"], title, seo_description, account["page_id"], page_token)
@@ -807,7 +811,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
         )
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Facebook Reel upload accepted by Meta; processing status pending", utc_now()))
-    return {"publication": {"status": "processing", **result}}
+    return {"publication": {"status": "processing", "page_name": account["page_name"], **result}}
 
 
 @app.post("/api/v1/jobs/{job_id}/facebook-publication/refresh")
