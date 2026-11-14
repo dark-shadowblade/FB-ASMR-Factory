@@ -12,7 +12,7 @@ def make_client(tmp_path):
     with sqlite3.connect(db) as conn:
         conn.executescript("""
         CREATE TABLE jobs(id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
-        CREATE TABLE clips(id TEXT PRIMARY KEY, job_id TEXT, prompt TEXT, clip_order INTEGER);
+        CREATE TABLE clips(id TEXT PRIMARY KEY, job_id TEXT, prompt TEXT, clip_order INTEGER, status TEXT DEFAULT 'planned');
         CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT);
         CREATE TABLE job_events(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, event TEXT, created_at TEXT);
         INSERT INTO jobs VALUES('job-a','prompts_approved','now');
