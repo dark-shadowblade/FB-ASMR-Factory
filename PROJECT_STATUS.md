@@ -50,6 +50,7 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
 - [x] FFprobe validates all five downloaded MP4 files during assembly, enforces approximately 8 seconds per source clip, and marks clips ready only after the final MP4 also passes validation.
 - [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
+- [x] Desktop now automatically starts assembly when all five clip tasks report completed downloads; manual merge remains available as a recovery action.
 - [x] Generate Facebook Reel title, caption, description and hashtags after assembly using the configured AI provider with a built-in fallback; expose metadata through job/library APIs and desktop details.
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
 - [x] Guarded retry for failed/blocked individual clip tasks, with live-worker checks and optional profile reassignment at the API layer.
@@ -75,6 +76,7 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] Added Meta Graph API Page connection check using environment-configured Page ID and Page access token.
 - [x] Added three-stage Facebook Reels upload: initialize, stream local MP4 to Meta's upload URL in 4 MB chunks, then finish with title and SEO description.
 - [x] Added editable Reel title, caption, description and hashtags in the desktop job view.
+- [x] Desktop automatically starts compilation after the fifth verified Flow download is reported.
 - [x] Added per-job publication ledger, duplicate submission guard, uncertain-upload lockout and Meta processing-status refresh.
 - [x] Added basic client tests for missing credentials and invalid source files.
 - [ ] CI validation and real Facebook Page test are pending; no actual Reel has been published from this environment.
