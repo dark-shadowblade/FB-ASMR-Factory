@@ -63,13 +63,19 @@
     return [el.getAttribute("aria-label"), el.getAttribute("aria-valuetext"),
       el.value, el.innerText, el.textContent].filter(Boolean).join(" ").trim();
   }
+  function selectedOptionText(expected) {
+    const selected = [...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"],option:checked')].filter(visible);
+    const needle = String(expected || "").toLowerCase();
+    const match = selected.find(el => labelOf(el).toLowerCase().includes(needle));
+    return match ? labelOf(match) : "";
+  }
   function verifySettings(settings, requested) {
     const actual = {};
     try {
-      actual.model = selectedText(settings.modelSelector);
-      actual.resolution = selectedText(settings.resolutionSelector);
-      actual.duration = selectedText(settings.durationSelector);
-      actual.aspectRatio = selectedText(settings.aspectRatioSelector);
+      actual.model = settings.modelSelector ? selectedText(settings.modelSelector) : selectedOptionText(requested.model);
+      actual.resolution = settings.resolutionSelector ? selectedText(settings.resolutionSelector) : selectedOptionText(requested.resolution);
+      actual.duration = settings.durationSelector ? selectedText(settings.durationSelector) : selectedOptionText(String(requested.durationSeconds));
+      actual.aspectRatio = settings.aspectRatioSelector ? selectedText(settings.aspectRatioSelector) : selectedOptionText(requested.aspectRatio);
     } catch (_) {
       return { ok: false, reason: "One or more selected-setting CSS selectors are invalid.", actual };
     }
