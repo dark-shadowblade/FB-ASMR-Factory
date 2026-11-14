@@ -140,8 +140,6 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
                 raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
             conn.execute("UPDATE flow_profiles SET project_url=?,updated_at=? WHERE profile_id=?",
                          (project_url, now(), request.profileId))
-            conn.execute("INSERT INTO job_events(job_id,event,created_at) SELECT id,?,? FROM jobs ORDER BY created_at DESC LIMIT 1",
-                         (f"Flow project auto-detected for {request.profileId}", now()))
         return {"saved": True, "profileId": request.profileId, "projectUrl": project_url}
 
 
