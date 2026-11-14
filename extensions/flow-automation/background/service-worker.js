@@ -4,7 +4,6 @@ const POLL_ALARM = "asmr-flow-poll";
 let activeTask = null;
 let pollBusy = false;
 let activeTabId = null;
-let activeDownloadId = null;
 let activeDownloadIds = new Set();
 async function restoreTask() {
   if (!activeTask) {
@@ -147,7 +146,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
         activeTabId = null;
-        await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadId"]);
+        activeDownloadIds.clear();
+        await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
       }
       sendResponse({ ok: true });
       return;
@@ -192,7 +192,7 @@ chrome.downloads.onChanged.addListener(async delta => {
     return;
   }
   await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
-  activeDownloadIds.delete(delta.id);
+  activeDownloadIds.clear();
   activeTask = null;
   activeTabId = null;
   await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
@@ -201,6 +201,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
     activeTask = null;
     activeTabId = null;
+    activeDownloadIds.clear();
     chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
     poll();
     sendResponse({ ok: true });
