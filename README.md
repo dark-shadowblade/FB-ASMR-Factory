@@ -2,9 +2,9 @@
 
 **Seven-style automated AI ASMR video production, compilation and Facebook publishing for Windows.**
 
-FB-ASMR-Factory is a Windows desktop application under active development that coordinates Google Flow/Veo browser sessions to generate short, satisfying ASMR clips, validates and combines them into a finished vertical video, maintains a searchable local video library, and publishes approved videos to a Facebook Page through supported Meta publishing APIs.
+FB-ASMR-Factory is a Windows desktop application under active development that coordinates five independent Google Flow/Veo browser profiles, generates short ASMR clips, validates and combines five clips into a vertical MP4, and is being extended with automatic publishing to a configured Facebook Page through supported Meta APIs.
 
-> **Current implementation status:** Desktop dashboard, local job engine and seven-style AI Director Prompt Studio are committed. Google Flow automation, video processing and Facebook publishing remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+> **Current implementation status:** Desktop dashboard, seven-style AI Director, five-profile extension bridge, Flow prompt/Generate code path, download event tracking, FFmpeg/FFprobe assembly API and basic local video library details are committed. Live Flow settings and generation still require verification in the user's signed-in accounts. Meta publishing, restart recovery and a richer searchable/playable library remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
 
 ## Product goal
 
@@ -16,7 +16,7 @@ Turn a topic into one finished, publication-ready ASMR video with as little repe
 4. Generate and download five clips using the configured Flow settings.
 5. Validate the downloads and combine the clips into one vertical video.
 6. Save the result, metadata, logs and job history locally.
-7. Review the video and publish it to a configured Facebook Page.
+7. Automatically publish the finished video as a Reel to a configured Facebook Page once the Meta publishing integration is enabled.
 8. Recover safely from interrupted or failed steps without mixing files or publishing duplicates.
 
 ## Seven active ASMR styles
@@ -164,7 +164,7 @@ The folders are a target structure; create them as implementation begins.
 
 ## Getting started
 
-An initial desktop/backend scaffold is in the repository. On Windows, install Node.js 20+ and Python 3.10+ once, extract the repository ZIP, then double-click [INSTALL.bat](INSTALL.bat). It prepares the Python environment, installs dependencies, starts the backend and launches the dashboard. See [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) for details. The current build supports local Fruits job planning and an AI Director Prompt Studio that creates five style-specific prompts for all seven themes, applies a persistent Style Bible, supports editing and approval, and can optionally use an OpenAI-compatible provider. It does not yet automate Flow, compile videos or publish to Facebook. See [docs/AI_DIRECTOR_PROMPT_STUDIO.md](docs/AI_DIRECTOR_PROMPT_STUDIO.md).
+On Windows, install Node.js 20+ and Python 3.10+ once, extract the repository ZIP, then double-click [INSTALL.bat](INSTALL.bat). It prepares the Python environment, installs dependencies, starts the backend and launches the dashboard. See [docs/DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md) for details. The current build supports all seven ASMR styles, five distinct prompts per job, a persistent Style Bible, editing/approval and an optional OpenAI-compatible prompt provider. It also includes five isolated Flow profile slots, an extension task bridge and a five-clip FFmpeg/FFprobe assembly endpoint. Install FFmpeg and FFprobe and ensure they are on PATH. Flow settings and live generation still need verification against authenticated accounts; Meta publishing is not implemented yet. See [docs/AI_DIRECTOR_PROMPT_STUDIO.md](docs/AI_DIRECTOR_PROMPT_STUDIO.md) and [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 Track implementation in [PROJECT_STATUS.md](PROJECT_STATUS.md) and follow [docs/DEVELOPMENT_ROADMAP.md](docs/DEVELOPMENT_ROADMAP.md).
 
