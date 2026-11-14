@@ -42,4 +42,4 @@ Task identity is always the tuple `(profileId, taskId, jobId, clipId)`. Never ro
 
 ## Verification status
 
-The extension package and message validation are implemented, but real Flow DOM behavior, model settings and download-button interaction still require a controlled browser test with an authorised account. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
+The extension package, profile-instance binding, local bridge, task dispatch, selector configuration and selected-setting verification logic are implemented. Real Flow DOM selectors and selected-value elements still require a controlled browser test with an authorised account. Prompt submission stays blocked until the selectors are configured and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
