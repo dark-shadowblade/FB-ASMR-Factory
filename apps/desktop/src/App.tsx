@@ -48,6 +48,12 @@ export default function App() {
   const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
   const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [aiProvider, setAiProvider] = useState("gemini");
+  const [aiModel, setAiModel] = useState("gemini-2.0-flash");
+  const [aiBaseUrl, setAiBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta/openai");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiKeySaved, setAiKeySaved] = useState(false);
+  const [savingAi, setSavingAi] = useState(false);
   const [styleBible, setStyleBible] = useState("");
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus>({ configured: false });
   const [facebookAccounts, setFacebookAccounts] = useState<FacebookAccount[]>([]);
@@ -97,7 +103,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refresh(); loadFacebookAccounts(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { refresh(); loadFacebookAccounts(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>{setAiConfigured(Boolean(d.configured));setAiProvider(d.provider || "gemini");setAiModel(d.model || "gemini-2.0-flash");setAiBaseUrl(d.base_url || "https://generativelanguage.googleapis.com/v1beta/openai");setAiKeySaved(Boolean(d.key_saved));}).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
 
   async function saveFlowProfile(profile: FlowProfile) {
     try {
@@ -368,6 +374,23 @@ export default function App() {
     finally { setPublishing(false); }
   }
 
+  async function saveAiProvider() {
+    setSavingAi(true);
+    try {
+      const response = await fetch(API + "/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: aiProvider, model: aiModel, base_url: aiBaseUrl, api_key: aiApiKey }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save AI provider");
+      setAiApiKey("");
+      setAiConfigured(Boolean(data.configured));
+      setAiKeySaved(Boolean(data.key_saved));
+      setAiProvider(data.provider || aiProvider);
+      setAiModel(data.model || aiModel);
+      setAiBaseUrl(data.base_url || aiBaseUrl);
+      setNotice(data.configured ? "AI provider saved. Built-in prompt generation remains available as fallback." : "AI provider preferences saved. Add an API key later to enable AI generation.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save AI provider."); }
+    finally { setSavingAi(false); }
+  }
+
   async function saveStyleBible() {
     try {
       const response = await fetch(API + "/style-bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: styleBible }) });
@@ -427,7 +450,7 @@ export default function App() {
       <div className="nav-item active"><span>▦</span> Overview</div>
       <div className="nav-item"><span>✦</span> Prompt Studio <em>AI DIRECTOR</em></div>
       <div className="nav-item"><span>▤</span> Video Library <em>Planned</em></div>
-      <div className="nav-item"><span>◉</span> Flow Accounts <em>Planned</em></div>
+      <div className="nav-item"><span>◉</span> Accounts</div>
       <div className="nav-label second">SYSTEM</div>
       <div className="nav-item"><span>⚙</span> Settings <em>Planned</em></div>
       <div className="sidebar-bottom"><div className="service-dot" data-state={health}></div><div><b>Local service</b><small>{health === "online" ? "Connected" : health === "offline" ? "Not running" : "Checking…"}</small></div></div>
@@ -473,6 +496,17 @@ export default function App() {
             </div>
           </div>)}
           <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
+          <div className="ai-account-panel">
+            <div className="ai-account-heading"><div><b>AI Provider Account</b><small>Connect Gemini when you're ready. Your key is stored in the computer's secure credential vault.</small></div><span className={aiKeySaved ? "ai-status connected" : "ai-status"}>{aiKeySaved ? "KEY SAVED" : "NOT CONNECTED"}</span></div>
+            <div className="ai-account-grid">
+              <label>PROVIDER<select value={aiProvider} onChange={e=>{setAiProvider(e.target.value);setAiBaseUrl(e.target.value==="gemini"?"https://generativelanguage.googleapis.com/v1beta/openai":"https://api.openai.com/v1");setAiModel(e.target.value==="gemini"?"gemini-2.0-flash":"gpt-4o-mini");}}><option value="gemini">Google Gemini</option><option value="openai">OpenAI-compatible</option></select></label>
+              <label>MODEL<input value={aiModel} onChange={e=>setAiModel(e.target.value)} placeholder="Model name"/></label>
+              <label className="ai-key-field">API KEY<input type="password" autoComplete="off" value={aiApiKey} onChange={e=>setAiApiKey(e.target.value)} placeholder={aiKeySaved ? "Saved securely · enter to replace" : "Paste API key later"}/></label>
+            </div>
+            <label className="ai-url-label">API BASE URL<input value={aiBaseUrl} onChange={e=>setAiBaseUrl(e.target.value)} /></label>
+            <div className="ai-account-footer"><span>{aiConfigured ? "AI generation enabled" : "Built-in prompt and metadata generation stays available without an API key."}</span><button className="secondary compact" onClick={saveAiProvider} disabled={savingAi || !aiModel.trim()}>{savingAi ? "Saving…" : "Save AI account"}</button></div>
+          </div>
+
           <div className="extension-pairing">
             <div><b>Chrome extension bridge</b><small>Paste this token into the extension options in all five profiles. Each profile must use its matching flow-1 … flow-5 ID.</small></div>
             <input value={bridgeToken} readOnly type="password" aria-label="Extension bridge token" />
