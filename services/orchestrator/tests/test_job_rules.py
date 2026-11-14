@@ -190,8 +190,11 @@ class JobRulesTests(unittest.TestCase):
                         "width": 720, "height": 1280, "video_codec": "h264",
                         "audio_codec": "aac", "size_bytes": output.stat().st_size}
             with patch.dict(os.environ, {"ASMR_FACTORY_DOWNLOADS_DIR": directory}), \
-                 patch.object(main_module.media_pipeline, "assemble_five_clips", side_effect=fake_assemble):
+                 patch.object(main_module.media_pipeline, "assemble_five_clips", side_effect=fake_assemble), \
+                 patch.object(main_module, "publish_facebook_reel", return_value={"publication": {"status": "processing"}}) as auto_publish:
                 response = self.client.post(f"/api/v1/jobs/{job_id}/assemble")
+            auto_publish.assert_called_once_with(job_id)
+            self.assertEqual(response.json()["publication"]["status"], "processing")
             self.assertEqual(response.status_code, 200, response.text)
             self.assertEqual(response.json()["output"]["clip_count"], 5)
             self.assertEqual(self.client.get("/api/v1/library").json()["videos"][0]["job_id"], job_id)
