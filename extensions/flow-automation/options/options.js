@@ -28,15 +28,16 @@ document.getElementById("save").addEventListener("click", async () => {
       return;
     }
   }
-  await chrome.storage.local.set(v);
   status.textContent = "Saving…";
-  chrome.runtime.sendMessage({ type: "CONFIG_UPDATED" }, response => {
+  chrome.runtime.sendMessage({ type: "CONFIG_UPDATED", config: v }, response => {
     if (chrome.runtime.lastError) {
-      status.textContent = "Saved locally. Worker refresh will retry the connection.";
+      status.textContent = "Could not reach the extension worker. Settings were not changed; try again.";
       return;
     }
-    if (response?.error === "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK") {
-      status.textContent = "Settings saved, but profile change is blocked while a task is active. Finish or recover that task first.";
+    if (!response?.ok) {
+      status.textContent = response?.error === "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK"
+        ? "Cannot change this profile assignment while a task is active. Settings were not changed."
+        : "Settings were not saved: " + (response?.error || "worker rejected the update.");
       return;
     }
     status.textContent = "Settings saved for this browser profile.";
