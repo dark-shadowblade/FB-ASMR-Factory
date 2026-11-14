@@ -197,7 +197,7 @@ export default function App() {
   async function dispatchFlowJob(job: Job) {
     setDispatching(true);
     try {
-      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
+      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST", headers: { "X-ASMR-Bridge-Token": bridgeToken } });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
       setNotice(`Dispatched ${data.dispatched} clips across five independent Flow accounts. The extension workers will pick them up.`);
