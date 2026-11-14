@@ -177,7 +177,15 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
                     status_code=409,
                     detail="Connect all five Flow extension workers before dispatch: " + ", ".join(missing_workers),
                 )
-            settings = {"model": "Veo 3.1 Lite", "resolution": "720p", "durationSeconds": 8, "aspectRatio": "9:16"}
+            setting_rows = {row["key"]: row["value"] for row in conn.execute(
+                "SELECT key,value FROM settings WHERE key LIKE 'flow_%'"
+            ).fetchall()}
+            settings = {
+                "model": setting_rows.get("flow_model", "Veo 3.1 Lite"),
+                "resolution": setting_rows.get("flow_resolution", "720p"),
+                "durationSeconds": int(setting_rows.get("flow_duration_seconds", "8")),
+                "aspectRatio": setting_rows.get("flow_aspect_ratio", "9:16"),
+            }
             created = []
             for index, clip in enumerate(clips):
                 profile_id = PROFILE_IDS[index]
