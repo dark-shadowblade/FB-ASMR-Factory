@@ -6,6 +6,7 @@ import re
 import sqlite3
 import httpx
 import uuid
+import keyring
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,15 @@ def init_db() -> None:
             project_url TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS facebook_accounts (
+            account_id TEXT PRIMARY KEY,
+            label TEXT NOT NULL,
+            page_id TEXT NOT NULL UNIQUE,
+            page_name TEXT NOT NULL,
+            credential_key TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS facebook_publications (
             job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
             status TEXT NOT NULL,
@@ -127,7 +137,7 @@ def init_db() -> None:
             created_at TEXT NOT NULL
         );
         """)
-        for index, profile_id in enumerate(PROFILE_IDS, start=1):
+        publication_columns = {row["name"] for row in conn.execute("PRAGMA table_info(facebook_publications)").fetchall()}\n        if "account_id" not in publication_columns:\n            conn.execute("ALTER TABLE facebook_publications ADD COLUMN account_id TEXT")\n        for index, profile_id in enumerate(PROFILE_IDS, start=1):
             conn.execute(
                 "INSERT OR IGNORE INTO flow_profiles(profile_id, display_name, project_url, updated_at) VALUES(?,?,?,?)",
                 (profile_id, f"Google Flow Account {index}", "", utc_now()),
@@ -606,15 +616,124 @@ class FacebookMetadataRequest(BaseModel):
     hashtags: list[str] = Field(max_length=12)
 
 
+class FacebookAccountRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    page_id: str = Field(min_length=1, max_length=80)
+    page_access_token: str = Field(min_length=20, max_length=10000)
+
+
+class FacebookAccountSelectRequest(BaseModel):
+    account_id: str = Field(min_length=1, max_length=80)
+
+
+def _meta_token_key(account_id: str) -> str:
+    return "facebook-page:" + account_id
+
+
+def _get_facebook_account(account_id: str | None = None) -> tuple[dict[str, Any], str] | None:
+    with connect() as conn:
+        if account_id:
+            row = conn.execute("SELECT * FROM facebook_accounts WHERE account_id=?", (account_id,)).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM facebook_accounts WHERE is_active=1 ORDER BY created_at LIMIT 1").fetchone()
+    if row is None:
+        return None
+    account = dict(row)
+    token = keyring.get_password("ASMR Factory", account["credential_key"])
+    if not token:
+        raise HTTPException(status_code=409, detail="Saved Facebook credential is missing from this computer's secure credential vault. Reconnect this Page.")
+    return account, token
+
+
+@app.get("/api/v1/facebook/accounts")
+def list_facebook_accounts() -> dict[str, Any]:
+    with connect() as conn:
+        rows = conn.execute("SELECT account_id,label,page_id,page_name,is_active,created_at FROM facebook_accounts ORDER BY created_at").fetchall()
+    return {"accounts": [dict(row) for row in rows]}
+
+
+@app.post("/api/v1/facebook/accounts")
+def add_facebook_account(request: FacebookAccountRequest) -> dict[str, Any]:
+    label = request.label.strip()
+    page_id = request.page_id.strip()
+    token = request.page_access_token.strip()
+    if not label or not page_id or not token:
+        raise HTTPException(status_code=422, detail="Account name, Page ID and Page access token are all required")
+    try:
+        verified = meta_publisher.verify_page(page_id, token)
+    except meta_publisher.MetaPublishError as exc:
+        raise HTTPException(status_code=422, detail="Meta could not verify this Page: " + str(exc))
+    account_id = str(uuid.uuid4())
+    credential_key = _meta_token_key(account_id)
+    try:
+        keyring.set_password("ASMR Factory", credential_key, token)
+        if keyring.get_password("ASMR Factory", credential_key) != token:
+            raise RuntimeError("Credential vault verification failed")
+    except Exception as exc:
+        try:
+            keyring.delete_password("ASMR Factory", credential_key)
+        except Exception:
+            pass
+        raise HTTPException(status_code=503, detail="Could not securely save this token in the computer's credential vault. " + str(exc)[:240])
+    with connect() as conn:
+        exists = conn.execute("SELECT account_id FROM facebook_accounts WHERE page_id=?", (verified["page_id"],)).fetchone()
+        if exists:
+            keyring.delete_password("ASMR Factory", credential_key)
+            raise HTTPException(status_code=409, detail="This Facebook Page is already added. Remove it first if you need to replace its token.")
+        has_active = conn.execute("SELECT 1 FROM facebook_accounts WHERE is_active=1 LIMIT 1").fetchone()
+        conn.execute(
+            "INSERT INTO facebook_accounts(account_id,label,page_id,page_name,credential_key,is_active,created_at) VALUES(?,?,?,?,?,?,?)",
+            (account_id, label, verified["page_id"], verified["page_name"], credential_key, 0 if has_active else 1, utc_now()),
+        )
+    return {"account": {"account_id": account_id, "label": label, "page_id": verified["page_id"], "page_name": verified["page_name"], "is_active": not bool(has_active)}, "connected": True}
+
+
+@app.post("/api/v1/facebook/accounts/select")
+def select_facebook_account(request: FacebookAccountSelectRequest) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT account_id FROM facebook_accounts WHERE account_id=?", (request.account_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Facebook account not found")
+        conn.execute("UPDATE facebook_accounts SET is_active=CASE WHEN account_id=? THEN 1 ELSE 0 END", (request.account_id,))
+        selected = conn.execute("SELECT account_id,label,page_id,page_name,is_active FROM facebook_accounts WHERE account_id=?", (request.account_id,)).fetchone()
+    return {"account": dict(selected)}
+
+
+@app.delete("/api/v1/facebook/accounts/{account_id}")
+def remove_facebook_account(account_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT credential_key,is_active FROM facebook_accounts WHERE account_id=?", (account_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Facebook account not found")
+        conn.execute("DELETE FROM facebook_accounts WHERE account_id=?", (account_id,))
+        if row["is_active"]:
+            replacement = conn.execute("SELECT account_id FROM facebook_accounts ORDER BY created_at LIMIT 1").fetchone()
+            if replacement:
+                conn.execute("UPDATE facebook_accounts SET is_active=1 WHERE account_id=?", (replacement["account_id"],))
+    try:
+        keyring.delete_password("ASMR Factory", row["credential_key"])
+    except keyring.errors.PasswordDeleteError:
+        pass
+    return {"removed": True}
+
+
 @app.get("/api/v1/facebook/status")
 def facebook_status() -> dict[str, Any]:
-    cfg = meta_publisher.meta_config()
-    if not cfg["page_id"] or not cfg["page_access_token"]:
-        return {"configured": False, "connected": False, "message": "Set ASMR_META_PAGE_ID and ASMR_META_PAGE_ACCESS_TOKEN in the app environment."}
+    selected = _get_facebook_account()
+    if selected is None:
+        cfg = meta_publisher.meta_config()
+        if cfg["page_id"] and cfg["page_access_token"]:
+            try:
+                return {"configured": True, **meta_publisher.verify_page()}
+            except meta_publisher.MetaPublishError as exc:
+                return {"configured": True, "connected": False, "message": str(exc)}
+        return {"configured": False, "connected": False, "message": "Add a Facebook Page account to get started."}
+    account, token = selected
     try:
-        return {"configured": True, **meta_publisher.verify_page()}
+        verified = meta_publisher.verify_page(account["page_id"], token)
+        return {"configured": True, **verified, "account_id": account["account_id"], "label": account["label"]}
     except meta_publisher.MetaPublishError as exc:
-        return {"configured": True, "connected": False, "message": str(exc)}
+        return {"configured": True, "connected": False, "message": str(exc), "account_id": account["account_id"]}
 
 
 @app.put("/api/v1/jobs/{job_id}/facebook-metadata")
@@ -672,7 +791,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
             (job_id, "uploading", now, now),
         )
     try:
-        result = meta_publisher.publish_reel(output["output_path"], title, seo_description)
+        result = meta_publisher.publish_reel(output["output_path"], title, seo_description, account["page_id"], page_token)
     except (meta_publisher.MetaPublishError, OSError) as exc:
         message = str(exc)[:1000]
         with connect() as conn:
@@ -694,7 +813,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
 @app.post("/api/v1/jobs/{job_id}/facebook-publication/refresh")
 def refresh_facebook_publication(job_id: str) -> dict[str, Any]:
     with connect() as conn:
-        row = conn.execute("SELECT status,video_id FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
+        row = conn.execute("SELECT status,video_id,account_id FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="No Facebook publication exists for this job")
         if not row["video_id"] or row["status"] in ("published", "failed", "uncertain"):
