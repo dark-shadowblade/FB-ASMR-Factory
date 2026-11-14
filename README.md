@@ -2,9 +2,13 @@
 
 **Seven-style automated AI ASMR video production, compilation and Facebook publishing for Windows.**
 
-FB-ASMR-Factory is a Windows desktop application under active development that coordinates five independent Google Flow/Veo browser profiles, generates short ASMR clips, validates and combines five clips into a vertical MP4, and is being extended with automatic publishing to a configured Facebook Page through supported Meta APIs.
+FB-ASMR-Factory is a Windows desktop application under active development that coordinates five independent Google Flow/Veo browser profiles, generates short ASMR clips, validates and combines five clips into a vertical MP4, and automatically attempts publishing to a connected Facebook Page after successful assembly.
 
-> **Current implementation status:** Desktop dashboard, seven-style AI Director, five-profile extension bridge, Flow prompt/Generate code path, download event tracking, FFmpeg/FFprobe assembly API, generated Facebook Reel metadata and basic local video library details are committed. Live Flow settings and generation still require verification in the user's signed-in accounts. Meta authentication and actual Reel publishing, restart recovery and a richer searchable/playable library remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+> **Current implementation status:** The hardening feature branch implements secure desktop/extension requests, five persistent Flow profiles with the extension bundled, configurable Flow settings, weekday theme rotation, task-scoped recovery, acknowledged worker commands, automatic assembly and conditional automatic Facebook Page publishing. CI checks for backend, extension, bridge and desktop have passed on recent commits; Windows installer validation and real-account end-to-end testing remain outstanding. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+
+## Latest implementation note — 14 Nov 2026
+
+The hardening feature branch now includes desktop/extension authentication, extension loading in five persistent Flow profiles, configurable Flow settings, weekday theme rotation, task-scoped video baselines, acknowledged pause/resume/cancel commands, automatic five-clip assembly, FFmpeg normalization, and automatic Facebook Page publishing when a Page is connected. Recent backend, extension, bridge and desktop CI checks have passed. The Windows installer check is still pending. Live Google Flow selectors, real five-account generation/download and a real Meta Page upload still require end-to-end verification. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for exact limits.
 
 ## Product goal
 
@@ -16,7 +20,7 @@ Turn a topic into one finished, publication-ready ASMR video with as little repe
 4. Generate and download five clips using the configured Flow settings.
 5. Validate the downloads and combine the clips into one vertical video.
 6. Save the result, metadata, logs and job history locally.
-7. Automatically publish the finished video as a Reel to a configured Facebook Page once the Meta publishing integration is enabled.
+7. Automatically publish the finished video as a Reel to the connected Facebook Page after assembly; no manual preview step is required by default.
 8. Recover safely from interrupted or failed steps without mixing files or publishing duplicates.
 
 ## Seven active ASMR styles
@@ -87,7 +91,7 @@ Each clip targets **8 seconds**, for an approximately **40-second** compilation.
 - Use official Meta Graph API publishing capabilities where supported by the Page, media type and current API permissions.
 - Store access tokens securely; never hardcode tokens or commit secrets.
 - Prepare a title/caption/description and relevant tags/hashtags for review.
-- Upload only after the user has configured a Page and approved the publication workflow.
+- Upload automatically after the user has connected a Page; no manual approval step is required by default.
 - Record the returned post/video identifier, publication time, target Page and result.
 - Verify publication outcome where the API provides a reliable result.
 - Prevent accidental duplicate publishing and provide clear retry behavior.

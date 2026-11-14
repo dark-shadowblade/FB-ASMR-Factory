@@ -6,6 +6,9 @@
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let paused = false;
+  let cancelled = false;
+  let stopWaitingForField = null;
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -123,17 +126,23 @@
       field.dispatchEvent(new Event("change", { bubbles: true }));
     }
   }
-  function videoReady() {
+  function videoFingerprint(video) {
+    return [video.currentSrc || video.src || "", video.getAttribute("poster") || "", String(video.duration || "")].join("|");
+  }
+  function videoReady(baseline = []) {
+    const prior = new Set(baseline || []);
     const playable = [...document.querySelectorAll("video")].some(v =>
-      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
+      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc && !prior.has(videoFingerprint(v))
     );
     return playable && !!findButton(/download/);
   }
-  function detectState() {
+  function detectState(baseline = []) {
     const text = (document.body?.innerText || "").toLowerCase();
     if (/sign in|choose an account|session expired/.test(text) && location.hostname === "flow.google.com") return "SESSION_CHECK";
-    if (/generating|creating video|in progress|queued/.test(text)) return "GENERATING";
-    if (videoReady()) return "VIDEO_READY";
+    const statusNodes = [...document.querySelectorAll('[role="progressbar"],[aria-busy="true"],[aria-live],[role="status"],[data-testid*="progress" i],[data-testid*="generation" i],[aria-label*="generating" i],[aria-label*="creating video" i]')].filter(visible);
+    const progress = statusNodes.some(node => node.getAttribute("aria-busy") === "true" || /generating|creating video|queued|in progress/.test((node.getAttribute("aria-label") || node.textContent || "").toLowerCase()));
+    if (progress) return "GENERATING";
+    if (videoReady(baseline)) return "VIDEO_READY";
     return "PROJECT_LOADED";
   }
   function waitForPromptField(resolveField, timeoutMs = 45000) {
@@ -146,14 +155,17 @@
         finished = true;
         observer.disconnect();
         clearTimeout(timeout);
+        if (stopWaitingForField === finish) stopWaitingForField = null;
         resolve(value);
       };
       const observer = new MutationObserver(() => {
+        if (paused || cancelled) return finish(null);
         const field = resolveField();
         if (field && visible(field)) finish(field);
       });
       observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
       const timeout = setTimeout(() => finish(null), timeoutMs);
+      stopWaitingForField = finish;
     });
   }
   function execute(task) {
@@ -167,11 +179,25 @@
   }
   async function runTask(task) {
     currentTask = task;
+    paused = false;
+    cancelled = false;
     if (!sameProject(location.href, task.projectUrl)) {
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
     }
-    const state = detectState();
+    const baselineKey = "videoBaseline:" + task.taskId;
+    const savedBaseline = await chrome.storage.local.get(baselineKey);
+    let baseline = savedBaseline[baselineKey];
+    if (!Array.isArray(baseline)) {
+      const existingVideos = [...document.querySelectorAll("video")].filter(visible).map(videoFingerprint);
+      if (existingVideos.length) {
+        send("TASK_FAILED", { reason: "A video already exists in this Flow project but no saved task baseline is available. Refusing to risk downloading or regenerating the wrong result." });
+        return;
+      }
+      baseline = [];
+      await chrome.storage.local.set({ [baselineKey]: baseline });
+    }
+    const state = detectState(baseline);
     if (state === "SESSION_CHECK") {
       send("SESSION_REQUIRED", { url: location.href });
       return;
@@ -179,13 +205,13 @@
     if (state === "GENERATING") {
       send("GENERATION_ALREADY_ACTIVE", { reason: "Existing generation detected; refusing to submit again." });
       lastState = "GENERATING";
-      startMonitor();
+      startMonitor(baseline);
       return;
     }
     if (state === "VIDEO_READY") {
       send("GENERATION_ALREADY_COMPLETE", { reason: "Existing video detected; refusing to submit another generation." });
       lastState = "VIDEO_READY";
-      startMonitor();
+      startMonitor(baseline);
       requestDownload();
       return;
     }
@@ -199,6 +225,7 @@
       } catch (_) { return null; }
     };
     const field = await waitForPromptField(resolveField);
+    if (paused || cancelled) return;
     if (!field || !visible(field)) {
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
@@ -247,11 +274,11 @@
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
     lastState = "PROJECT_LOADED";
-    startMonitor();
+    startMonitor(baseline);
   }
   let downloadRequested = false;
   function requestDownload() {
-    if (downloadRequested) return;
+    if (paused || cancelled || downloadRequested) return;
     downloadRequested = true;
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
@@ -264,6 +291,7 @@
       let button = null;
       try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
       if (!visible(button)) {
+        downloadRequested = false;
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
         return;
       }
@@ -278,10 +306,12 @@
       });
     });
   }
-  function startMonitor() {
+  function startMonitor(baseline = []) {
+    if (paused || cancelled) return;
     if (observer) observer.disconnect();
     observer = new MutationObserver(() => {
-      const state = detectState();
+      if (paused || cancelled) return;
+      const state = detectState(baseline);
       if (state !== lastState) {
         lastState = state;
         if (state === "SESSION_CHECK") send("SESSION_REQUIRED", { url: location.href });
@@ -293,7 +323,7 @@
       }
     });
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-    const state = detectState();
+    const state = detectState(baseline);
     if (state === "GENERATING") send("GENERATION_STARTED", {});
     if (state === "VIDEO_READY") {
       send("GENERATION_COMPLETED", {});
@@ -413,20 +443,25 @@
     catch (error) { sendResponse({ ok: false, error: String(error).slice(0, 300) }); }
     return false;
   });
-  chrome.runtime.onMessage.addListener(message => {
-    if (!currentTask) return;
-    if (message?.type === "TASK_ASSIGNED" && message.task) execute(message.task);
-    if (message?.type === "PAUSE") { if (observer) observer.disconnect(); send("TASK_PAUSED", {}); }
-    if (message?.type === "RESUME") {
-      chrome.storage.local.get("activeDownloadIds", saved => {
-        if (!(saved.activeDownloadIds || []).length) downloadRequested = false;
-        execute(currentTask);
-        send("TASK_RESUMED", { detectedState: detectState() });
-      });
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!currentTask) { sendResponse?.({ ok: false, error: "NO_ACTIVE_TASK" }); return false; }
+    if (message?.type === "TASK_ASSIGNED" && message.task) { execute(message.task); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "PAUSE") {
+      paused = true; if (observer) observer.disconnect(); if (stopWaitingForField) stopWaitingForField(null);
+      send("TASK_PAUSED", {}); sendResponse?.({ ok: true }); return false;
     }
-    if (message?.type === "CANCEL") { if (observer) observer.disconnect(); send("TASK_CANCELLED", {}); }
-    if (message?.type === "CHECK_STATUS") send("STATUS_CHECKED", { detectedState: detectState(), url: location.href });
-    if (message?.type === "DOWNLOAD_VIDEO") requestDownload();
-    if (message?.type === "SUBMIT_PROMPT") execute(currentTask);
+    if (message?.type === "RESUME") {
+      paused = false; cancelled = false; if (observer) observer.disconnect(); downloadRequested = false;
+      send("TASK_RESUMED", { detectedState: "resuming" });
+      setTimeout(() => execute(currentTask), 75); sendResponse?.({ ok: true }); return false;
+    }
+    if (message?.type === "CANCEL") {
+      cancelled = true; paused = false; if (observer) observer.disconnect(); if (stopWaitingForField) stopWaitingForField(null);
+      send("TASK_CANCELLED", {}); sendResponse?.({ ok: true }); return false;
+    }
+    if (message?.type === "CHECK_STATUS") { send("STATUS_CHECKED", { detectedState: detectState(), url: location.href }); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "DOWNLOAD_VIDEO") { requestDownload(); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "SUBMIT_PROMPT") { execute(currentTask); sendResponse?.({ ok: true }); return false; }
+    sendResponse?.({ ok: false, error: "UNKNOWN_COMMAND" }); return false;
   });
 })();

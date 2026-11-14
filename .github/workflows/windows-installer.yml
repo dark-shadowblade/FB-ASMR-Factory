@@ -6,12 +6,14 @@ on:
     paths:
       - "apps/desktop/**"
       - "services/orchestrator/**"
+      - "extensions/flow-automation/**"
       - ".github/workflows/windows-installer.yml"
   pull_request:
     branches: [main]
     paths:
       - "apps/desktop/**"
       - "services/orchestrator/**"
+      - "extensions/flow-automation/**"
       - ".github/workflows/windows-installer.yml"
   workflow_dispatch:
 
@@ -43,7 +45,7 @@ jobs:
 
       - name: Package backend executable
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --name asmr-orchestrator --paths services/orchestrator --collect-all fastapi --collect-all starlette --collect-all pydantic --collect-all uvicorn --collect-all playwright --collect-all greenlet --collect-all keyring --hidden-import keyring.backends.Windows --hidden-import app.main services/orchestrator/launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --name asmr-orchestrator --paths services/orchestrator --collect-all fastapi --collect-all starlette --collect-all pydantic --collect-all uvicorn --collect-all playwright --collect-all greenlet --collect-all keyring --hidden-import keyring.backends.Windows --hidden-import app.main --add-data "extensions/flow-automation;extensions/flow-automation" services/orchestrator/launcher.py
           New-Item -ItemType Directory -Force apps/desktop/backend | Out-Null
           Copy-Item -Recurse dist/asmr-orchestrator apps/desktop/backend/asmr-orchestrator
 

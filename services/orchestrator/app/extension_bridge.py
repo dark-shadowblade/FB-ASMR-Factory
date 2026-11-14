@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import os
 import sqlite3
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -67,9 +68,13 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         if not value or not secrets.compare_digest(value, bridge_token):
             raise HTTPException(status_code=401, detail="Invalid local extension bridge token")
 
-    def require_desktop_origin(value: str) -> None:
-        if value not in ("http://127.0.0.1:5173", "file://", "null"):
-            raise HTTPException(status_code=403, detail="Desktop-only endpoint")
+    def require_desktop_origin(value: str, desktop_token: str = "") -> None:
+        if value == "http://127.0.0.1:5173":
+            return
+        expected = os.environ.get("ASMR_FACTORY_DESKTOP_TOKEN", "")
+        if value == "null" and expected and desktop_token and secrets.compare_digest(desktop_token, expected):
+            return
+        raise HTTPException(status_code=403, detail="Desktop authentication required")
 
     def init_tables() -> None:
         with connect() as conn:
@@ -117,8 +122,8 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         return {"registered": True, "profileId": request.profileId}
 
     @router.get("/desktop-config")
-    def desktop_config(origin: str = Header(default="")):
-        require_desktop_origin(origin)
+    def desktop_config(origin: str = Header(default=""), x_asmr_desktop_token: str = Header(default="")):
+        require_desktop_origin(origin, x_asmr_desktop_token)
         with connect() as conn:
             rows = conn.execute("SELECT profile_id,extension_version,last_seen FROM extension_instances").fetchall()
         by_id = {r["profile_id"]: dict(r) for r in rows}
@@ -138,10 +143,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
 
     @router.post("/dispatch/{job_id}")
     def dispatch(job_id: str, x_asmr_bridge_token: str = Header(default=""), origin: str = Header(default="")):
-        if x_asmr_bridge_token:
-            require_token(x_asmr_bridge_token)
-        else:
-            require_desktop_origin(origin)
+        require_token(x_asmr_bridge_token)
         with connect() as conn:
             job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
             if job is None:
@@ -175,7 +177,15 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
                     status_code=409,
                     detail="Connect all five Flow extension workers before dispatch: " + ", ".join(missing_workers),
                 )
-            settings = {"model": "Veo 3.1 Lite", "resolution": "720p", "durationSeconds": 8, "aspectRatio": "9:16"}
+            setting_rows = {row["key"]: row["value"] for row in conn.execute(
+                "SELECT key,value FROM settings WHERE key LIKE 'flow_%'"
+            ).fetchall()}
+            settings = {
+                "model": setting_rows.get("flow_model", "Veo 3.1 Lite"),
+                "resolution": setting_rows.get("flow_resolution", "720p"),
+                "durationSeconds": int(setting_rows.get("flow_duration_seconds", "8")),
+                "aspectRatio": setting_rows.get("flow_aspect_ratio", "9:16"),
+            }
             created = []
             for index, clip in enumerate(clips):
                 profile_id = PROFILE_IDS[index]
@@ -321,9 +331,20 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             if registered is None or registered["instance_id"] != instance_id:
                 raise HTTPException(status_code=409, detail="This extension instance is not paired to the selected browser profile")
             rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND task_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id, task_id)).fetchall()
-            ids = [r["id"] for r in rows]
-            if ids:
-                conn.executemany("UPDATE extension_commands SET status='delivered' WHERE id=?", [(i,) for i in ids])
             return {"commands": [dict(r) for r in rows]}
+
+    @router.post("/commands/{command_id}/ack")
+    def acknowledge_command(command_id: int, profile_id: str = Query(...), instance_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if profile_id not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unknown profile ID")
+        with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            if registered is None or registered["instance_id"] != instance_id:
+                raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
+            cursor = conn.execute("UPDATE extension_commands SET status='delivered' WHERE id=? AND profile_id=? AND status='pending'", (command_id, profile_id))
+            if cursor.rowcount == 0:
+                return {"acknowledged": False, "already_handled": True}
+            return {"acknowledged": True}
 
     return router

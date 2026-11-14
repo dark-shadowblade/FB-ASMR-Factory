@@ -10,6 +10,8 @@ type FacebookPublication = { status: string; video_id?: string | null; post_id?:
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
 const API = "http://127.0.0.1:8765/api/v1";
+const WEEKLY_ROTATION = ["fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"];
+const todaysTheme = () => WEEKLY_ROTATION[(new Date().getDay() + 6) % 7];
 const THEMES = [
   { value: "fruits", label: "Fruits", emoji: "🍉" },
   { value: "soaps", label: "Soaps", emoji: "🧼" },
@@ -35,7 +37,10 @@ function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; o
 export default function App() {
   const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings">("home");
   const [topic, setTopic] = useState("");
-  const [theme, setTheme] = useState("fruits");
+  const [theme, setTheme] = useState(todaysTheme());
+  const [themeOverride, setThemeOverride] = useState(false);
+  const [flowSettings, setFlowSettings] = useState({ model: "Veo 3.1 Lite", resolution: "720p", duration_seconds: 8, aspect_ratio: "9:16" });
+  const [savingFlowSettings, setSavingFlowSettings] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [library, setLibrary] = useState<LibraryVideo[]>([]);
   const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
@@ -46,7 +51,7 @@ export default function App() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
+  const [notice, setNotice] = useState("Today’s scheduled ASMR style: " + (THEMES.find(x => x.value === todaysTheme())?.label || "Fruits") + ".");
   const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [aiProvider, setAiProvider] = useState("gemini");
@@ -98,16 +103,29 @@ export default function App() {
       }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
-      if (selected) {
-        const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
-        if (updated) setSelected(updated);
-      }
+      setSelected(current => {
+        if (!current) return current;
+        return (data.jobs ?? []).find((j: Job) => j.id === current.id) ?? current;
+      });
     } catch {
       setHealth("offline");
     }
   }
 
-  useEffect(() => { refresh(); loadFacebookAccounts(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>{setAiConfigured(Boolean(d.configured));setAiProvider(d.provider || "gemini");setAiModel(d.model || "gemini-2.0-flash");setAiBaseUrl(d.base_url || "https://generativelanguage.googleapis.com/v1beta/openai");setAiKeySaved(Boolean(d.key_saved));}).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { refresh(); loadFacebookAccounts(); fetch(API + "/settings/flow").then(r=>r.json()).then(d=>setFlowSettings({model:d.model || "Veo 3.1 Lite",resolution:d.resolution || "720p",duration_seconds:d.duration_seconds || 8,aspect_ratio:d.aspect_ratio || "9:16"})).catch(()=>{}); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>{setAiConfigured(Boolean(d.configured));setAiProvider(d.provider || "gemini");setAiModel(d.model || "gemini-2.0-flash");setAiBaseUrl(d.base_url || "https://generativelanguage.googleapis.com/v1beta/openai");setAiKeySaved(Boolean(d.key_saved));}).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+
+
+  async function saveFlowSettings() {
+    setSavingFlowSettings(true);
+    try {
+      const response = await fetch(API + "/settings/flow", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(flowSettings) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save Flow settings");
+      setFlowSettings({ model: data.model, resolution: data.resolution, duration_seconds: data.duration_seconds, aspect_ratio: data.aspect_ratio });
+      setNotice("Flow generation settings saved. All new tasks will use these values and verify them in Google Flow.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Flow settings."); }
+    finally { setSavingFlowSettings(false); }
+  }
 
   async function saveFlowProfile(profile: FlowProfile) {
     try {
@@ -145,18 +163,21 @@ export default function App() {
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
+    const themeToCreate = themeOverride ? theme : todaysTheme();
     setBusy(true);
     try {
       const response = await fetch(`${API}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), theme })
+        body: JSON.stringify({ topic: topic.trim(), theme: themeToCreate })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
       setTopic("");
+      setTheme(todaysTheme());
+      setThemeOverride(false);
       setSelected(data.job);
-      setNotice("Draft " + (THEMES.find(t => t.value === theme)?.label || theme) + " job created with five clip tasks.");
+      setNotice("Draft " + (THEMES.find(t => t.value === themeToCreate)?.label || themeToCreate) + " job created with five clip tasks.");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
@@ -200,7 +221,7 @@ export default function App() {
   async function dispatchFlowJob(job: Job) {
     setDispatching(true);
     try {
-      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
+      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST", headers: { "X-ASMR-Bridge-Token": bridgeToken } });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
       setNotice(`Dispatched ${data.dispatched} clips across five independent Flow accounts. The extension workers will pick them up.`);
@@ -268,7 +289,7 @@ export default function App() {
         setSelected(current);
       }
       setNotice("Dispatching one clip to each of Chrome profiles 01–05…");
-      const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
+      const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST", headers: { "X-ASMR-Bridge-Token": bridgeToken } });
       const dispatchData = await dispatched.json();
       if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
       setSelected(current);
@@ -280,10 +301,23 @@ export default function App() {
     } finally { setDispatching(false); }
   }
 
+  async function sendFlowCommand(task: FlowAutomationStatus["tasks"][number], command: "PAUSE" | "RESUME" | "CANCEL") {
+    try {
+      const response = await fetch(API + "/extension/tasks/" + task.task_id + "/command", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": bridgeToken },
+        body: JSON.stringify({ command })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not send Flow command");
+      setNotice(command + " command queued for " + task.profile_id + ". The extension confirms it after handling.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not send Flow command."); }
+  }
+
   async function retryFlowTask(task: FlowAutomationStatus["tasks"][number]) {
     try {
       const response = await fetch(API + "/extension/tasks/" + task.task_id + "/retry", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+        method: "POST", headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": bridgeToken }, body: JSON.stringify({})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not retry Flow task");
@@ -300,7 +334,9 @@ export default function App() {
       if (!response.ok) throw new Error(data.detail || "Video assembly failed");
       setNotice(data.already_assembled ? "Final video is already in your library." : "Five clips validated and merged. Final video saved to the local library.");
       await refresh();
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Video assembly failed."); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Video assembly failed.");
+    }
     finally { setAssembling(false); }
   }
 
@@ -495,9 +531,9 @@ export default function App() {
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
           <input id="topic" value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createJob()} placeholder="e.g. tropical fruit cutting" />
           <label htmlFor="theme">GENERATION STYLE · 7 AVAILABLE</label>
-          <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
-          <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
-          <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
+          <select id="theme" className="theme-select" value={theme} onChange={e=>{setTheme(e.target.value);setThemeOverride(true);}}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
+          <div className="style-hint">{themeOverride ? "Manual style: " + (THEMES.find(t => t.value === theme)?.label || theme) : "Scheduled today: " + (THEMES.find(t => t.value === todaysTheme())?.label || "Fruits")} · five different subjects · {flowSettings.duration_seconds} seconds each</div>
+          <div className="settings-row"><div><small>MODEL</small><b>{flowSettings.model}</b></div><div><small>QUALITY</small><b>{flowSettings.resolution}</b></div><div><small>DURATION</small><b>{flowSettings.duration_seconds} seconds</b></div></div>
           <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
           <p className="helper">Creates a saved five-clip plan. Flow settings are checked when the five browser tasks start.</p>
         </section>}
@@ -579,7 +615,7 @@ export default function App() {
       {activePage === "home" && <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
         {jobs.length===0 ? <div className="empty"><div className="empty-icon">▤</div><b>No productions yet</b><span>Your created jobs will appear here.</span></div> :
-          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
+          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>{setSelected(job);setActivePage("prompts");}}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>}
 
       {activePage === "prompts" && active && <section className="panel detail-panel">
@@ -597,7 +633,7 @@ export default function App() {
             <div><b>Google Flow task queue</b><small>Chrome profiles 01–05 open automatically · {flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
             <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
           </div>
-          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
+          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}{["leased","project_open","submitted","generating","generation_completed","downloading"].includes(task.status) && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"PAUSE")}>Pause</button>}{task.status==="paused" && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"RESUME")}>Resume</button>}{!["downloaded","failed","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>sendFlowCommand(task,"CANCEL")}>Cancel</button>}</div>)}</div>}
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
           {active.final_video && <div className="facebook-publish-panel">
             <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS · SEO</div><h3>Publish finished video</h3></div><span className="count-pill">{facebookStatus.connected ? "PAGE CONNECTED" : "NOT CONNECTED"}</span></div>
@@ -636,10 +672,16 @@ export default function App() {
 
       {activePage === "settings" && <section className="panel settings-page">
         <div className="panel-head"><div><div className="eyebrow">WORKSPACE CONFIGURATION</div><h2>Production settings</h2></div><span className="count-pill">CURRENT DEFAULTS</span></div>
-        <p className="muted">These are production targets. Google Flow must confirm the selected values in each signed-in profile before generation.</p>
-        <div className="settings-summary-grid">
-          <div><small>VIDEO MODEL</small><b>Veo 3.1 Lite</b></div><div><small>RESOLUTION</small><b>720p</b></div><div><small>CLIP DURATION</small><b>8 seconds</b></div><div><small>ASPECT RATIO</small><b>9:16 vertical</b></div><div><small>CLIPS PER VIDEO</small><b>5</b></div><div><small>FINAL TARGET</small><b>~40 seconds</b></div>
+        <p className="muted">Set the values the extension must verify in each Google Flow account before it generates a clip.</p>
+        <div className="settings-info">
+          <label>VIDEO MODEL<input value={flowSettings.model} onChange={e=>setFlowSettings(v=>({...v,model:e.target.value}))} placeholder="Exact model label shown in Flow"/></label>
+          <label>RESOLUTION<select value={flowSettings.resolution} onChange={e=>setFlowSettings(v=>({...v,resolution:e.target.value}))}><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
+          <label>CLIP DURATION<select value={flowSettings.duration_seconds} onChange={e=>setFlowSettings(v=>({...v,duration_seconds:Number(e.target.value)}))}><option value={4}>4 seconds</option><option value={6}>6 seconds</option><option value={8}>8 seconds</option></select></label>
+          <label>ASPECT RATIO<select value={flowSettings.aspect_ratio} onChange={e=>setFlowSettings(v=>({...v,aspect_ratio:e.target.value}))}><option value="9:16">9:16 vertical · Facebook Reels</option></select></label>
+          <button className="primary compact" onClick={saveFlowSettings} disabled={savingFlowSettings}>{savingFlowSettings ? "Saving…" : "Save Flow settings"}</button>
         </div>
+        <div className="settings-summary-grid"><div><small>CLIPS PER VIDEO</small><b>5</b></div><div><small>WEEKLY ROTATION</small><b>Monday–Sunday</b></div></div>
+        <div className="settings-info"><b>Weekly ASMR style rotation</b><span>{THEMES.map((item,i)=>["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][i] + ": " + item.label).join(" · ")}</span></div>
         <div className="settings-info"><b>Local service</b><span>{health === "online" ? "Connected on this computer" : health === "offline" ? "Not connected · start the local service" : "Checking connection…"}</span><b>Media tools</b><span>FFmpeg and FFprobe are used by the local assembly pipeline. Availability is checked when assembly runs.</span><b>Credentials</b><span>AI and Facebook credentials are stored in the operating system credential vault, not in this settings screen.</span></div>
       </section>}
       <div className="notice">{notice}</div>

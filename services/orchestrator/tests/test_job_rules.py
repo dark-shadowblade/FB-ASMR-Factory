@@ -172,7 +172,7 @@ class JobRulesTests(unittest.TestCase):
                          f"https://flow.google.com/project/{index:08d}-abcd", clip["prompt"],
                          "{}", "downloaded", "now", "now", str(source))
                     )
-            def fake_assemble(input_paths, output_path):
+            def fake_assemble(input_paths, output_path, **kwargs):
                 output = Path(output_path)
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_bytes(b"final-mp4")
@@ -202,6 +202,58 @@ class JobRulesTests(unittest.TestCase):
         approved = self.client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()["job"]["status"], "prompts_approved")
+
+    def test_weekday_rotation_defaults_new_jobs_to_the_scheduled_theme(self):
+        with patch.object(main_module, "scheduled_theme", return_value="clay"):
+            response = self.client.post("/api/v1/jobs", json={"topic": "Scheduled"} )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job"]["theme"], "clay")
+
+    def test_weekly_rotation_order_is_monday_through_sunday(self):
+        response = self.client.get("/api/v1/schedule")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["theme"] for row in response.json()["rotation"]], [
+            "fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"
+        ])
+
+    def test_flow_settings_are_saved_and_returned(self):
+        payload = {"model": "Veo 3.1 Lite", "resolution": "1080p", "duration_seconds": 6, "aspect_ratio": "9:16"}
+        saved = self.client.put("/api/v1/settings/flow", json=payload)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json(), payload)
+        self.assertEqual(self.client.get("/api/v1/settings/flow").json(), payload)
+
+    def test_opaque_origin_api_rejects_missing_desktop_token(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ASMR_FACTORY_DESKTOP_TOKEN", None)
+            response = self.client.get("/api/v1/health", headers={"Origin": "null"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_opaque_origin_api_accepts_matching_desktop_token(self):
+        with patch.dict(os.environ, {"ASMR_FACTORY_DESKTOP_TOKEN": "launch-secret"}):
+            response = self.client.get("/api/v1/health", headers={
+                "Origin": "null", "X-ASMR-Desktop-Token": "launch-secret"
+            })
+        self.assertEqual(response.status_code, 200)
+
+    def test_extension_origin_requires_bridge_token_for_local_api(self):
+        origin = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        denied = self.client.get("/api/v1/jobs", headers={"Origin": origin})
+        self.assertEqual(denied.status_code, 403)
+        token = (main_module.DATA_DIR / "extension-bridge.token").read_text(encoding="utf-8").strip()
+        allowed = self.client.get("/api/v1/jobs", headers={
+            "Origin": origin, "X-ASMR-Bridge-Token": token
+        })
+        self.assertEqual(allowed.status_code, 200)
+
+    def test_local_cors_allows_prompt_editor_patch_preflight(self):
+        response = self.client.options("/api/v1/jobs/example/clips/example/prompt", headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "content-type",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PATCH", response.headers.get("access-control-allow-methods", ""))
 
 if __name__ == "__main__":
     unittest.main()

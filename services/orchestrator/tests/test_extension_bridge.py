@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import os
+from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,6 +16,7 @@ def make_client(tmp_path):
         CREATE TABLE jobs(id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
         CREATE TABLE clips(id TEXT PRIMARY KEY, job_id TEXT, prompt TEXT, clip_order INTEGER, status TEXT DEFAULT 'planned');
         CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT);
+        CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
         CREATE TABLE job_events(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, event TEXT, created_at TEXT);
         INSERT INTO jobs VALUES('job-a','prompts_approved','now');
         INSERT INTO flow_profiles VALUES('flow-1','https://flow.google.com/project/12345678-abcd');
@@ -185,3 +188,48 @@ def test_commands_are_scoped_to_exact_profile_instance_and_task(tmp_path):
     )
     assert own_task.status_code == 200
     assert own_task.json()["commands"][0]["command"] == "PAUSE"
+
+
+def test_command_remains_pending_until_worker_acknowledges(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
+    queued = client.post(f"/api/v1/extension/tasks/{task['taskId']}/command", headers=headers, json={"command": "PAUSE"}).json()
+    poll_url = f"/api/v1/extension/commands?profile_id=flow-1&task_id={task['taskId']}&instance_id=instance-flow-1"
+    first = client.get(poll_url, headers=headers).json()["commands"]
+    second = client.get(poll_url, headers=headers).json()["commands"]
+    assert first[0]["id"] == queued.get("id", first[0]["id"])
+    assert second[0]["id"] == first[0]["id"]
+    ack = client.post(f"/api/v1/extension/commands/{first[0]['id']}/ack?profile_id=flow-1&instance_id=instance-flow-1", headers=headers)
+    assert ack.status_code == 200
+    assert client.get(poll_url, headers=headers).json()["commands"] == []
+
+
+def test_desktop_config_rejects_opaque_origin_without_secret(tmp_path):
+    client, _, _ = make_client(tmp_path)
+    response = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+    assert response.status_code == 403
+
+
+def test_desktop_config_accepts_opaque_origin_only_with_matching_secret(tmp_path):
+    client, _, _ = make_client(tmp_path)
+    with patch.dict(os.environ, {"ASMR_FACTORY_DESKTOP_TOKEN": "desktop-secret"}):
+        denied = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+        allowed = client.get("/api/v1/extension/desktop-config", headers={
+            "Origin": "null", "X-ASMR-Desktop-Token": "desktop-secret"
+        })
+    assert denied.status_code == 403
+    assert allowed.status_code == 200
+
+
+def test_dispatch_uses_saved_flow_generation_settings(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.executemany("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?)", [
+            ("flow_model", "Veo 3.1 Lite", "now"), ("flow_resolution", "1080p", "now"),
+            ("flow_duration_seconds", "6", "now"), ("flow_aspect_ratio", "9:16", "now")
+        ])
+    response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    assert response.status_code == 200
+    task = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
+    assert task["settings"] == {"model": "Veo 3.1 Lite", "resolution": "1080p", "durationSeconds": 6, "aspectRatio": "9:16"}

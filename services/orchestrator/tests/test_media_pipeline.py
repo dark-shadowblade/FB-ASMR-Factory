@@ -29,14 +29,13 @@ class MediaPipelineTests(unittest.TestCase):
             with self.assertRaises(media_pipeline.MediaPipelineError):
                 media_pipeline.probe_video(text_file)
 
-    def test_probe_requires_audio_and_video_codecs(self):
+    def test_probe_rejects_files_without_a_video_stream(self):
         with tempfile.TemporaryDirectory() as directory:
             clip = Path(directory) / "clip.mp4"
             clip.write_bytes(b"fake")
             invalid = json.dumps({
                 "format": {"duration": "8"},
-                "streams": [{"codec_type": "video", "codec_name": "vp9",
-                             "width": 720, "height": 1280, "r_frame_rate": "30/1"}],
+                "streams": [{"codec_type": "audio", "codec_name": "opus"}],
             })
             with patch.object(media_pipeline, "_run",
                               return_value=CompletedProcess([], 0, invalid, "")):
@@ -66,7 +65,7 @@ class MediaPipelineTests(unittest.TestCase):
         with self.assertRaises(media_pipeline.MediaPipelineError):
             media_pipeline.assemble_five_clips(["a.mp4"] * 4, "out.mp4")
 
-    def test_assembly_validates_compatibility_and_creates_output(self):
+    def test_assembly_normalizes_different_source_frame_rates(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             clips = []
@@ -74,22 +73,21 @@ class MediaPipelineTests(unittest.TestCase):
                 path = root / f"{i}.mp4"
                 path.write_bytes(b"fake")
                 clips.append(path)
-
+            normalized_commands = []
             def fake_run(command):
                 if command[0] == "ffprobe":
-                    probe_path = Path(command[-1])
-                    if probe_path.stem == "final":
-                        return CompletedProcess(command, 0, self.metadata(duration=40.0), "")
-                    index = int(probe_path.stem)
-                    metadata = self.metadata(fps="24/1" if index == 4 else "30/1")
-                    return CompletedProcess(command, 0, metadata, "")
-                Path(command[-1]).write_bytes(b"merged")
+                    duration = 40.0 if Path(command[-1]).stem == "final" else 8.0
+                    return CompletedProcess(command, 0, self.metadata(duration=duration), "")
+                normalized_commands.append(command)
+                Path(command[-1]).write_bytes(b"normalized")
                 return CompletedProcess(command, 0, "", "")
-
             with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \
                  patch.object(media_pipeline, "_run", side_effect=fake_run):
-                with self.assertRaisesRegex(media_pipeline.MediaPipelineError, "incompatible"):
-                    media_pipeline.assemble_five_clips(clips, root / "final.mp4")
+                result = media_pipeline.assemble_five_clips(clips, root / "final.mp4")
+            self.assertEqual(result["width"], 720)
+            self.assertEqual(result["height"], 1280)
+            self.assertEqual(len(normalized_commands), 6)
+            self.assertTrue(all("fps=30" in command[command.index("-vf") + 1] for command in normalized_commands[:5]))
 
     def test_assembly_merges_five_compatible_clips(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,8 +102,10 @@ class MediaPipelineTests(unittest.TestCase):
                 if command[0] == "ffprobe":
                     duration = 40.0 if Path(command[-1]).stem == "final" else 8.0
                     return CompletedProcess(command, 0, self.metadata(duration=duration), "")
-                self.assertIn("-c", command)
-                self.assertIn("copy", command)
+                if "concat" in command:
+                    self.assertIn("copy", command)
+                else:
+                    self.assertIn("libx264", command)
                 Path(command[-1]).write_bytes(b"merged-video")
                 return CompletedProcess(command, 0, "", "")
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Any
@@ -18,6 +19,20 @@ def validate_flow_project_url(value: str) -> str:
     if len(parts) != 2 or parts[0] != "project" or not re.fullmatch(r"[A-Za-z0-9-]{12,}", parts[1]):
         raise ValueError("URL must point directly to a Google Flow project, for example https://flow.google.com/project/PROJECT_ID.")
     return url
+
+
+def resolve_flow_extension_dir() -> Path:
+    executable_extension = Path(sys.executable).resolve().parent / "extensions" / "flow-automation"
+    if getattr(sys, "frozen", False):
+        bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+        candidates = [bundle_root / "extensions" / "flow-automation", executable_extension]
+    else:
+        source_root = Path(__file__).resolve().parents[3]
+        candidates = [source_root / "extensions" / "flow-automation", executable_extension]
+    for candidate in candidates:
+        if (candidate / "manifest.json").is_file():
+            return candidate
+    raise RuntimeError("Flow automation extension was not packaged or found. Searched: " + ", ".join(map(str, candidates)))
 
 
 class FlowProfileManager:
@@ -47,6 +62,7 @@ class FlowProfileManager:
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 downloads_dir = profile_dir / "downloads"
                 downloads_dir.mkdir(parents=True, exist_ok=True)
+                extension_dir = resolve_flow_extension_dir()
                 try:
                     context = await self._playwright.chromium.launch_persistent_context(
                         user_data_dir=str(profile_dir),
@@ -55,6 +71,8 @@ class FlowProfileManager:
                         accept_downloads=True,
                         downloads_path=str(downloads_dir),
                         viewport={"width": 1440, "height": 1000},
+                        args=[f"--disable-extensions-except={extension_dir}", f"--load-extension={extension_dir}"],
+                        ignore_default_args=["--disable-extensions"],
                     )
                 except Exception as exc:
                     message = str(exc)

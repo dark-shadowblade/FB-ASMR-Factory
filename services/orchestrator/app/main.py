@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import secrets
 import httpx
 import uuid
 import keyring
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -32,12 +33,31 @@ app = FastAPI(title="ASMR Factory Local Orchestrator", version="0.1.0")
 app.include_router(create_extension_router(DB_PATH, DATA_DIR))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "file://", "null"],
+    allow_origins=["http://127.0.0.1:5173", "null"],
     allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-ASMR-Bridge-Token", "X-ASMR-Desktop-Token"],
 )
+
+@app.middleware("http")
+async def require_desktop_auth_for_opaque_origins(request, call_next):
+    origin = request.headers.get("origin", "")
+    if origin == "null" and request.method != "OPTIONS":
+        expected = os.environ.get("ASMR_FACTORY_DESKTOP_TOKEN", "")
+        supplied = request.headers.get("x-asmr-desktop-token", "")
+        if not expected or not supplied or not secrets.compare_digest(supplied, expected):
+            return JSONResponse(status_code=403, content={"detail": "Desktop authentication required"})
+    if origin.startswith("chrome-extension://") and request.method != "OPTIONS":
+        try:
+            expected_bridge = (DATA_DIR / "extension-bridge.token").read_text(encoding="utf-8").strip()
+        except OSError:
+            expected_bridge = ""
+        supplied_bridge = request.headers.get("x-asmr-bridge-token", "")
+        if not expected_bridge or not supplied_bridge or not secrets.compare_digest(supplied_bridge, expected_bridge):
+            return JSONResponse(status_code=403, content={"detail": "Extension bridge authentication required"})
+    return await call_next(request)
+
 
 THEME_SUBJECTS = {
     "fruits": ["Watermelon", "Kiwi", "Orange", "Pineapple", "Strawberry"],
@@ -61,7 +81,13 @@ THEME_DIRECTIONS = {
 
 class CreateJobRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=120)
-    theme: str = "fruits"
+    theme: str | None = None
+
+WEEKLY_THEME_ROTATION = ("fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr")
+
+
+def scheduled_theme(now_value: datetime | None = None) -> str:
+    return WEEKLY_THEME_ROTATION[(now_value or datetime.now()).weekday()]
 
 
 def utc_now() -> str:
@@ -253,7 +279,7 @@ def list_jobs() -> dict[str, list[dict[str, Any]]]:
 @app.post("/api/v1/jobs")
 def create_job(request: CreateJobRequest) -> dict[str, Any]:
     topic = request.topic.strip()
-    theme = request.theme.strip().lower()
+    theme = (request.theme or scheduled_theme()).strip().lower()
     if not topic:
         raise HTTPException(status_code=422, detail="Topic cannot be empty")
     if theme not in THEME_SUBJECTS:
@@ -282,7 +308,7 @@ def approve_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail="Only draft jobs can be approved")
         clip_count = conn.execute("SELECT COUNT(*) AS n FROM clips WHERE job_id = ?", (job_id,)).fetchone()["n"]
         if clip_count != 5:
-            raise HTTPException(status_code=409, detail="A Fruits job must contain exactly five clip tasks")
+            raise HTTPException(status_code=409, detail="A job must contain exactly five clip tasks")
         conn.execute("UPDATE jobs SET status = 'approved', updated_at = ? WHERE id = ?", (now, job_id))
         conn.execute(
             "INSERT INTO job_events (job_id, event, created_at) VALUES (?, ?, ?)",
@@ -324,6 +350,51 @@ def ai_provider_config() -> dict[str, str]:
     except Exception:
         api_key = os.environ.get("ASMR_AI_API_KEY", "")
     return {"provider": provider, "base_url": base_url.rstrip("/"), "api_key": api_key, "model": model}
+
+class FlowSettingsRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=80)
+    resolution: str = Field(pattern="^(720p|1080p)$")
+    duration_seconds: int = Field(ge=4, le=8)
+    aspect_ratio: str = Field(pattern="^9:16$")
+
+
+@app.get("/api/v1/settings/flow")
+def get_flow_settings() -> dict[str, Any]:
+    defaults = {"model": "Veo 3.1 Lite", "resolution": "720p", "duration_seconds": 8, "aspect_ratio": "9:16"}
+    with connect() as conn:
+        rows = {row["key"]: row["value"] for row in conn.execute(
+            "SELECT key,value FROM settings WHERE key LIKE 'flow_%'"
+        ).fetchall()}
+    return {
+        "model": rows.get("flow_model", defaults["model"]),
+        "resolution": rows.get("flow_resolution", defaults["resolution"]),
+        "duration_seconds": int(rows.get("flow_duration_seconds", defaults["duration_seconds"])),
+        "aspect_ratio": rows.get("flow_aspect_ratio", defaults["aspect_ratio"]),
+    }
+
+
+@app.put("/api/v1/settings/flow")
+def put_flow_settings(request: FlowSettingsRequest) -> dict[str, Any]:
+    values = {
+        "flow_model": request.model.strip(),
+        "flow_resolution": request.resolution,
+        "flow_duration_seconds": str(request.duration_seconds),
+        "flow_aspect_ratio": request.aspect_ratio,
+    }
+    with connect() as conn:
+        for key, value in values.items():
+            conn.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key, value, utc_now()))
+    return get_flow_settings()
+
+
+@app.get("/api/v1/schedule")
+def get_weekly_schedule() -> dict[str, Any]:
+    return {"today": scheduled_theme(), "rotation": [
+        {"weekday": name, "theme": theme} for name, theme in zip(
+            ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"), WEEKLY_THEME_ROTATION
+        )
+    ]}
+
 
 class AISettingsRequest(BaseModel):
     provider: str = Field(pattern="^(gemini|openai-compatible)$")
@@ -632,7 +703,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         tasks = conn.execute(
-            """SELECT t.clip_id,t.status,t.download_path,c.clip_order
+            """SELECT t.clip_id,t.profile_id,t.status,t.download_path,t.settings_json,c.clip_order
                FROM extension_tasks t JOIN clips c ON c.id=t.clip_id
                WHERE t.job_id=? ORDER BY c.clip_order""", (job_id,)
         ).fetchall()
@@ -643,13 +714,17 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if incomplete:
             raise HTTPException(status_code=409, detail="Five completed downloads are required before assembly")
         existing = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
-        if existing:
-            return {"output": dict(existing), "already_assembled": True}
+        existing_output = dict(existing) if existing else None
         subjects = [row["subject"] for row in conn.execute(
             "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
         ).fetchall()]
 
-    downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
+    if existing_output:
+        auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
+        return {"output": existing_output, "already_assembled": True,
+                "publication": auto_publication, "auto_publish_error": auto_publish_error}
+
+    downloads_override = os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", "").strip()
     clip_paths: list[Path] = []
     for row in tasks:
         candidate = Path(row["download_path"]).expanduser()
@@ -657,9 +732,11 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail=f"Chrome did not report an absolute download path for {row['clip_id']}")
         try:
             resolved = candidate.resolve(strict=True)
+            downloads_root = (Path(downloads_override).expanduser().resolve() if downloads_override
+                              else (DATA_DIR / "chrome-profiles" / row["profile_id"] / "downloads").resolve())
             resolved.relative_to(downloads_root)
         except (OSError, ValueError):
-            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the configured Downloads folder")
+            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the allowed downloads folder for {row['profile_id']}")
         if resolved.suffix.lower() != ".mp4" or not resolved.is_file():
             raise HTTPException(status_code=422, detail=f"Download for {row['clip_id']} is not an MP4 file")
         clip_paths.append(resolved)
@@ -668,7 +745,9 @@ def assemble_job(job_id: str) -> dict[str, Any]:
     output_dir = DATA_DIR / "outputs" / safe_topic_slug(job["topic"]) / job_id
     output_path = output_dir / "final.mp4"
     try:
-        result = media_pipeline.assemble_five_clips(clip_paths, output_path)
+        expected_clip_duration = float(json.loads(tasks[0]["settings_json"]).get("durationSeconds", 8))
+        output_height = 1920 if json.loads(tasks[0]["settings_json"]).get("resolution") == "1080p" else 1280
+        result = media_pipeline.assemble_five_clips(clip_paths, output_path, expected_clip_duration=expected_clip_duration, output_height=output_height)
     except media_pipeline.MediaPipelineError as exc:
         with connect() as conn:
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
@@ -687,7 +766,9 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
-        return {"output": result, "already_assembled": False}
+    auto_publication, auto_publish_error = _attempt_auto_publish(job_id)
+    return {"output": result, "already_assembled": False,
+            "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
 
 class FacebookMetadataRequest(BaseModel):
@@ -724,6 +805,33 @@ def _get_facebook_account(account_id: str | None = None) -> tuple[dict[str, Any]
     if not token:
         raise HTTPException(status_code=409, detail="Saved Facebook credential is missing from this computer's secure credential vault. Reconnect this Page.")
     return account, token
+
+
+def _attempt_auto_publish(job_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Publish once when a secure Page is connected; keep assembly successful if Meta is unavailable."""
+    try:
+        if _get_facebook_account() is None:
+            return None, None
+        result = publish_facebook_reel(job_id)
+        return result.get("publication"), None
+    except HTTPException as exc:
+        message = str(exc.detail)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + message, utc_now()))
+        return None, message
+    except (httpx.RequestError, OSError) as exc:
+        message = str(exc)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing failed safely: " + message, utc_now()))
+        return None, message
+    except Exception as exc:
+        message = "Unexpected publishing error: " + str(exc)[:450]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + message, utc_now()))
+        return None, message
 
 
 @app.get("/api/v1/facebook/accounts")
@@ -802,13 +910,7 @@ def remove_facebook_account(account_id: str) -> dict[str, Any]:
 def facebook_status() -> dict[str, Any]:
     selected = _get_facebook_account()
     if selected is None:
-        cfg = meta_publisher.meta_config()
-        if cfg["page_id"] and cfg["page_access_token"]:
-            try:
-                return {"configured": True, **meta_publisher.verify_page()}
-            except meta_publisher.MetaPublishError as exc:
-                return {"configured": True, "connected": False, "message": str(exc)}
-        return {"configured": False, "connected": False, "message": "Add a Facebook Page account to get started."}
+        return {"configured": False, "connected": False, "message": "Add and select a Facebook Page account to enable automatic publishing."}
     account, token = selected
     try:
         verified = meta_publisher.verify_page(account["page_id"], token)
@@ -877,7 +979,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
         )
     try:
         result = meta_publisher.publish_reel(output["output_path"], title, seo_description, account["page_id"], page_token)
-    except (meta_publisher.MetaPublishError, OSError) as exc:
+    except (meta_publisher.MetaPublishError, httpx.RequestError, OSError) as exc:
         message = str(exc)[:1000]
         with connect() as conn:
             conn.execute("UPDATE facebook_publications SET status='uncertain',error=?,updated_at=? WHERE job_id=?",
