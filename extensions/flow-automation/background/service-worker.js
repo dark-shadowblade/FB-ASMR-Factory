@@ -16,11 +16,12 @@ async function restoreTask() {
 }
 
 async function config() {
-  const v = await chrome.storage.local.get(["baseUrl", "bridgeToken", "profileId", "enabled"]);
+  const v = await chrome.storage.local.get(["baseUrl", "bridgeToken", "profileId", "enabled", "instanceId"]);
   return {
     baseUrl: (v.baseUrl || "http://127.0.0.1:8765").replace(/\/$/, ""),
     bridgeToken: v.bridgeToken || "",
     profileId: v.profileId || "",
+    instanceId: v.instanceId || "",
     enabled: v.enabled === true
   };
 }
@@ -44,7 +45,7 @@ async function report(type, payload = {}) {
     await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify({
       protocolVersion: P.VERSION, messageId: crypto.randomUUID(), type,
       taskId: activeTask.taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
-      profileId: c.profileId, timestamp: new Date().toISOString(), payload
+      profileId: c.profileId, instanceId: c.instanceId, timestamp: new Date().toISOString(), payload
     })});
   } catch (error) {
     console.warn("[ASMR Flow] event report failed", error.message);
@@ -65,7 +66,7 @@ async function poll() {
       instanceId, extensionVersion: chrome.runtime.getManifest().version
     })});
     if (activeTask) return;
-    const result = await api("/api/v1/extension/next-task?profile_id=" + encodeURIComponent(c.profileId));
+    const result = await api("/api/v1/extension/next-task?profile_id=" + encodeURIComponent(c.profileId) + "&instance_id=" + encodeURIComponent(instanceId));
     if (!result.task) return;
     if (!P.validTask(result.task, c.profileId)) {
       console.error("[ASMR Flow] rejected task: profile or payload mismatch");
@@ -169,7 +170,7 @@ async function pollCommands() {
     await restoreTask();
     const c = await config();
     if (!c.enabled || !activeTask) return;
-    const result = await api("/api/v1/extension/commands?profile_id=" + encodeURIComponent(c.profileId) + "&task_id=" + encodeURIComponent(activeTask.taskId));
+    const result = await api("/api/v1/extension/commands?profile_id=" + encodeURIComponent(c.profileId) + "&task_id=" + encodeURIComponent(activeTask.taskId) + "&instance_id=" + encodeURIComponent(c.instanceId));
     for (const item of (result.commands || [])) {
       if (item.task_id !== activeTask.taskId) continue;
       if (item.command === "OPEN_PROJECT" && activeTabId) {
