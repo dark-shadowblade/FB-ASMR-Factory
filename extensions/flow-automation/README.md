@@ -41,9 +41,9 @@ The worker now prefers the observed rich-text editor patterns when identifying a
 
 These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker can use unique semantic auto-detection; explicitly verified custom selectors remain an optional override. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
 
-## Live Flow selectors: deliberately unverified
+## Live Flow controls: automatic detection with guarded overrides
 
-The repository has no captured DOM fixture or verified live Google Flow selectors. The content script therefore runs in safe mode: it reports whether it can identify a unique prompt field but does not submit prompts or click Generate until the user has supplied selectors and explicitly marked them verified in that profile's options.
+The content script first detects a unique prompt editor, Generate control and Download control from the live page. It also checks the currently selected model, resolution, duration and aspect ratio from selected/checked UI elements. Explicitly verified selectors in the options page override automatic detection. If the current Flow page does not expose one unique control or a selected value that matches the assigned task, the worker blocks that clip and reports the exact missing control/value instead of guessing. This automatic detection has not yet been confirmed against a live signed-in Google Flow session.
 
 Model, quality, duration and aspect-ratio selection are not implemented as verified actions yet. The worker reports this limitation instead of pretending requested settings were applied.
 
@@ -53,7 +53,7 @@ Model, quality, duration and aspect-ratio selection are not implemented as verif
 
 The extension detects the Google Flow project ID from the signed-in tab URL and stores the most recently detected project in that Chrome profile's local extension storage (`lastFlowProject`). The background worker also records the profile ID, page title and detection timestamp. Project matching uses the Flow project ID rather than a raw URL string, so query parameters or a trailing slash do not make the same project look different. A task is never submitted when its assigned project ID differs from the open project.
 
-Generation settings are read from the assigned task's `settings` object supplied by the desktop/orchestrator bridge: `model`, `resolution`, `durationSeconds`, and optionally `aspectRatio`. The extension does not silently substitute defaults. It verifies those requested values against the configured visible Flow setting selectors and refuses submission if a required value is missing or differs. Each Chrome profile keeps its own selector configuration and saved project detection state.
+Generation settings are read from the assigned task's `settings` object supplied by the desktop/orchestrator bridge: `model`, `resolution`, `durationSeconds`, and optionally `aspectRatio`. The extension does not silently substitute defaults. It verifies those requested values against configured selectors or uniquely detected selected/checked UI values and refuses submission if a required value is missing or differs. Each Chrome profile keeps its own selector configuration and saved project detection state.
 
 The worker expects the local API routes:
 
@@ -67,7 +67,7 @@ Task identity is always the tuple `(profileId, taskId, jobId, clipId)`. Never ro
 
 ## Verification status
 
-The extension package, profile-instance binding, local bridge, task dispatch, persistent event outbox, selector configuration and selected-setting verification logic are implemented. Real Flow DOM selectors and selected-value elements still require a controlled browser test with an authorised account. Prompt submission stays blocked until the selectors are configured and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
+The extension package, profile-instance binding, local bridge, task dispatch, persistent event outbox, selector configuration and selected-setting verification logic are implemented. Automatic Flow DOM control detection and selected-value matching still require a controlled browser test with an authorised account. Prompt submission stays blocked unless the controls are unique and the selected model/resolution/duration values visibly match the requested settings. Do not mark a clip ready based on a Generate click or a video element alone; the orchestrator must validate the completed download with FFprobe before downstream processing.
 
 
 ## Command semantics and safety
