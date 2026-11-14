@@ -33,6 +33,7 @@ function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; o
 }
 
 export default function App() {
+  const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings">("home");
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -467,17 +468,18 @@ export default function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">A</div><div><b>ASMR FACTORY</b><small>CREATOR WORKSPACE</small></div></div>
       <div className="nav-label">WORKSPACE</div>
-      <div className="nav-item active"><span>▦</span> Overview</div>
-      <div className="nav-item"><span>✦</span> Prompt Studio <em>AI DIRECTOR</em></div>
-      <div className="nav-item"><span>▤</span> Video Library <em>Planned</em></div>
-      <div className="nav-item"><span>◉</span> Accounts</div>
+      <button className={activePage==="home" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("home")}><span>▦</span> Home</button>
+      <button className={activePage==="prompts" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("prompts")}><span>✦</span> Prompt Studio <em>AI DIRECTOR</em></button>
+      <button className={activePage==="library" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("library")}><span>▤</span> Video Library</button>
+      <button className={activePage==="accounts" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("accounts")}><span>◉</span> Accounts</button>
       <div className="nav-label second">SYSTEM</div>
-      <div className="nav-item"><span>⚙</span> Settings <em>Planned</em></div>
+      <button className={activePage==="settings" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("settings")}><span>⚙</span> Settings</button>
       <div className="sidebar-bottom"><div className="service-dot" data-state={health}></div><div><b>Local service</b><small>{health === "online" ? "Connected" : health === "offline" ? "Not running" : "Checking…"}</small></div></div>
     </aside>
 
     <main className="main">
-      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>Overview</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
+      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>{({home:"Home",prompts:"Prompt Studio",accounts:"Accounts",library:"Video Library",settings:"Settings"})[activePage]}</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
+      {activePage === "home" && <>
       <section className="welcome"><div><div className="eyebrow">YOUR AUTOMATED VIDEO WORKSHOP</div><h1>Make something <span>satisfying.</span></h1><p>Plan, generate and publish your ASMR videos from one place.</p></div><div className="welcome-art"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="orb-core">✦</div></div></section>
 
       <section className="stats">
@@ -613,7 +615,7 @@ export default function App() {
 
         </>}
       </section>}
-      <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
+      {activePage === "prompts" && <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
 
       <div className="notice">{notice}</div>
       <footer>ASMR FACTORY <span>·</span> EARLY DEVELOPMENT BUILD <span>·</span> LOCAL-FIRST</footer>
