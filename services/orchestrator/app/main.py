@@ -273,7 +273,7 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
 @app.patch("/api/v1/jobs/{job_id}/clips/{clip_id}/prompt")
 def edit_prompt(job_id: str, clip_id: str, request: PromptUpdateRequest) -> dict[str, Any]:
     with connect() as conn:
-        job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = conn.execute("SELECT status, theme FROM jobs WHERE id=?", (job_id,)).fetchone()
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         if job["status"] not in ("draft", "prompts_ready"):
