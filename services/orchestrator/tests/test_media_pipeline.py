@@ -66,7 +66,7 @@ class MediaPipelineTests(unittest.TestCase):
         with self.assertRaises(media_pipeline.MediaPipelineError):
             media_pipeline.assemble_five_clips(["a.mp4"] * 4, "out.mp4")
 
-    def test_assembly_validates_compatibility_and_creates_output(self):
+    def test_assembly_normalizes_different_source_frame_rates(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             clips = []
@@ -74,22 +74,21 @@ class MediaPipelineTests(unittest.TestCase):
                 path = root / f"{i}.mp4"
                 path.write_bytes(b"fake")
                 clips.append(path)
-
+            normalized_commands = []
             def fake_run(command):
                 if command[0] == "ffprobe":
-                    probe_path = Path(command[-1])
-                    if probe_path.stem == "final":
-                        return CompletedProcess(command, 0, self.metadata(duration=40.0), "")
-                    index = int(probe_path.stem)
-                    metadata = self.metadata(fps="24/1" if index == 4 else "30/1")
-                    return CompletedProcess(command, 0, metadata, "")
-                Path(command[-1]).write_bytes(b"merged")
+                    duration = 40.0 if Path(command[-1]).stem == "final" else 8.0
+                    return CompletedProcess(command, 0, self.metadata(duration=duration), "")
+                normalized_commands.append(command)
+                Path(command[-1]).write_bytes(b"normalized")
                 return CompletedProcess(command, 0, "", "")
-
-            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \
+            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \\
                  patch.object(media_pipeline, "_run", side_effect=fake_run):
-                with self.assertRaisesRegex(media_pipeline.MediaPipelineError, "incompatible"):
-                    media_pipeline.assemble_five_clips(clips, root / "final.mp4")
+                result = media_pipeline.assemble_five_clips(clips, root / "final.mp4")
+            self.assertEqual(result["width"], 720)
+            self.assertEqual(result["height"], 1280)
+            self.assertEqual(len(normalized_commands), 6)
+            self.assertTrue(all("fps=30" in command[command.index("-vf") + 1] for command in normalized_commands[:5]))
 
     def test_assembly_merges_five_compatible_clips(self):
         with tempfile.TemporaryDirectory() as directory:
