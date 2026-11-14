@@ -45,3 +45,28 @@ These are initial default subjects and can be refined later; do not reduce the s
 2. Create one job for each style and verify exactly five subjects/prompts.
 3. Run backend unit tests and fix any failures.
 4. Continue Chrome extension and five persistent Flow browser profiles.
+
+## 2026-11-14 — Google Flow persistent profile milestone
+
+### Implemented
+- Added `app/flow_browser.py` with five fixed, isolated persistent Chrome profiles (`flow-1` through `flow-5`).
+- Each profile has its own local Chrome user-data directory under the app data folder and a dedicated downloads folder.
+- Added strict HTTPS Google Flow project URL validation; only direct `flow.google.com/project/{id}` URLs are accepted.
+- Added SQLite-backed account labels and saved project URLs, with five default account slots seeded automatically.
+- Added local API endpoints to list, save and open each profile.
+- Opening an account launches visible Google Chrome, opens its saved Flow project directly and reuses its persistent session on later launches.
+- A Google sign-in redirect is detected and surfaced; the user signs in once inside that profile. No Google passwords or cookies are copied into app settings.
+- Added five account URL inputs and Save/Open controls to the desktop Flow Sessions panel.
+- Added Playwright to backend requirements and included its runtime in the PyInstaller build configuration.
+- Added unit tests for the five profile IDs, accepted/rejected project URLs and profile directory isolation.
+
+### Boundaries / not yet verified
+- The account/profile milestone is implemented in code; real five-account browser launch still needs a Windows machine with Google Chrome and the user's authorised accounts.
+- This commit does not claim prompt insertion, generation completion detection, downloads, FFmpeg processing or Facebook publishing. Those remain the next milestones.
+- Chrome must be installed separately; Playwright uses the installed Chrome channel rather than downloading a separate Chromium browser.
+
+### Next
+1. Run backend unit tests and the Windows installer workflow.
+2. Verify one profile launch, saved session reuse and direct project navigation on Windows.
+3. Implement guarded prompt insertion and Generate interaction using observable Flow page controls.
+4. Add per-clip task persistence and generation/download recovery before enabling five-way automatic production.
