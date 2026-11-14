@@ -19,6 +19,7 @@ from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_proj
 from app.extension_bridge import create_extension_router
 from app.media_pipeline import MediaPipelineError, assemble_five_clips
 from app import media_pipeline
+from app import meta_publisher
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).resolve()
@@ -104,6 +105,15 @@ def init_db() -> None:
             profile_id TEXT PRIMARY KEY,
             display_name TEXT NOT NULL,
             project_url TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS facebook_publications (
+            job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+            status TEXT NOT NULL,
+            video_id TEXT,
+            post_id TEXT,
+            error TEXT,
+            created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS job_outputs (
@@ -587,6 +597,98 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
         return {"output": result, "already_assembled": False}
+
+
+class FacebookMetadataRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    caption: str = Field(max_length=2000)
+    description: str = Field(max_length=5000)
+    hashtags: list[str] = Field(max_length=12)
+
+
+@app.get("/api/v1/facebook/status")
+def facebook_status() -> dict[str, Any]:
+    cfg = meta_publisher.meta_config()
+    if not cfg["page_id"] or not cfg["page_access_token"]:
+        return {"configured": False, "connected": False, "message": "Set ASMR_META_PAGE_ID and ASMR_META_PAGE_ACCESS_TOKEN in the app environment."}
+    try:
+        return {"configured": True, **meta_publisher.verify_page()}
+    except meta_publisher.MetaPublishError as exc:
+        return {"configured": True, "connected": False, "message": str(exc)}
+
+
+@app.put("/api/v1/jobs/{job_id}/facebook-metadata")
+def update_facebook_metadata(job_id: str, request: FacebookMetadataRequest) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT metadata_json FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Assemble the final video before editing its Facebook metadata")
+        try:
+            metadata = json.loads(row["metadata_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            metadata = {}
+        metadata["social_metadata"] = {
+            "title": request.title.strip(),
+            "caption": request.caption.strip(),
+            "description": request.description.strip(),
+            "hashtags": ["#" + re.sub(r"[^A-Za-z0-9]", "", str(tag).lstrip("#")) for tag in request.hashtags if re.sub(r"[^A-Za-z0-9]", "", str(tag).lstrip("#"))][:12],
+            "source": "edited",
+        }
+        conn.execute("UPDATE job_outputs SET metadata_json=? WHERE job_id=?", (json.dumps(metadata), job_id))
+        return {"social_metadata": metadata["social_metadata"]}
+
+
+@app.get("/api/v1/jobs/{job_id}/facebook-publication")
+def get_facebook_publication(job_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
+        return {"publication": dict(row) if row else None}
+
+
+@app.post("/api/v1/jobs/{job_id}/publish-facebook")
+def publish_facebook_reel(job_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        output = conn.execute("SELECT output_path,metadata_json FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if output is None:
+            raise HTTPException(status_code=409, detail="Assemble and validate the final video before publishing")
+        prior = conn.execute("SELECT * FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
+        if prior:
+            raise HTTPException(status_code=409, detail=f"Facebook publication already exists with status '{prior['status']}'. Automatic re-upload is blocked to prevent duplicates.")
+        try:
+            metadata = json.loads(output["metadata_json"]).get("social_metadata", {})
+        except (TypeError, ValueError, json.JSONDecodeError):
+            metadata = {}
+        title = str(metadata.get("title") or "Satisfying ASMR")[:100]
+        caption = str(metadata.get("caption") or "").strip()
+        description = str(metadata.get("description") or "").strip()
+        hashtags = metadata.get("hashtags") if isinstance(metadata.get("hashtags"), list) else []
+        seo_description = "\n\n".join(part for part in [caption, description, " ".join(hashtags)] if part)
+        now = utc_now()
+        conn.execute(
+            "INSERT INTO facebook_publications(job_id,status,created_at,updated_at) VALUES(?,?,?,?)",
+            (job_id, "uploading", now, now),
+        )
+    try:
+        result = meta_publisher.publish_reel(output["output_path"], title, seo_description)
+    except (meta_publisher.MetaPublishError, OSError) as exc:
+        message = str(exc)[:1000]
+        with connect() as conn:
+            conn.execute("UPDATE facebook_publications SET status='uncertain',error=?,updated_at=? WHERE job_id=?",
+                         (message, utc_now(), job_id))
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Facebook upload needs manual verification; duplicate protection is active: " + message[:300], utc_now()))
+        raise HTTPException(status_code=502, detail="Facebook upload could not be confirmed. Check the Page before retrying; automatic duplicate upload is blocked. " + message)
+    with connect() as conn:
+        conn.execute(
+            "UPDATE facebook_publications SET status='processing',video_id=?,post_id=?,updated_at=? WHERE job_id=?",
+            (result["video_id"], result.get("post_id"), utc_now(), job_id),
+        )
+        conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                     (job_id, "Facebook Reel upload accepted by Meta; processing status pending", utc_now()))
+    return {"publication": {"status": "processing", **result}}
 
 
 @app.get("/api/v1/jobs/{job_id}/output")
