@@ -1,10 +1,10 @@
 # FB-ASMR-Factory
 
-**Automated AI ASMR video production, compilation and Facebook publishing for Windows.**
+**Seven-style automated AI ASMR video production, compilation and Facebook publishing for Windows.**
 
-FB-ASMR-Factory is a planned Windows desktop application that coordinates Google Flow/Veo browser sessions to generate short, satisfying ASMR clips, validates and combines them into a finished vertical video, maintains a searchable local video library, and publishes approved videos to a Facebook Page through supported Meta publishing APIs.
+FB-ASMR-Factory is a Windows desktop application under active development that coordinates Google Flow/Veo browser sessions to generate short, satisfying ASMR clips, validates and combines them into a finished vertical video, maintains a searchable local video library, and publishes approved videos to a Facebook Page through supported Meta publishing APIs.
 
-> **Current implementation status:** Requirements and architecture are being documented. The repository is created, but the desktop application, browser extension, Flow automation, video pipeline and Facebook integration have not yet been implemented or verified. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+> **Current implementation status:** Desktop dashboard, local job engine and seven-style AI Director Prompt Studio are committed. Google Flow automation, video processing and Facebook publishing remain in development. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
 
 ## Product goal
 
@@ -120,7 +120,7 @@ A scheduler may run jobs at configured times while the application and computer 
 | Facebook publishing | Meta Graph API, subject to current permissions and supported endpoints |
 | Packaging | Windows installer / desktop executable |
 
-These are proposed implementation choices, not claims that the integrations are already working.
+These are proposed implementation choices; Flow automation, media processing and Facebook publishing are not yet verified.
 
 ## Suggested repository layout
 
@@ -128,6 +128,7 @@ These are proposed implementation choices, not claims that the integrations are 
 FB-ASMR-Factory/
 ├── README.md
 ├── PROJECT_STATUS.md
+├── DEVELOPMENT_LOG.md
 ├── docs/
 │   ├── PROJECT_SPECIFICATION.md
 │   ├── ARCHITECTURE.md
