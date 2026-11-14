@@ -691,6 +691,29 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
     return {"publication": {"status": "processing", **result}}
 
 
+@app.post("/api/v1/jobs/{job_id}/facebook-publication/refresh")
+def refresh_facebook_publication(job_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT status,video_id FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No Facebook publication exists for this job")
+        if not row["video_id"] or row["status"] in ("published", "failed", "uncertain"):
+            return {"publication": dict(row)}
+        video_id = row["video_id"]
+    try:
+        result = meta_publisher.get_reel_status(video_id)
+    except meta_publisher.MetaPublishError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    with connect() as conn:
+        conn.execute("UPDATE facebook_publications SET status=?,updated_at=? WHERE job_id=?",
+                     (result["status"], utc_now(), job_id))
+        current = conn.execute("SELECT * FROM facebook_publications WHERE job_id=?", (job_id,)).fetchone()
+        if result["status"] in ("published", "failed"):
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Facebook Reel status: " + result["status"], utc_now()))
+        return {"publication": dict(current), "meta_status": result["meta_status"]}
+
+
 @app.get("/api/v1/jobs/{job_id}/output")
 def get_job_output(job_id: str) -> dict[str, Any]:
     with connect() as conn:
