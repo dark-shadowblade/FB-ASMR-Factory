@@ -695,7 +695,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         tasks = conn.execute(
-            """SELECT t.clip_id,t.status,t.download_path,c.clip_order
+            """SELECT t.clip_id,t.profile_id,t.status,t.download_path,c.clip_order
                FROM extension_tasks t JOIN clips c ON c.id=t.clip_id
                WHERE t.job_id=? ORDER BY c.clip_order""", (job_id,)
         ).fetchall()
@@ -716,7 +716,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         return {"output": existing_output, "already_assembled": True,
                 "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
-    downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
+    downloads_override = os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", "").strip()
     clip_paths: list[Path] = []
     for row in tasks:
         candidate = Path(row["download_path"]).expanduser()
@@ -724,9 +724,11 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail=f"Chrome did not report an absolute download path for {row['clip_id']}")
         try:
             resolved = candidate.resolve(strict=True)
+            downloads_root = (Path(downloads_override).expanduser().resolve() if downloads_override
+                              else (DATA_DIR / "chrome-profiles" / row["profile_id"] / "downloads").resolve())
             resolved.relative_to(downloads_root)
         except (OSError, ValueError):
-            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the configured Downloads folder")
+            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the allowed downloads folder for {row['profile_id']}")
         if resolved.suffix.lower() != ".mp4" or not resolved.is_file():
             raise HTTPException(status_code=422, detail=f"Download for {row['clip_id']} is not an MP4 file")
         clip_paths.append(resolved)
