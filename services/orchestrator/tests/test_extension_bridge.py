@@ -16,6 +16,7 @@ def make_client(tmp_path):
         CREATE TABLE jobs(id TEXT PRIMARY KEY, status TEXT, updated_at TEXT);
         CREATE TABLE clips(id TEXT PRIMARY KEY, job_id TEXT, prompt TEXT, clip_order INTEGER, status TEXT DEFAULT 'planned');
         CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT);
+        CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
         CREATE TABLE job_events(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, event TEXT, created_at TEXT);
         INSERT INTO jobs VALUES('job-a','prompts_approved','now');
         INSERT INTO flow_profiles VALUES('flow-1','https://flow.google.com/project/12345678-abcd');
@@ -219,3 +220,16 @@ def test_desktop_config_accepts_opaque_origin_only_with_matching_secret(tmp_path
         })
     assert denied.status_code == 403
     assert allowed.status_code == 200
+
+
+def test_dispatch_uses_saved_flow_generation_settings(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.executemany("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?)", [
+            ("flow_model", "Veo 3.1 Lite"), ("flow_resolution", "1080p"),
+            ("flow_duration_seconds", "6"), ("flow_aspect_ratio", "9:16")
+        ])
+    response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    assert response.status_code == 200
+    task = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
+    assert task["settings"] == {"model": "Veo 3.1 Lite", "resolution": "1080p", "durationSeconds": 6, "aspectRatio": "9:16"}
