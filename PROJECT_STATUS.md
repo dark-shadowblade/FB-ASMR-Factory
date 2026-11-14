@@ -47,11 +47,12 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] FFprobe validates all five downloaded MP4 files during assembly; source clips are marked ready only after the final MP4 also passes validation.
 - [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
+- [x] Guarded retry for failed/blocked individual clip tasks, with live-worker checks and optional profile reassignment at the API layer.
 - [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
-- [x] CI workflows cover backend, extension protocol/bridge and desktop build (backend, protocol and bridge jobs pass on latest checked commit; desktop build is still running).
+- [x] CI workflows cover backend, extension protocol/bridge and desktop build (backend, protocol, bridge and desktop-build jobs passed on the latest fully checked integration commit).
 - [ ] Full job recovery and retry behavior.
 - [x] Basic local Video Library API and per-job final-video details; thumbnails, search/filtering and playback UI remain.
 - [ ] Meta authentication, Page selection and Graph API publishing.
