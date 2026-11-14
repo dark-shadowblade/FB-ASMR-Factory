@@ -39,13 +39,13 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] SQLite-backed saved Flow project URL per profile (five account slots).
 - [x] Desktop UI to paste/save each project's URL and open it directly.
 - [x] Reuse each profile's persistent Chrome session; first sign-in is required once per profile.
-- [ ] Actual Flow prompt insertion and Generate action (code path is implemented but remains blocked until real selectors are verified in an authenticated Flow session).
+- [x] Reference-informed Flow prompt discovery and guarded prompt insertion / Generate code path (live interaction still needs an authenticated Flow verification).
 - [x] DOM-observation generation-state monitor and safe reload/duplicate-generation guards (live Flow behavior not yet verified).
 - [x] Configurable selected-value checks for Veo 3.1 Lite, 720p and 8 seconds (requires real selectors to be configured).
 - [ ] Automatic selection/change of model, resolution, duration and 9:16 aspect ratio in the live Flow UI.
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
-- [ ] Verify download contents with FFprobe and mark clips ready only after media validation.
-- [ ] FFmpeg/FFprobe media pipeline.
+- [x] FFprobe validates all five downloaded MP4 files during assembly; source clips are marked ready only after the final MP4 also passes validation.
+- [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
 - [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
@@ -53,13 +53,13 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
 - [x] CI workflow added for extension protocol and backend bridge tests (first run pending).
 - [ ] Full job recovery and retry behavior.
-- [ ] Video Library and thumbnails.
+- [x] Basic local Video Library API and per-job final-video details; thumbnails, search/filtering and playback UI remain.
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, AI Director Prompt Studio, and the first Google Flow browser milestone are committed. Five isolated persistent Chrome profiles can be configured with individual Flow project URLs and opened directly through Playwright. Browser profile launch requires Google Chrome installed on the Windows PC; each profile needs its initial Google sign-in once. Five-profile task dispatch, worker heartbeat visibility, unique extension-instance binding, and authenticated local task/event/command messaging are implemented. The extension safely refuses to submit until real Flow selectors and visible selected-setting values are configured. Live Flow behavior, actual setting selection, prompt submission, download correctness, FFprobe validation, media processing and Facebook publishing remain unverified or unimplemented.
+**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action and final-video details. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. Meta publishing, robust restart recovery, thumbnails/search/playback UI and a full five-account end-to-end test remain outstanding.
 
 ## 2. Product rules that must not be lost
 
