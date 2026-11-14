@@ -62,6 +62,19 @@
       send("SESSION_REQUIRED", { url: location.href });
       return;
     }
+    if (state === "GENERATING") {
+      send("GENERATION_ALREADY_ACTIVE", { reason: "Existing generation detected; refusing to submit again." });
+      lastState = "GENERATING";
+      startMonitor();
+      return;
+    }
+    if (state === "VIDEO_READY") {
+      send("GENERATION_ALREADY_COMPLETE", { reason: "Existing video detected; refusing to submit another generation." });
+      lastState = "VIDEO_READY";
+      startMonitor();
+      requestDownload();
+      return;
+    }
     const field = findPromptField();
     if (!field) {
       send("FLOW_UI_UNVERIFIED", { reason: "Could not identify exactly one accessible prompt field", state });
@@ -88,11 +101,11 @@
       send("SETTINGS_UNVERIFIED", { requested: task.settings, reason: "Model/quality/duration verification is not yet implemented for the live Flow UI." });
       return;
     }
-    if (configuredField.value === task.prompt || configuredField.textContent === task.prompt) {
-      send("PROMPT_ALREADY_PRESENT", {});
-    } else {
-      setFieldValue(configuredField, task.prompt);
+    if ((configuredField.value || configuredField.textContent || "").trim() === task.prompt.trim()) {
+      send("PROMPT_ALREADY_PRESENT", { reason: "Prompt is already present; refusing to click Generate a second time." });
+      return;
     }
+    setFieldValue(configuredField, task.prompt);
     if ((configuredField.value || configuredField.textContent || "").trim() !== task.prompt.trim()) {
       send("PROMPT_INSERT_FAILED", {});
       return;
