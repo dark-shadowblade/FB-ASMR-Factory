@@ -374,6 +374,33 @@ async def open_flow_profile(profile_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
+@app.get("/api/v1/flow/automation/status")
+def flow_automation_status() -> dict[str, Any]:
+    with connect() as conn:
+        try:
+            instances = conn.execute(
+                "SELECT profile_id, instance_id, extension_version, last_seen FROM extension_instances ORDER BY profile_id"
+            ).fetchall()
+            tasks = conn.execute(
+                """SELECT task_id, job_id, clip_id, profile_id, status, updated_at, last_error, download_path
+                   FROM extension_tasks ORDER BY created_at DESC LIMIT 25"""
+            ).fetchall()
+        except sqlite3.OperationalError:
+            instances, tasks = [], []
+        registered = {row["profile_id"]: dict(row) for row in instances}
+        profiles = []
+        for profile_id in PROFILE_IDS:
+            item = registered.get(profile_id)
+            profiles.append({
+                "profile_id": profile_id,
+                "registered": item is not None,
+                "last_seen": item["last_seen"] if item else None,
+                "extension_version": item["extension_version"] if item else None,
+            })
+        return {"profiles": profiles, "registered_count": sum(p["registered"] for p in profiles),
+                "tasks": [dict(row) for row in tasks]}
+
+
 @app.on_event("shutdown")
 async def shutdown_flow_profiles() -> None:
     await FLOW_MANAGER.close_all()
