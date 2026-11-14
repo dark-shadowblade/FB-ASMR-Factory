@@ -227,7 +227,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         "TASK_FAILED", "PROMPT_INSERT_FAILED", "DOWNLOAD_FAILED", "DOWNLOAD_COMPLETED",
         "TASK_CANCELLED", "FLOW_UI_UNVERIFIED", "SETTINGS_UNVERIFIED",
         "DOWNLOAD_SELECTOR_UNVERIFIED", "PROJECT_URL_MISMATCH",
-        "PROMPT_ALREADY_PRESENT", "SESSION_REQUIRED"
+        "PROMPT_ALREADY_PRESENT", "SESSION_REQUIRED", "MONITOR_TIMEOUT"
       ];
       if (releasesWorker.includes(message.event)) {
         activeTask = null;
