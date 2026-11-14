@@ -29,5 +29,30 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
 
+    def test_prompt_generation_creates_five_distinct_prompts(self):
+        created = client.post("/api/v1/jobs", json={"topic": "Tropical Fruits", "theme": "fruits"}).json()["job"]
+        response = client.post(f"/api/v1/jobs/{created['id']}/generate-prompts")
+        self.assertEqual(response.status_code, 200)
+        job = response.json()["job"]
+        self.assertEqual(job["status"], "prompts_ready")
+        self.assertEqual([clip["subject"] for clip in job["clips"]], ["Mango", "Apple", "Kiwi", "Dragon fruit", "Orange"])
+        self.assertTrue(all(len(clip["prompt"]) > 100 for clip in job["clips"]))
+        self.assertEqual(len({clip["prompt"] for clip in job["clips"]}), 5)
+
+    def test_style_bible_can_be_saved_and_reused(self):
+        custom = "Consistent macro camera, warm studio lighting, clean slate board, crisp natural cutting audio, no music or speech."
+        response = client.put("/api/v1/style-bible", json={"content": custom})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(client.get("/api/v1/style-bible").json()["content"], custom)
+
+    def test_prompt_pack_requires_all_five_before_approval(self):
+        created = client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
+        response = client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
+        self.assertEqual(response.status_code, 409)
+        generated = client.post(f"/api/v1/jobs/{created['id']}/generate-prompts").json()["job"]
+        approved = client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.json()["job"]["status"], "prompts_approved")
+
 if __name__ == "__main__":
     unittest.main()
