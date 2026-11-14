@@ -42,24 +42,47 @@ async function api(path, options = {}) {
   }
   return response.status === 204 ? null : response.json();
 }
+let flushingEvents = false;
+async function flushEvents() {
+  if (flushingEvents) return;
+  flushingEvents = true;
+  try {
+    const saved = await chrome.storage.local.get("pendingEvents");
+    const queue = [...(saved.pendingEvents || [])];
+    while (queue.length) {
+      try {
+        await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify(queue[0]) });
+        queue.shift();
+        await chrome.storage.local.set({ pendingEvents: queue });
+      } catch (error) {
+        console.warn("[ASMR Flow] event retained for retry", error.message);
+        break;
+      }
+    }
+  } finally {
+    flushingEvents = false;
+  }
+}
 async function report(type, payload = {}) {
   const c = await config();
-  if (!c.profileId || !activeTask) return;
-  try {
-    await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify({
-      protocolVersion: P.VERSION, messageId: crypto.randomUUID(), type,
-      taskId: activeTask.taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
-      profileId: c.profileId, instanceId: c.instanceId, timestamp: new Date().toISOString(), payload
-    })});
-  } catch (error) {
-    console.warn("[ASMR Flow] event report failed", error.message);
-  }
+  if (!c.profileId || !c.instanceId || !activeTask) return;
+  const event = {
+    protocolVersion: P.VERSION, messageId: crypto.randomUUID(), type,
+    taskId: activeTask.taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
+    profileId: c.profileId, instanceId: c.instanceId,
+    timestamp: new Date().toISOString(), payload
+  };
+  const saved = await chrome.storage.local.get("pendingEvents");
+  const queue = [...(saved.pendingEvents || []), event].slice(-200);
+  await chrome.storage.local.set({ pendingEvents: queue });
+  await flushEvents();
 }
 async function poll() {
   if (pollBusy) return;
   pollBusy = true;
   try {
     await restoreTask();
+    await flushEvents();
     const c = await config();
     if (!c.enabled || !c.bridgeToken || !P.PROFILES.includes(c.profileId)) return;
     const stored = await chrome.storage.local.get("instanceId");
