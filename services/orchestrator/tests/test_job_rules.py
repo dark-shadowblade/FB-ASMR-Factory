@@ -150,6 +150,7 @@ class JobRulesTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200, response.text)
             self.assertEqual(response.json()["output"]["clip_count"], 5)
             self.assertEqual(self.client.get("/api/v1/library").json()["videos"][0]["job_id"], job_id)
+            self.assertTrue(self.client.get("/api/v1/library").json()["videos"][0]["social_metadata"]["title"])
             output = self.client.get(f"/api/v1/jobs/{job_id}/output")
             self.assertEqual(output.status_code, 200)
             self.assertEqual(output.json()["output"]["duration_seconds"], 40.0)
