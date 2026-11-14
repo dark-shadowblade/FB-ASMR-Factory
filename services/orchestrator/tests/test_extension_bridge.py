@@ -226,8 +226,8 @@ def test_dispatch_uses_saved_flow_generation_settings(tmp_path):
     client, headers, db = make_client(tmp_path)
     with sqlite3.connect(db) as conn:
         conn.executemany("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?)", [
-            ("flow_model", "Veo 3.1 Lite"), ("flow_resolution", "1080p"),
-            ("flow_duration_seconds", "6"), ("flow_aspect_ratio", "9:16")
+            ("flow_model", "Veo 3.1 Lite", "now"), ("flow_resolution", "1080p", "now"),
+            ("flow_duration_seconds", "6", "now"), ("flow_aspect_ratio", "9:16", "now")
         ])
     response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
     assert response.status_code == 200
