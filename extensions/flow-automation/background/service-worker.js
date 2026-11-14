@@ -47,17 +47,25 @@ async function flushEvents() {
   if (flushingEvents) return;
   flushingEvents = true;
   try {
-    const saved = await chrome.storage.local.get("pendingEvents");
-    const queue = [...(saved.pendingEvents || [])];
-    while (queue.length) {
+    while (true) {
+      const saved = await chrome.storage.local.get("pendingEvents");
+      const queue = saved.pendingEvents || [];
+      if (!queue.length) break;
+      const event = queue[0];
       try {
-        await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify(queue[0]) });
-        queue.shift();
-        await chrome.storage.local.set({ pendingEvents: queue });
+        await api("/api/v1/extension/events", { method: "POST", body: JSON.stringify(event) });
       } catch (error) {
         console.warn("[ASMR Flow] event retained for retry", error.message);
         break;
       }
+      const latest = await chrome.storage.local.get("pendingEvents");
+      const remaining = latest.pendingEvents || [];
+      if (remaining[0]?.messageId === event.messageId) remaining.shift();
+      else {
+        const index = remaining.findIndex(item => item.messageId === event.messageId);
+        if (index >= 0) remaining.splice(index, 1);
+      }
+      await chrome.storage.local.set({ pendingEvents: remaining });
     }
   } finally {
     flushingEvents = false;
@@ -73,7 +81,7 @@ async function report(type, payload = {}) {
     timestamp: new Date().toISOString(), payload
   };
   const saved = await chrome.storage.local.get("pendingEvents");
-  const queue = [...(saved.pendingEvents || []), event].slice(-200);
+  const queue = [...(saved.pendingEvents || []), event];
   await chrome.storage.local.set({ pendingEvents: queue });
   await flushEvents();
 }
