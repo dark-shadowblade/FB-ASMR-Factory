@@ -6,6 +6,18 @@ type Job = { id: string; topic: string; theme: string; status: string; created_a
 const API = "http://127.0.0.1:8765/api/v1";
 const fruitFallback = ["Mango", "Apple", "Kiwi", "Dragon fruit", "Orange"];
 
+
+function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; onSave: (value: string) => void }) {
+  const [value, setValue] = useState(clip.prompt);
+  useEffect(() => setValue(clip.prompt), [clip.prompt]);
+  return <div className="prompt-card">
+    <div className="clip-top"><span>CLIP 0{clip.order}</span><span>{clip.status.replaceAll("_"," ")}</span></div>
+    <b>{clip.subject}</b>
+    <textarea value={value} onChange={e=>setValue(e.target.value)} placeholder="Generate prompts to begin…" disabled={locked}/>
+    <button className="prompt-save" disabled={locked || value.trim().length<40 || value===clip.prompt} onClick={()=>onSave(value)}>Save edit</button>
+  </div>;
+}
+
 export default function App() {
   const [topic, setTopic] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -13,6 +25,9 @@ export default function App() {
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
+  const [generating, setGenerating] = useState(false);
+  const [aiConfigured, setAiConfigured] = useState(false);
+  const [styleBible, setStyleBible] = useState("");
 
   async function refresh() {
     try {
@@ -31,7 +46,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { refresh(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
@@ -53,6 +68,49 @@ export default function App() {
     } finally { setBusy(false); }
   }
 
+
+  async function generatePrompts(job: Job) {
+    setGenerating(true);
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Prompt generation failed");
+      setSelected(data.job);
+      setNotice("Five prompts created using " + data.source + ". Review and edit them below.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Prompt generation failed."); }
+    finally { setGenerating(false); }
+  }
+
+  async function savePrompt(job: Job, clip: Clip, prompt: string) {
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/clips/" + clip.id + "/prompt", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save prompt");
+      setSelected(data.job); setNotice(clip.subject + " prompt saved."); await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save prompt."); }
+  }
+
+  async function approvePrompts(job: Job) {
+    try {
+      const response = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Prompt approval failed");
+      setSelected(data.job); setNotice("All five prompts approved and locked."); await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve prompts."); }
+  }
+
+  async function saveStyleBible() {
+    try {
+      const response = await fetch(API + "/style-bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: styleBible }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not save Style Bible");
+      setStyleBible(data.content); setNotice("ASMR Style Bible saved for future jobs.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save Style Bible."); }
+  }
+
   async function approveJob(job: Job) {
     try {
       const response = await fetch(`${API}/jobs/${job.id}/approve`, { method: "POST" });
@@ -71,7 +129,7 @@ export default function App() {
       <div className="brand"><div className="brand-mark">A</div><div><b>ASMR FACTORY</b><small>CREATOR WORKSPACE</small></div></div>
       <div className="nav-label">WORKSPACE</div>
       <div className="nav-item active"><span>▦</span> Overview</div>
-      <div className="nav-item"><span>✦</span> Prompt Studio <em>Planned</em></div>
+      <div className="nav-item"><span>✦</span> Prompt Studio <em>AI DIRECTOR</em></div>
       <div className="nav-item"><span>▤</span> Video Library <em>Planned</em></div>
       <div className="nav-item"><span>◉</span> Flow Accounts <em>Planned</em></div>
       <div className="nav-label second">SYSTEM</div>
@@ -116,7 +174,14 @@ export default function App() {
           <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>
 
-      {active && <section className="panel detail-panel"><div className="panel-head"><div><div className="eyebrow">JOB DETAILS</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div><div className="clip-grid">{active.clips.map(clip=><div className="clip-card" key={clip.id}><div className="clip-top"><span>CLIP 0{clip.order}</span><span>{clip.status}</span></div><b>{clip.subject}</b><p>{clip.prompt || "Prompt will be generated in the AI Director milestone."}</p></div>)}</div>{active.status==="draft" && <button className="secondary" onClick={()=>approveJob(active)}>Approve placeholder plan</button>}</section>}
+      {active && <section className="panel detail-panel">
+        <div className="panel-head"><div><div className="eyebrow">AI DIRECTOR · PROMPT STUDIO</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
+        <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
+        <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
+        {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
+        {active.status==="prompts_approved" && <div className="approved-note">✓ Prompt pack approved. Google Flow generation is the next milestone.</div>}
+      </section>}
+      <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>}
 
       <div className="notice">{notice}</div>
       <footer>ASMR FACTORY <span>·</span> EARLY DEVELOPMENT BUILD <span>·</span> LOCAL-FIRST</footer>
