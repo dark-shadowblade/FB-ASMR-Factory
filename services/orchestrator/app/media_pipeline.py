@@ -104,7 +104,7 @@ def assemble_five_clips(
                     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(clip["path"]),
                         "-map", "0:v:0", "-map", "0:a:0", "-vf", video_filter,
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                        "-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0",
+                        "-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", "aresample=async=1:first_pts=0,apad=pad_dur=2",
                         "-shortest", "-movflags", "+faststart", str(target)]
                 else:
                     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(clip["path"]),
