@@ -164,7 +164,19 @@ Example task (illustrative contract only):
 }
 ```
 
-The extension should emit distinct events for project opened, settings verified, prompt submitted, generation observed complete, download started, download completed and task failed. Events must be idempotently processed by message ID.
+The extension emits distinct events for task accepted, project opened, prompt submitted, generation observed, download started/completed and task blocked/failed. Events are idempotently processed by message ID. The current bridge routes through authenticated loopback HTTP (127.0.0.1:8765), with a random token generated into the orchestrator data directory. Each independently running Chrome profile stores its own profile ID and bridge token in extension storage. The backend validates the full task/profile/job/clip tuple before accepting an event.
+
+The bridge API currently includes:
+- `POST /api/v1/extension/register`
+- `POST /api/v1/extension/dispatch/{job_id}`
+- `GET /api/v1/extension/next-task?profile_id=flow-N`
+- `POST /api/v1/extension/events`
+- `POST /api/v1/extension/tasks/{task_id}/command`
+- `GET /api/v1/extension/commands?profile_id=flow-N`
+
+The bridge token is stored at `<ASMR_FACTORY_DATA>/extension-bridge.token`. Do not commit or expose it in logs. This is a local pairing step, not a Google credential; Google login remains in the relevant Chrome profile.
+
+The extension currently uses safe mode for Flow interaction. No live Flow CSS selectors or generation settings are asserted to be verified. Prompt submission and download clicks remain blocked until selectors are configured and explicitly marked verified; requested model/quality/duration settings also remain blocked until a real UI verification path exists.
 
 Do not put credentials, cookies or tokens in task messages.
 
