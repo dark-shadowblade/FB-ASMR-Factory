@@ -28,8 +28,25 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-FRUIT_SUBJECTS = ["Mango", "Apple", "Kiwi", "Dragon fruit", "Orange"]
-
+THEME_SUBJECTS = {
+    "fruits": ["Watermelon", "Kiwi", "Orange", "Pineapple", "Strawberry"],
+    "soaps": ["Rose soap", "Transparent soap", "Rainbow soap", "Marble soap", "Glitter soap"],
+    "clay": ["Red clay", "Blue clay", "Rainbow clay", "Pastel clay", "Metallic clay"],
+    "kinetic_sand": ["Golden kinetic sand", "Blue kinetic sand", "Pink kinetic sand", "Rainbow kinetic sand", "Layered kinetic sand"],
+    "slime": ["Clear slime", "Crunchy slime", "Glossy slime", "Glitter slime", "Fluffy slime"],
+    "satisfying_objects": ["Jelly", "Wax", "Soft foam", "Coloured blocks", "Sensory material"],
+    "mixed_asmr": ["Layered sensory block", "Jelly-filled object", "Soft wax object", "Foam-and-clay object", "Multi-texture sensory object"],
+}
+THEME_LABELS = {"fruits":"Fruits","soaps":"Soaps","clay":"Clay","kinetic_sand":"Kinetic Sand","slime":"Slime","satisfying_objects":"Satisfying Objects / Materials","mixed_asmr":"Mixed ASMR"}
+THEME_DIRECTIONS = {
+    "fruits":"Photorealistic fresh fruit cutting with accurate peel, flesh, seeds and juice.",
+    "soaps":"Photorealistic soap cutting; preserve translucency, colour, layered or marbled patterns and crisp shavings.",
+    "clay":"Photorealistic modelling-clay cutting; preserve dense smooth texture, clean edges, layered colours and realistic deformation.",
+    "kinetic_sand":"Photorealistic kinetic sand slicing; show cohesive grains, clean cross-sections, compacted layers and granular crumble.",
+    "slime":"Photorealistic slime slicing and pressing; show the named slime texture, plausible stretch, folds, bubbles and material response.",
+    "satisfying_objects":"Photorealistic satisfying material cutting; emphasize the named material's distinctive texture and believable interaction.",
+    "mixed_asmr":"A coordinated mixed-material ASMR experiment; each clip has a distinct named material/object combination with plausible physical interactions.",
+}
 
 class CreateJobRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=120)
@@ -114,31 +131,18 @@ def list_jobs() -> dict[str, list[dict[str, Any]]]:
 @app.post("/api/v1/jobs")
 def create_job(request: CreateJobRequest) -> dict[str, Any]:
     topic = request.topic.strip()
+    theme = request.theme.strip().lower()
     if not topic:
         raise HTTPException(status_code=422, detail="Topic cannot be empty")
-    if request.theme.lower() != "fruits":
-        raise HTTPException(status_code=422, detail="Only the Fruits theme is enabled in the first release")
-
-    job_id = str(uuid.uuid4())
-    now = utc_now()
+    if theme not in THEME_SUBJECTS:
+        raise HTTPException(status_code=422, detail="Choose one of the seven supported ASMR styles")
+    job_id, now = str(uuid.uuid4()), utc_now()
     with connect() as conn:
-        conn.execute(
-            "INSERT INTO jobs (id, topic, theme, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (job_id, topic, "fruits", "draft", now, now),
-        )
-        for index, subject in enumerate(FRUIT_SUBJECTS, start=1):
-            clip_id = str(uuid.uuid4())
-            conn.execute(
-                "INSERT INTO clips (id, job_id, subject, prompt, status, clip_order) VALUES (?, ?, ?, '', 'planned', ?)",
-                (clip_id, job_id, subject, index),
-            )
-        conn.execute(
-            "INSERT INTO job_events (job_id, event, created_at) VALUES (?, ?, ?)",
-            (job_id, "Draft job created with five planned fruit clips", now),
-        )
-        job = serialize_job(conn, job_id)
-    return {"job": job}
-
+        conn.execute("INSERT INTO jobs (id, topic, theme, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (job_id, topic, theme, "draft", now, now))
+        for index, subject in enumerate(THEME_SUBJECTS[theme], start=1):
+            conn.execute("INSERT INTO clips (id, job_id, subject, prompt, status, clip_order) VALUES (?, ?, ?, '', 'planned', ?)", (str(uuid.uuid4()), job_id, subject, index))
+        conn.execute("INSERT INTO job_events (job_id, event, created_at) VALUES (?, ?, ?)", (job_id, "Draft " + THEME_LABELS[theme] + " job created with five planned clip tasks", now))
+        return {"job": serialize_job(conn, job_id)}
 
 @app.get("/api/v1/jobs/{job_id}")
 def get_job(job_id: str) -> dict[str, Any]:
@@ -173,14 +177,6 @@ vertical 9:16, shallow depth of field, clean dark charcoal or warm neutral surfa
 soft directional studio light, natural fruit color and realistic moisture. One continuous
 8-second shot: one deliberate controlled knife cut, believable resistance and clean separation.
 Intimate natural cutting audio only; no music, speech, text, logos, jump cuts or surreal physics."""
-FRUIT_DETAILS = {
-    "Mango": "ripe golden mango, natural pores, orange flesh and a visible flat stone",
-    "Apple": "crisp red-and-gold apple, taut skin, pale flesh and a small seed chamber",
-    "Kiwi": "brown fuzzy kiwi, vivid emerald flesh, pale center and tiny black seeds",
-    "Dragon fruit": "magenta dragon fruit with green-tipped scales, white flesh and tiny black seeds",
-    "Orange": "textured bright-orange peel, translucent juicy segments and delicate white pith",
-}
-
 class StyleBibleRequest(BaseModel):
     content: str = Field(min_length=40, max_length=5000)
 
@@ -192,51 +188,37 @@ def style_bible(conn: sqlite3.Connection) -> str:
     return row["value"] if row else DEFAULT_STYLE_BIBLE
 
 def ai_provider_config() -> dict[str, str]:
-    return {
-        "base_url": os.environ.get("ASMR_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
-        "api_key": os.environ.get("ASMR_AI_API_KEY", ""),
-        "model": os.environ.get("ASMR_AI_MODEL", ""),
-    }
+    return {"base_url": os.environ.get("ASMR_AI_BASE_URL", "https://api.openai.com/v1").rstrip("/"), "api_key": os.environ.get("ASMR_AI_API_KEY", ""), "model": os.environ.get("ASMR_AI_MODEL", "")}
 
-def compose_builtin_prompts(topic: str, bible: str) -> list[dict[str, str]]:
+def compose_builtin_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     output = []
-    for fruit, detail in FRUIT_DETAILS.items():
-        prompt = (
-            f"{bible.strip()}\\n\\nSCENE: {topic.strip()}. Feature only {fruit}: {detail}. "
-            "Show one fresh fruit on a clean cutting board. A realistic chef knife enters naturally "
-            "and makes one slow, controlled continuous cut. The two pieces visibly separate with "
-            "physically accurate contact, gravity and texture. End on a still macro view of the "
-            "freshly cut surface. No extra fruit, props, hands in unsafe positions, transitions or "
-            "camera movement. Vertical 9:16, exactly one standalone 8-second shot."
-        )
-        output.append({"subject": fruit, "prompt": prompt})
+    for subject in THEME_SUBJECTS[theme]:
+        prompt = (f"{bible.strip()}\\n\\nSTYLE: {THEME_DIRECTIONS[theme]}\\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
+                  "Create a distinctive material-specific cutting or satisfying action, visually different from the other four clips. "
+                  "Use one continuous controlled action with realistic contact, resistance, gravity and texture. "
+                  "Vertical 9:16, one standalone 8-second shot. No speech, music, text, logos, unsafe hand placement or impossible physics.")
+        output.append({"subject": subject, "prompt": prompt})
     return output
 
-def compose_ai_prompts(topic: str, bible: str) -> list[dict[str, str]]:
+def compose_ai_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     cfg = ai_provider_config()
-    response = httpx.post(
-        f"{cfg['base_url']}/chat/completions",
-        headers={"Authorization": f"Bearer {cfg['api_key']}"},
-        json={"model": cfg["model"], "temperature": 0.65,
-              "response_format": {"type": "json_object"},
-              "messages": [
-                  {"role": "system", "content": "Return only JSON: {prompts:[{subject,prompt}...]}. Exactly five prompts in this order: Mango, Apple, Kiwi, Dragon fruit, Orange. Each prompt is a distinct, standalone, photorealistic vertical 9:16 fruit-cutting ASMR shot lasting 8 seconds. Keep shared camera, lighting, surface and sound style. No speech, music, text, logos or impossible physics."},
-                  {"role": "user", "content": f"Topic: {topic}\\nShared style bible:\\n{bible}\\nMake the fruit-specific actions and textures distinct."}
-              ]},
-        timeout=90.0,
-    )
+    expected = THEME_SUBJECTS[theme]
+    system = (f"Return only JSON {{prompts:[{{subject,prompt}}...]}}. Exactly five prompts in this subject order: {expected}. "
+              f"Style: {THEME_LABELS[theme]}. {THEME_DIRECTIONS[theme]} Each prompt is a distinct vertical 9:16, 8-second ASMR clip. "
+              "Keep camera, lighting, surface and audio identity consistent. No speech, music, text, logos or impossible physics.")
+    response = httpx.post(f"{cfg['base_url']}/chat/completions", headers={"Authorization": f"Bearer {cfg['api_key']}"},
+        json={"model": cfg["model"], "temperature": 0.65, "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": f"Topic: {topic}\\nShared Style Bible:\\n{bible}\\nMake the five subject actions and textures meaningfully distinct."}]}, timeout=90.0)
     response.raise_for_status()
-    parsed = json.loads(response.json()["choices"][0]["message"]["content"])
-    prompts = parsed.get("prompts", [])
-    expected = list(FRUIT_DETAILS)
+    prompts = json.loads(response.json()["choices"][0]["message"]["content"]).get("prompts", [])
     if len(prompts) != 5:
         raise ValueError("Provider did not return exactly five prompts")
     result = []
-    for fruit, item in zip(expected, prompts):
+    for subject, item in zip(expected, prompts):
         prompt = item.get("prompt", "").strip()
-        if item.get("subject") != fruit or len(prompt) < 40:
-            raise ValueError(f"Invalid provider prompt for {fruit}")
-        result.append({"subject": fruit, "prompt": prompt})
+        if item.get("subject") != subject or len(prompt) < 40:
+            raise ValueError("Invalid provider prompt for " + subject)
+        result.append({"subject": subject, "prompt": prompt})
     return result
 
 @app.get("/api/v1/settings/ai")
@@ -273,10 +255,10 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
         source = "built-in"
         try:
             if cfg["api_key"] and cfg["model"]:
-                prompts = compose_ai_prompts(job["topic"], style_bible(conn))
+                prompts = compose_ai_prompts(job["topic"], job["theme"], style_bible(conn))
                 source = "AI provider"
             else:
-                prompts = compose_builtin_prompts(job["topic"], style_bible(conn))
+                prompts = compose_builtin_prompts(job["topic"], job["theme"], style_bible(conn))
         except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=502, detail=f"AI provider failed; existing prompts were not changed: {str(exc)[:200]}")
         for item in prompts:
@@ -284,7 +266,7 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
                          (item["prompt"], job_id, item["subject"]))
         conn.execute("UPDATE jobs SET status='prompts_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
-                     (job_id, f"Five prompts generated with {source}", utc_now()))
+                     (job_id, "Five " + THEME_LABELS[job["theme"]] + " prompts generated with " + source, utc_now()))
         return {"job": serialize_job(conn, job_id), "source": source}
 
 @app.patch("/api/v1/jobs/{job_id}/clips/{clip_id}/prompt")
@@ -316,7 +298,7 @@ def approve_prompts(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail="All five prompts must be generated and reviewed first")
         conn.execute("UPDATE jobs SET status='prompts_approved',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
-                     (job_id, "Five fruit prompts approved; Flow automation is next", utc_now()))
+                     (job_id, "Five " + THEME_LABELS[job["theme"]] + " prompts approved; Flow automation is next", utc_now()))
         return {"job": serialize_job(conn, job_id)}
 \n\nif __name__ == "__main__":
     import uvicorn
