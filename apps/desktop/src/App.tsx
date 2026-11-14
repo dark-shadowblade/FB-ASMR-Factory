@@ -346,7 +346,7 @@ export default function App() {
     try {
       const response = await fetch(API + "/jobs/" + job.id + "/facebook-metadata", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: seoTitle, caption: seoCaption, description: seoDescription, hashtags: seoHashtags.split(/\\s+/).filter(Boolean) })
+        body: JSON.stringify({ title: seoTitle, caption: seoCaption, description: seoDescription, hashtags: seoHashtags.split(/\s+/).filter(Boolean) })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not save Facebook metadata");
