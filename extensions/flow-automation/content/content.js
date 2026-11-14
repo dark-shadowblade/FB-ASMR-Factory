@@ -349,11 +349,11 @@
   function diagnosticElement(el) {
     const rect = el.getBoundingClientRect();
     const selector = diagnosticSelector(el);
-    const isTextEntry = /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox";
+    const textEntry = /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox";
     const safeLabel = [
       el.getAttribute("aria-label"), el.getAttribute("placeholder"),
       el.getAttribute("data-placeholder"), el.getAttribute("title"),
-      isTextEntry ? "" : el.innerText
+      textEntry ? "" : el.innerText
     ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 180);
     return {
       tag: el.tagName.toLowerCase(),
