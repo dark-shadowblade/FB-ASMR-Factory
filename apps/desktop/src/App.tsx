@@ -32,7 +32,8 @@ export default function App() {
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);\n  const [bridgeToken, setBridgeToken] = useState("");
+  const [flowProfiles, setFlowProfiles] = useState<FlowProfile[]>([]);
+  const [bridgeToken, setBridgeToken] = useState("");
   const [flowAutomation, setFlowAutomation] = useState<FlowAutomationStatus>({ profiles: [], registered_count: 0, tasks: [] });
   const [dispatching, setDispatching] = useState(false);
   const [selected, setSelected] = useState<Job | null>(null);
@@ -107,18 +108,6 @@ export default function App() {
       setNotice("Extension bridge token copied. Paste it into the options page in each Chrome profile.");
     } catch {
       setNotice("Clipboard access was unavailable. Copy the token from the field manually.");
-    }
-  }
-
-  async function dispatchFlow(job: Job) {
-    try {
-      const response = await fetch(`${API}/extension/dispatch/${job.id}`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Could not dispatch Flow tasks");
-      setNotice(`Dispatched ${data.dispatched} clip tasks: one prompt to each of the five independent Flow profiles.`);
-      await refresh();
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Flow task dispatch failed.");
     }
   }
 
