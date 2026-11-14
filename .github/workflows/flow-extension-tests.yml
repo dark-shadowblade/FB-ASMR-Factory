@@ -16,6 +16,11 @@ jobs:
           node-version: 22
       - name: Test extension protocol
         run: node --test tests/extension-protocol.test.cjs
+      - name: Syntax-check Flow extension scripts
+        run: |
+          node --check extensions/flow-automation/background/service-worker.js
+          node --check extensions/flow-automation/content/content.js
+          node --check extensions/flow-automation/options/options.js
 
   extension-bridge:
     runs-on: ubuntu-latest
