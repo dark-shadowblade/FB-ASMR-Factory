@@ -62,7 +62,7 @@ class MediaPipelineTests(unittest.TestCase):
                     if probe_path.stem == "final":
                         return CompletedProcess(command, 0, self.metadata(duration=40.0), "")
                     index = int(probe_path.stem)
-                    metadata = self.metadata(width=640 if index == 4 else 720)
+                    metadata = self.metadata(fps="24/1" if index == 4 else "30/1")
                     return CompletedProcess(command, 0, metadata, "")
                 Path(command[-1]).write_bytes(b"merged")
                 return CompletedProcess(command, 0, "", "")
