@@ -169,9 +169,9 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         status_map = {
           "TASK_ACCEPTED": "leased", "PROJECT_PAGE_READY": "project_open",
           "PROMPT_SUBMITTED": "submitted", "GENERATION_STARTED": "generating",
-          "GENERATION_COMPLETED": "generation_completed", "DOWNLOAD_STARTED": "downloading",
+          "GENERATION_COMPLETED": "generation_completed", "GENERATION_ALREADY_ACTIVE": "generating", "GENERATION_ALREADY_COMPLETE": "generation_completed", "DOWNLOAD_STARTED": "downloading",
           "DOWNLOAD_COMPLETED": "downloaded", "SESSION_REQUIRED": "needs_login",
-          "FLOW_UI_UNVERIFIED": "blocked_ui", "SETTINGS_UNVERIFIED": "blocked_settings",
+          "FLOW_UI_UNVERIFIED": "blocked_ui", "DOWNLOAD_SELECTOR_UNVERIFIED": "blocked_ui", "PROJECT_URL_MISMATCH": "blocked_ui", "SETTINGS_UNVERIFIED": "blocked_settings", "PROMPT_INSERT_FAILED": "failed",
           "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_CANCELLED": "cancelled"
         }
         with connect() as conn:
