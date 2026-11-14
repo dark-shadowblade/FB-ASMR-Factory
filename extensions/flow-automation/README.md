@@ -39,7 +39,7 @@ It also contains these Generate-control patterns:
 
 The worker now prefers the observed rich-text editor patterns when identifying a unique prompt field, and the read-only diagnostic reports icon text where available so icon-only Generate/Download controls are easier to recognise. For contenteditable editors, prompt insertion now uses the browser editing-command path instead of directly replacing `textContent`; it deliberately avoids private React internals and DevTools Protocol input simulation.
 
-These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker still requires an explicitly configured and verified selector before it submits anything. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
+These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker can use unique semantic auto-detection; explicitly verified custom selectors remain an optional override. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
 
 ## Live Flow selectors: deliberately unverified
 
