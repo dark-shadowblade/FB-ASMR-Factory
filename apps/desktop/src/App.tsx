@@ -434,6 +434,12 @@ export default function App() {
   }
 
   const active = selected ?? jobs[0] ?? null;
+  const jobProgress = (job: Job) => {
+    const tasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
+    const downloaded = tasks.filter(task => task.status === "downloaded").length;
+    const failed = tasks.filter(task => ["failed", "blocked_ui", "blocked_settings", "needs_login"].includes(task.status)).length;
+    return { downloaded, failed, percent: job.final_video ? 100 : Math.round(downloaded / 5 * 100) };
+  };
 
   useEffect(() => {
     if (!active || active.final_video || assembling || autoAssemblyAttempted.has(active.id)) return;
@@ -578,7 +584,7 @@ export default function App() {
       {activePage === "home" && <section className="panel jobs-panel">
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
         {jobs.length===0 ? <div className="empty"><div className="empty-icon">▤</div><b>No productions yet</b><span>Your created jobs will appear here.</span></div> :
-          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
+          <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small><div className="job-progress-meta"><span>{jobProgress(job).downloaded}/5 clips downloaded</span><span>{jobProgress(job).percent}%</span></div><div className="job-progress-track"><div className="job-progress-fill" style={{width: jobProgress(job).percent + "%"}} /></div>{jobProgress(job).failed>0 && <small className="job-progress-error">{jobProgress(job).failed} clip task(s) need attention</small>}</div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>}
 
       {activePage === "prompts" && active && <section className="panel detail-panel">
