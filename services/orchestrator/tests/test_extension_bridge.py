@@ -62,7 +62,7 @@ def test_profile_cannot_poll_another_profiles_task(tmp_path):
 def test_event_identity_mismatch_is_rejected(tmp_path):
     client, headers, _ = make_client(tmp_path)
     client.post("/api/v1/extension/dispatch/job-a", headers=headers)
-    task = client.get("/api/v1/extension/next-task?profile_id=flow-1", headers=headers).json()["task"]
+    task = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
     payload = {
         "protocolVersion": 1, "messageId": "message-0001", "type": "GENERATION_STARTED",
         "taskId": task["taskId"], "jobId": task["jobId"], "clipId": task["clipId"],
