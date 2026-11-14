@@ -6,7 +6,7 @@ import re
 import sqlite3
 import httpx
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -391,10 +391,15 @@ def flow_automation_status() -> dict[str, Any]:
         profiles = []
         for profile_id in PROFILE_IDS:
             item = registered.get(profile_id)
+            last_seen = item["last_seen"] if item else None
+            try:
+                connected = bool(last_seen and datetime.fromisoformat(last_seen) >= datetime.now(timezone.utc) - timedelta(minutes=2))
+            except ValueError:
+                connected = False
             profiles.append({
                 "profile_id": profile_id,
-                "registered": item is not None,
-                "last_seen": item["last_seen"] if item else None,
+                "registered": connected,
+                "last_seen": last_seen,
                 "extension_version": item["extension_version"] if item else None,
             })
         return {"profiles": profiles, "registered_count": sum(p["registered"] for p in profiles),
