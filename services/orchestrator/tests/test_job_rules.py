@@ -22,6 +22,37 @@ class JobRulesTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.client_context.__exit__(None, None, None)
+    def test_ai_verify_requires_saved_api_key(self):
+        with patch.object(main_module.keyring, "get_password", return_value=None):
+            response = self.client.post("/api/v1/settings/ai/verify")
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Add an API key", response.json()["detail"])
+
+    def test_ai_verify_checks_provider_and_model(self):
+        class FakeResponse:
+            status_code = 200
+            def json(self):
+                return {"choices": [{"message": {"content": "OK"}}]}
+        with patch.object(main_module.keyring, "get_password", return_value="test-secret"), \\
+             patch.object(main_module.httpx, "post", return_value=FakeResponse()) as request:
+            response = self.client.post("/api/v1/settings/ai/verify")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["verified"])
+        self.assertEqual(response.json()["provider"], "gemini")
+        self.assertNotIn("test-secret", response.text)
+        self.assertTrue(request.called)
+
+    def test_ai_verify_reports_provider_authentication_failure(self):
+        class FakeResponse:
+            status_code = 401
+            def json(self):
+                return {"error": {"message": "Invalid API key"}}
+        with patch.object(main_module.keyring, "get_password", return_value="bad-secret"), \\
+             patch.object(main_module.httpx, "post", return_value=FakeResponse()):
+            response = self.client.post("/api/v1/settings/ai/verify")
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("Invalid API key", response.json()["detail"])
+
     def test_fruits_job_has_exactly_five_clip_tasks(self):
         response = self.client.post("/api/v1/jobs", json={"topic": "Tropical", "theme": "fruits"})
         self.assertEqual(response.status_code, 200)
