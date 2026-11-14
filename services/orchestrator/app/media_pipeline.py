@@ -116,7 +116,7 @@ def assemble_five_clips(
                 if not target.is_file() or target.stat().st_size == 0:
                     raise MediaPipelineError(f"Normalization did not produce clip {index}")
                 normalized.append(target)
-            manifest.write_text("".join(f"file '{quote_concat_path(path)}'\\n" for path in normalized), encoding="utf-8")
+            manifest.write_text("".join(f"file '{quote_concat_path(path)}'\n" for path in normalized), encoding="utf-8")
             _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0",
                   "-i", str(manifest), "-c", "copy", "-movflags", "+faststart", str(output)])
         if not output.is_file() or output.stat().st_size == 0:
