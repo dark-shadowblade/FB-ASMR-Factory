@@ -64,3 +64,23 @@ test("Flow generation settings must come from the assigned desktop task", () => 
   assert.match(content, /missing model, resolution or duration settings from the desktop app/);
   assert.doesNotMatch(content, /requested\.model \|\| "Veo 3\.1 Lite"/);
 });
+
+test("extension options render live profile, project and assigned settings", () => {
+  const html = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/options/options.html"), "utf8");
+  const js = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/options/options.js"), "utf8");
+  for (const id of ["liveProfile","liveConnection","liveProject","liveProjectMeta","liveModel","liveQuality","liveDuration","liveRatio","liveTaskMeta","refreshLiveStatus"]) {
+    assert.match(html, new RegExp('id="' + id + '"'));
+  }
+  assert.match(js, /extensionTaskSnapshot/);
+  assert.match(js, /lastFlowProject/);
+  assert.match(js, /chrome\.storage\.onChanged/);
+  assert.match(js, /Waiting for worker registration/);
+});
+
+test("background stores assigned generation settings and task events for the extension panel", () => {
+  const worker = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/background/service-worker.js"), "utf8");
+  assert.match(worker, /extensionTaskSnapshot:/);
+  assert.match(worker, /durationSeconds: assignedSettings\.durationSeconds/);
+  assert.match(worker, /extensionWorkerStatus:/);
+  assert.match(worker, /lastEvent: message\.event/);
+});
