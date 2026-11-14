@@ -23,7 +23,7 @@ def make_client(tmp_path):
         INSERT INTO flow_profiles VALUES('flow-5','https://flow.google.com/project/56789012-abcd');
         """)
         for i in range(1, 6):
-            conn.execute("INSERT INTO clips VALUES(?,?,?,?)",
+            conn.execute("INSERT INTO clips(id,job_id,prompt,clip_order) VALUES(?,?,?,?)",
                 (f"clip-{i}", "job-a", "A detailed approved ASMR prompt for test clip number " + str(i) + " with realistic material texture and action.", i))
     app = FastAPI()
     app.include_router(create_extension_router(db, tmp_path))
