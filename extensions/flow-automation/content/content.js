@@ -16,7 +16,7 @@
     el.getAttribute?.("aria-label"), el.getAttribute?.("placeholder"),
     el.getAttribute?.("data-placeholder"), el.getAttribute?.("title"),
     isTextEntry(el) ? "" : el.innerText || el.textContent
-  ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim();
+  ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 
   function projectIdentity(url) {
     try {
@@ -354,7 +354,7 @@
       el.getAttribute("aria-label"), el.getAttribute("placeholder"),
       el.getAttribute("data-placeholder"), el.getAttribute("title"),
       isTextEntry ? "" : el.innerText
-    ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim().slice(0, 180);
+    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 180);
     return {
       tag: el.tagName.toLowerCase(),
       role: el.getAttribute("role") || "",
