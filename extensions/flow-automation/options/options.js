@@ -14,7 +14,7 @@ document.getElementById("scan").addEventListener("click", async () => {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
-    if (!tab?.id || !/^https:\\/\\/flow\\.google\\.com\\//i.test(tab.url || "")) {
+    let isFlowTab = false;\n    try { isFlowTab = new URL(tab?.url || "").hostname === "flow.google.com"; } catch (_) {}\n    if (!tab?.id || !isFlowTab) {
       throw new Error("Open the target Google Flow project in this Chrome profile and make it the active tab.");
     }
     const response = await chrome.tabs.sendMessage(tab.id, { type: "RUN_DOM_DIAGNOSTIC" });
