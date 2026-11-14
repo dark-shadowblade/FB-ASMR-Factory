@@ -78,6 +78,10 @@ def assemble_five_clips(
     clips = [probe_video(Path(path), ffprobe=ffprobe) for path in clip_paths]
     reference = clips[0]
     for index, clip in enumerate(clips, start=1):
+        if abs(clip["duration"] - 8.0) > 1.0:
+            raise MediaPipelineError(
+                f"Clip {index} duration is {clip['duration']:.2f}s; expected approximately 8 seconds"
+            )
         ratio = clip["width"] / clip["height"]
         if clip["height"] <= clip["width"] or abs(ratio - (9 / 16)) > 0.03:
             raise MediaPipelineError(f"Clip {index} is not vertical 9:16 video ({clip['width']}x{clip['height']})")
