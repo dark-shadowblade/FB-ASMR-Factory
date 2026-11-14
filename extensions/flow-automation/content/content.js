@@ -6,6 +6,9 @@
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let paused = false;
+  let cancelled = false;
+  let stopWaitingForField = null;
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -146,14 +149,17 @@
         finished = true;
         observer.disconnect();
         clearTimeout(timeout);
+        if (stopWaitingForField === finish) stopWaitingForField = null;
         resolve(value);
       };
       const observer = new MutationObserver(() => {
+        if (paused || cancelled) return finish(null);
         const field = resolveField();
         if (field && visible(field)) finish(field);
       });
       observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
       const timeout = setTimeout(() => finish(null), timeoutMs);
+      stopWaitingForField = finish;
     });
   }
   function execute(task) {
@@ -167,6 +173,8 @@
   }
   async function runTask(task) {
     currentTask = task;
+    paused = false;
+    cancelled = false;
     if (!sameProject(location.href, task.projectUrl)) {
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
@@ -199,6 +207,7 @@
       } catch (_) { return null; }
     };
     const field = await waitForPromptField(resolveField);
+    if (paused || cancelled) return;
     if (!field || !visible(field)) {
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
@@ -251,7 +260,7 @@
   }
   let downloadRequested = false;
   function requestDownload() {
-    if (downloadRequested) return;
+    if (paused || cancelled || downloadRequested) return;
     downloadRequested = true;
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
@@ -264,6 +273,7 @@
       let button = null;
       try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
       if (!visible(button)) {
+        downloadRequested = false;
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
         return;
       }
@@ -413,20 +423,25 @@
     catch (error) { sendResponse({ ok: false, error: String(error).slice(0, 300) }); }
     return false;
   });
-  chrome.runtime.onMessage.addListener(message => {
-    if (!currentTask) return;
-    if (message?.type === "TASK_ASSIGNED" && message.task) execute(message.task);
-    if (message?.type === "PAUSE") { if (observer) observer.disconnect(); send("TASK_PAUSED", {}); }
-    if (message?.type === "RESUME") {
-      chrome.storage.local.get("activeDownloadIds", saved => {
-        if (!(saved.activeDownloadIds || []).length) downloadRequested = false;
-        execute(currentTask);
-        send("TASK_RESUMED", { detectedState: detectState() });
-      });
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!currentTask) { sendResponse?.({ ok: false, error: "NO_ACTIVE_TASK" }); return false; }
+    if (message?.type === "TASK_ASSIGNED" && message.task) { execute(message.task); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "PAUSE") {
+      paused = true; if (observer) observer.disconnect(); if (stopWaitingForField) stopWaitingForField(null);
+      send("TASK_PAUSED", {}); sendResponse?.({ ok: true }); return false;
     }
-    if (message?.type === "CANCEL") { if (observer) observer.disconnect(); send("TASK_CANCELLED", {}); }
-    if (message?.type === "CHECK_STATUS") send("STATUS_CHECKED", { detectedState: detectState(), url: location.href });
-    if (message?.type === "DOWNLOAD_VIDEO") requestDownload();
-    if (message?.type === "SUBMIT_PROMPT") execute(currentTask);
+    if (message?.type === "RESUME") {
+      paused = false; cancelled = false; if (observer) observer.disconnect(); downloadRequested = false;
+      send("TASK_RESUMED", { detectedState: "resuming" });
+      setTimeout(() => execute(currentTask), 75); sendResponse?.({ ok: true }); return false;
+    }
+    if (message?.type === "CANCEL") {
+      cancelled = true; paused = false; if (observer) observer.disconnect(); if (stopWaitingForField) stopWaitingForField(null);
+      send("TASK_CANCELLED", {}); sendResponse?.({ ok: true }); return false;
+    }
+    if (message?.type === "CHECK_STATUS") { send("STATUS_CHECKED", { detectedState: detectState(), url: location.href }); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "DOWNLOAD_VIDEO") { requestDownload(); sendResponse?.({ ok: true }); return false; }
+    if (message?.type === "SUBMIT_PROMPT") { execute(currentTask); sendResponse?.({ ok: true }); return false; }
+    sendResponse?.({ ok: false, error: "UNKNOWN_COMMAND" }); return false;
   });
 })();
