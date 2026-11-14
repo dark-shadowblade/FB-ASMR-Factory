@@ -236,13 +236,19 @@ async function pollCommands() {
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) pollCommands(); });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (!changeInfo.url) return;
   await restoreTask();
   if (!activeTask || tabId !== activeTabId) return;
+  const currentUrl = changeInfo.url || tab?.url || "";
+  if (!currentUrl) return;
   try {
-    const host = new URL(changeInfo.url).hostname;
-    if (host === "accounts.google.com") {
-      await report("SESSION_REQUIRED", { url: changeInfo.url, reason: "Google redirected this profile to sign-in." });
+    const parsed = new URL(currentUrl);
+    if (parsed.hostname === "accounts.google.com") {
+      await report("SESSION_REQUIRED", { url: currentUrl, reason: "Google redirected this profile to sign-in." });
+      return;
+    }
+    if (parsed.hostname === "flow.google.com" &&
+        parsed.pathname === new URL(activeTask.projectUrl).pathname) {
+      chrome.tabs.sendMessage(tabId, { type: "TASK_ASSIGNED", task: activeTask }).catch(() => {});
     }
   } catch (_) {}
 });
