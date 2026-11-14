@@ -48,6 +48,14 @@ async def require_desktop_auth_for_opaque_origins(request, call_next):
         supplied = request.headers.get("x-asmr-desktop-token", "")
         if not expected or not supplied or not secrets.compare_digest(supplied, expected):
             return JSONResponse(status_code=403, content={"detail": "Desktop authentication required"})
+    if origin.startswith("chrome-extension://") and request.method != "OPTIONS":
+        try:
+            expected_bridge = (DATA_DIR / "extension-bridge.token").read_text(encoding="utf-8").strip()
+        except OSError:
+            expected_bridge = ""
+        supplied_bridge = request.headers.get("x-asmr-bridge-token", "")
+        if not expected_bridge or not supplied_bridge or not secrets.compare_digest(supplied_bridge, expected_bridge):
+            return JSONResponse(status_code=403, content={"detail": "Extension bridge authentication required"})
     return await call_next(request)
 
 
