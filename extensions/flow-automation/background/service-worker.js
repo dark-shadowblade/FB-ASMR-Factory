@@ -5,7 +5,7 @@ let activeTask = null;
 let pollBusy = false;
 let activeTabId = null;
 let activeDownloadIds = new Set();
-async function restoreTask() {
+function flowProjectIdentity(url) {\n  try {\n    const parsed = new URL(url);\n    if (parsed.protocol !== "https:" || parsed.hostname !== "flow.google.com") return null;\n    const match = parsed.pathname.match(/^\\/project\\/([A-Za-z0-9-]{12,})\\/?$/);\n    return match ? { projectId: match[1], path: "/project/" + match[1] } : null;\n  } catch (_) { return null; }\n}\nfunction sameFlowProject(left, right) {\n  const a = flowProjectIdentity(left);\n  const b = flowProjectIdentity(right);\n  return Boolean(a && b && a.projectId === b.projectId);\n}\nasync function restoreTask() {
   if (!activeTask) {
     const saved = await chrome.storage.local.get(["activeTask", "activeTabId", "activeDownloadIds"]);
     activeTask = saved.activeTask || null;
@@ -86,7 +86,7 @@ async function report(type, payload = {}) {
 }
 async function ensureActiveTaskTab() {
   if (!activeTask) return;
-  const expectedPath = activeTask.projectUrl.split("?")[0];
+  const expectedProject = flowProjectIdentity(activeTask.projectUrl);\n  if (!expectedProject) { await report("PROJECT_URL_INVALID", { expected: activeTask.projectUrl }); return; }
   if (Number.isInteger(activeTabId)) {
     try {
       const current = await chrome.tabs.get(activeTabId);
@@ -95,11 +95,11 @@ async function ensureActiveTaskTab() {
         await report("SESSION_REQUIRED", { url: currentUrl, reason: "Google redirected this profile to sign-in." });
         return;
       }
-      if (currentUrl.split("?")[0] === expectedPath) return;
+      if (sameFlowProject(currentUrl, activeTask.projectUrl)) return;
     } catch (_) {}
   }
   const tabs = await chrome.tabs.query({ url: "https://flow.google.com/project/*" });
-  const existing = tabs.find(tab => (tab.url || "").split("?")[0] === expectedPath);
+  const existing = tabs.find(tab => sameFlowProject(tab.url || "", activeTask.projectUrl));
   const tab = existing
     ? await chrome.tabs.update(existing.id, { url: activeTask.projectUrl, active: true })
     : await chrome.tabs.create({ url: activeTask.projectUrl, active: true });
@@ -284,7 +284,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       return;
     }
     if (parsed.hostname === "flow.google.com" &&
-        parsed.pathname === new URL(activeTask.projectUrl).pathname) {
+        sameFlowProject(currentUrl, activeTask.projectUrl)) {
       chrome.tabs.sendMessage(tabId, { type: "TASK_ASSIGNED", task: activeTask }).catch(() => {});
     }
   } catch (_) {}
