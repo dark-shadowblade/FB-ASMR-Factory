@@ -56,10 +56,12 @@ async function poll() {
     await restoreTask();
     const c = await config();
     if (!c.enabled || !c.bridgeToken || !P.PROFILES.includes(c.profileId)) return;
+    const stored = await chrome.storage.local.get("instanceId");
+    const instanceId = stored.instanceId || crypto.randomUUID();
+    if (!stored.instanceId) await chrome.storage.local.set({ instanceId });
     await api("/api/v1/extension/register", { method: "POST", body: JSON.stringify({
       protocolVersion: P.VERSION, profileId: c.profileId,
-      instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
-      extensionVersion: chrome.runtime.getManifest().version
+      instanceId, extensionVersion: chrome.runtime.getManifest().version
     })});
     if (activeTask) return;
     const result = await api("/api/v1/extension/next-task?profile_id=" + encodeURIComponent(c.profileId));
