@@ -71,10 +71,14 @@ def publish_reel(video_path: str | Path, title: str, description: str, timeout: 
         raise MetaPublishError("Meta did not return a valid Reel upload session")
 
     size = path.stat().st_size
-    with path.open("rb") as stream:
-        uploaded = httpx.post(
+    def file_chunks():
+        with path.open("rb") as stream:
+            while chunk := stream.read(4 * 1024 * 1024):
+                yield chunk
+
+    uploaded = httpx.post(
             upload_url,
-            content=stream,
+            content=file_chunks(),
             headers={
                 "Authorization": f"OAuth {token}",
                 "offset": "0",
@@ -101,3 +105,21 @@ def publish_reel(video_path: str | Path, title: str, description: str, timeout: 
     if completed.get("success") is False:
         raise MetaPublishError("Meta did not accept the Reel publish request")
     return {"video_id": video_id, "post_id": completed.get("post_id"), "success": True, "state": "processing"}
+
+
+def get_reel_status(video_id: str, timeout: float = 20.0) -> dict[str, Any]:
+    cfg = meta_config()
+    if not cfg["page_access_token"]:
+        raise MetaPublishError("Facebook Page access token is not configured")
+    response = httpx.get(
+        f"{GRAPH_BASE}/{video_id}",
+        params={"fields": "status", "access_token": cfg["page_access_token"]},
+        timeout=timeout,
+    )
+    data = _check_response(response, "Reel status check")
+    status = data.get("status", {})
+    if not isinstance(status, dict):
+        status = {}
+    video_status = str(status.get("video_status") or status.get("processing_phase", {}).get("status") or "processing").lower()
+    normalized = "published" if video_status in {"ready", "published"} else "failed" if video_status in {"error", "upload_failed", "expired"} else "processing"
+    return {"video_id": video_id, "status": normalized, "meta_status": status}
