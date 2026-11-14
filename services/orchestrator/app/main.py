@@ -201,7 +201,7 @@ def compose_social_metadata(topic: str, theme: str, subjects: list[str]) -> dict
             return fallback
         return {"title": title, "caption": caption, "description": description,
                 "hashtags": cleaned, "source": "AI provider"}
-    except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+    except (httpx.HTTPError, KeyError, IndexError, AttributeError, TypeError, ValueError, json.JSONDecodeError):
         return fallback
 
 
