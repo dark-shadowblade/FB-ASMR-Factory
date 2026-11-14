@@ -188,7 +188,15 @@ chrome.downloads.onChanged.addListener(async delta => {
   const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(item.filename || "") || /video\//i.test(item.mime || "");
   if (!isVideo) {
     activeDownloadIds.delete(delta.id);
-    await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
+    if (activeDownloadIds.size === 0) {
+      await report("DOWNLOAD_FAILED", { downloadId: item.id, error: "Flow download completed but the file was not recognised as video media." });
+      activeTask = null;
+      activeTabId = null;
+      activeDownloadIds.clear();
+      await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+    } else {
+      await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
+    }
     return;
   }
   await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
