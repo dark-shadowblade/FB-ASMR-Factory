@@ -34,6 +34,7 @@ function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; o
 
 export default function App() {
   const [topic, setTopic] = useState("");
+  const [activeSection, setActiveSection] = useState<"overview" | "library" | "accounts" | "settings" | "history" | "prompt" | "publishing">("overview");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [library, setLibrary] = useState<LibraryVideo[]>([]);
@@ -45,7 +46,7 @@ export default function App() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("Create a Fruits job to plan your first five clips.");
+  const [notice, setNotice] = useState("Enter a topic, choose one ASMR style, then click Generate Video.");
   const [generating, setGenerating] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
   const [styleBible, setStyleBible] = useState("");
@@ -135,6 +136,11 @@ export default function App() {
 
   async function createJob() {
     if (!topic.trim()) { setNotice("Enter a topic first."); return; }
+    if (flowProfiles.filter(profile => profile.configured).length !== 5) {
+      setActiveSection("accounts");
+      setNotice("Set up and save all five Google Flow project URLs in Flow Accounts before starting a production.");
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch(`${API}/jobs`, {
@@ -146,8 +152,9 @@ export default function App() {
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
       setTopic("");
       setSelected(data.job);
-      setNotice("Draft " + (THEMES.find(t => t.value === theme)?.label || theme) + " job created with five clip tasks.");
+      setNotice("Production created. Starting the five-account workflow…");
       await refresh();
+      await startAutomaticProduction(data.job);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
     } finally { setBusy(false); }
@@ -383,7 +390,7 @@ export default function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Approval failed");
       setSelected(data.job);
-      setNotice("Prompts approved. Real AI prompt generation and Flow automation are not connected yet.");
+      setNotice("Five prompts approved and ready for Flow workers.");
       await refresh();
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve job."); }
   }
@@ -424,20 +431,22 @@ export default function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">A</div><div><b>ASMR FACTORY</b><small>CREATOR WORKSPACE</small></div></div>
       <div className="nav-label">WORKSPACE</div>
-      <div className="nav-item active"><span>▦</span> Overview</div>
-      <div className="nav-item"><span>✦</span> Prompt Studio <em>AI DIRECTOR</em></div>
-      <div className="nav-item"><span>▤</span> Video Library <em>Planned</em></div>
-      <div className="nav-item"><span>◉</span> Flow Accounts <em>Planned</em></div>
-      <div className="nav-label second">SYSTEM</div>
-      <div className="nav-item"><span>⚙</span> Settings <em>Planned</em></div>
+      <button className={activeSection === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("overview")}><span>▦</span> Create Video</button>
+      <button className={activeSection === "prompt" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("prompt")}><span>✦</span> Prompt Studio</button>
+      <button className={activeSection === "library" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("library")}><span>▤</span> Video Library</button>
+      <button className={activeSection === "history" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("history")}><span>◷</span> Generation History</button>
+      <div className="nav-label second">ACCOUNTS & SYSTEM</div>
+      <button className={activeSection === "accounts" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("accounts")}><span>◉</span> Flow Accounts</button>
+      <button className={activeSection === "publishing" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("publishing")}><span>f</span> Facebook Pages</button>
+      <button className={activeSection === "settings" ? "nav-item active" : "nav-item"} onClick={() => setActiveSection("settings")}><span>⚙</span> Settings</button>
       <div className="sidebar-bottom"><div className="service-dot" data-state={health}></div><div><b>Local service</b><small>{health === "online" ? "Connected" : health === "offline" ? "Not running" : "Checking…"}</small></div></div>
     </aside>
 
     <main className="main">
-      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>Overview</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
-      <section className="welcome"><div><div className="eyebrow">YOUR AUTOMATED VIDEO WORKSHOP</div><h1>Make something <span>satisfying.</span></h1><p>Plan, generate and publish your ASMR videos from one place.</p></div><div className="welcome-art"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="orb-core">✦</div></div></section>
+      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>{({overview:"Create Video",prompt:"Prompt Studio",library:"Video Library",accounts:"Flow Accounts",settings:"Settings",history:"Generation History",publishing:"Facebook Pages"} as const)[activeSection]}</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
+      <section className="welcome" style={{display: activeSection === "overview" ? undefined : "none"}}><div><div className="eyebrow">YOUR AUTOMATED VIDEO WORKSHOP</div><h1>Make something <span>satisfying.</span></h1><p>Plan, generate and publish your ASMR videos from one place.</p></div><div className="welcome-art"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="orb-core">✦</div></div></section>
 
-      <section className="stats">
+      <section className="stats" style={{display: activeSection === "overview" ? undefined : "none"}}>
         <div className="stat-card"><small>TOTAL JOBS</small><strong>{jobs.length.toString().padStart(2,"0")}</strong><span>Saved locally</span></div>
         <div className="stat-card"><small>CLIPS PLANNED</small><strong>{jobs.reduce((n,j)=>n+j.clips.length,0).toString().padStart(2,"0")}</strong><span>Across all jobs</span></div>
         <div className="stat-card"><small>COMPLETED VIDEOS</small><strong>{jobs.filter(j=>Boolean(j.final_video)).length.toString().padStart(2,"0")}</strong><span>Saved in local library</span></div>
@@ -445,7 +454,7 @@ export default function App() {
       </section>
 
       <div className="content-grid">
-        <section className="panel create-panel">
+        <section className="panel create-panel" style={{display: activeSection === "overview" ? undefined : "none"}}>
           <div className="panel-head"><div><div className="eyebrow">NEW PRODUCTION</div><h2>Create a video job</h2></div><span className="step-tag">STEP 01 / 05</span></div>
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
           <input id="topic" value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createJob()} placeholder="e.g. tropical fruit cutting" />
@@ -453,11 +462,11 @@ export default function App() {
           <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
-          <button className="primary" onClick={createJob} disabled={busy || health!=="online"}>{busy ? "Creating job…" : "＋  Create production job"}</button>
-          <p className="helper">Creates a saved five-clip plan. Generation settings are targets and will be verified against Flow when integration is built.</p>
+          <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy || dispatching ? "Starting production…" : "▶  Generate Video"}</button>
+          <p className="helper">One click starts five coordinated Flow workers. Clips are validated, combined, and prepared for automatic Facebook publishing.</p>
         </section>
 
-        <section className="panel session-panel">
+        <section className="panel session-panel" style={{display: activeSection === "accounts" ? undefined : "none"}}>
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
           <p className="muted">Each session will use its own signed-in Google account and saved Flow project.</p>
           {flowProfiles.map((profile,i)=><div className="session-row flow-account-row" key={profile.profile_id}>
@@ -481,19 +490,19 @@ export default function App() {
         </section>
       </div>
 
-      <section className="panel jobs-panel">
+      <section className="panel jobs-panel" style={{display: activeSection === "library" ? undefined : "none"}}>
         <div className="panel-head"><div><div className="eyebrow">FINISHED PRODUCTIONS</div><h2>Video Library</h2></div><span className="count-pill">{library.length} VIDEOS</span></div>
         {library.length===0 ? <div className="empty"><div className="empty-icon">▣</div><b>No finished videos yet</b><span>Once five Flow downloads pass validation and merge, they will appear here.</span></div> :
           <div className="job-list">{library.map(video=><div className="job-row library-row" key={video.job_id}><video className="library-preview" controls preload="metadata" src={API + "/jobs/" + video.job_id + "/output/file"} /><div className="job-info"><b>{video.topic}</b><small>{Math.round(video.duration_seconds)}s · {video.width}×{video.height} · {(video.size_bytes/1024/1024).toFixed(1)} MB</small><small>{video.output_path}</small><a href={API + "/jobs/" + video.job_id + "/output/file"} download>Download MP4</a></div><span className="job-state">READY</span></div>)}</div>}
       </section>
 
-      <section className="panel jobs-panel">
+      <section className="panel jobs-panel" style={{display: activeSection === "history" ? undefined : "none"}}>
         <div className="panel-head"><div><div className="eyebrow">PRODUCTION HISTORY</div><h2>Recent jobs</h2></div><span className="count-pill">{jobs.length} JOBS</span></div>
         {jobs.length===0 ? <div className="empty"><div className="empty-icon">▤</div><b>No productions yet</b><span>Your created jobs will appear here.</span></div> :
           <div className="job-list">{jobs.map(job=><button className={active?.id===job.id?"job-row chosen":"job-row"} key={job.id} onClick={()=>setSelected(job)}><div className="job-thumb">🍓</div><div className="job-info"><b>{job.topic}</b><small>{new Date(job.created_at).toLocaleString()} · {job.clips.length} clip tasks</small></div><span className="job-state">{job.status.replaceAll("_"," ")}</span><span className="arrow">›</span></button>)}</div>}
       </section>
 
-      {active && <section className="panel detail-panel">
+      {active && <section className="panel detail-panel" style={{display: ["overview","prompt"].includes(activeSection) ? undefined : "none"}}>
         <div className="panel-head"><div><div className="eyebrow">AI DIRECTOR · PROMPT STUDIO</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
         <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
         <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
@@ -543,9 +552,29 @@ export default function App() {
 
         </>}
       </section>}
-      <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
+      <section className="panel facebook-settings-panel" style={{display: activeSection === "publishing" ? undefined : "none"}}>
+        <div className="panel-head"><div><div className="eyebrow">META GRAPH API</div><h2>Facebook Pages</h2></div><span className="count-pill">{facebookStatus.connected ? "CONNECTED" : "NOT CONNECTED"}</span></div>
+        <p className="muted">{facebookStatus.connected ? "Automatic publishing is enabled for " + (facebookStatus.page_name || "the selected Page") + " after a video passes final validation." : "Connect a Facebook Page once. The factory will publish completed videos automatically when the Page is connected."}</p>
+        <div className="facebook-account-manager">
+          <div className="facebook-account-heading"><div><b>Connected Pages</b><small>Only Pages you are authorised to manage can be connected.</small></div><button className="secondary compact" onClick={()=>setShowAddFacebook(v=>!v)}>{showAddFacebook ? "Close" : "＋ Add account"}</button></div>
+          {facebookAccounts.length === 0 && <div className="facebook-empty-account">No Facebook Pages connected yet.</div>}
+          {facebookAccounts.map(account=><div className={account.is_active ? "facebook-account active" : "facebook-account"} key={account.account_id}>
+            <div className="facebook-account-avatar">f</div><div className="facebook-account-details"><b>{account.label}</b><span>{account.page_name} · ID {account.page_id}</span><small>{account.is_active ? "Selected for automatic publishing" : "Connected"}</small></div>
+            {!account.is_active && <button className="secondary compact" onClick={()=>selectFacebookAccount(account)}>Use Page</button>}
+            <button className="account-remove" title="Remove account" onClick={()=>removeFacebookAccount(account)}>×</button>
+          </div>)}
+          {showAddFacebook && <div className="facebook-add-form">
+            <label>ACCOUNT LABEL</label><input value={facebookAccountLabel} onChange={e=>setFacebookAccountLabel(e.target.value)} placeholder="e.g. Main ASMR Page"/>
+            <label>FACEBOOK PAGE ID</label><input value={facebookPageId} onChange={e=>setFacebookPageId(e.target.value)} placeholder="Enter Page ID"/>
+            <label>PAGE ACCESS TOKEN</label><input type="password" autoComplete="off" value={facebookPageToken} onChange={e=>setFacebookPageToken(e.target.value)} placeholder="Paste Page access token"/>
+            <button className="primary" disabled={savingFacebookAccount || !facebookAccountLabel.trim() || !facebookPageId.trim() || facebookPageToken.trim().length<20} onClick={addFacebookAccount}>{savingFacebookAccount ? "Verifying with Meta…" : "Connect Facebook Page"}</button>
+          </div>}
+        </div>
+      </section>
 
-      <div className="notice">{notice}</div>
+      <section className="panel style-panel" style={{display: activeSection === "settings" ? undefined : "none"}}><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>
+
+      <div className="notice" role="status">{notice}</div>
       <footer>ASMR FACTORY <span>·</span> EARLY DEVELOPMENT BUILD <span>·</span> LOCAL-FIRST</footer>
     </main>
   </div>;

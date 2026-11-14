@@ -47,6 +47,9 @@ class FlowProfileManager:
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 downloads_dir = profile_dir / "downloads"
                 downloads_dir.mkdir(parents=True, exist_ok=True)
+                extension_dir = Path(__file__).resolve().parents[3] / "extensions" / "flow-automation"
+                if not (extension_dir / "manifest.json").is_file():
+                    raise RuntimeError(f"Flow automation extension was not found at {extension_dir}")
                 try:
                     context = await self._playwright.chromium.launch_persistent_context(
                         user_data_dir=str(profile_dir),
@@ -55,6 +58,11 @@ class FlowProfileManager:
                         accept_downloads=True,
                         downloads_path=str(downloads_dir),
                         viewport={"width": 1440, "height": 1000},
+                        ignore_default_args=["--disable-extensions"],
+                        args=[
+                            f"--disable-extensions-except={extension_dir}",
+                            f"--load-extension={extension_dir}",
+                        ],
                     )
                 except Exception as exc:
                     message = str(exc)

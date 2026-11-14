@@ -198,6 +198,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) poll(); });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "CONFIG_UPDATED") return false;
   (async () => {
     await restoreTask();
     if (message?.type === "FLOW_PAGE_READY" && activeTask) {
@@ -222,7 +223,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         lastEventAt: new Date().toISOString(), lastEventPayload: message.payload || {}
       }});
       await report(message.event, message.payload || {});
-      if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
+      const releasesWorker = [
+        "TASK_FAILED", "PROMPT_INSERT_FAILED", "DOWNLOAD_FAILED", "DOWNLOAD_COMPLETED",
+        "TASK_CANCELLED", "FLOW_UI_UNVERIFIED", "SETTINGS_UNVERIFIED",
+        "DOWNLOAD_SELECTOR_UNVERIFIED", "PROJECT_URL_MISMATCH",
+        "PROMPT_ALREADY_PRESENT", "SESSION_REQUIRED", "MONITOR_TIMEOUT"
+      ];
+      if (releasesWorker.includes(message.event)) {
         activeTask = null;
         activeTabId = null;
         activeDownloadIds.clear();
@@ -290,11 +297,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Profile reassignment is rejected while a task is active; finish/recover it first.
     (async () => {
       await restoreTask();
-      const c = await config();
-      if (activeTask && activeTask.profileId !== c.profileId) {
+      const next = message.config;
+      if (!next || typeof next !== "object" || !P.PROFILES.includes(next.profileId)) {
+        sendResponse({ ok: false, error: "INVALID_PROFILE_CONFIGURATION" });
+        return;
+      }
+      if (activeTask && activeTask.profileId !== next.profileId) {
         sendResponse({ ok: false, error: "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK" });
         return;
       }
+      await chrome.storage.local.set(next);
       await poll();
       sendResponse({ ok: true });
     })().catch(error => sendResponse({ ok: false, error: error.message }));

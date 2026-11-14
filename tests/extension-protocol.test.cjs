@@ -27,11 +27,16 @@ test("Manifest V3 permissions and Flow host scope are declared", () => {
   assert.ok(manifest.host_permissions.includes("http://127.0.0.1:8765/*"));
 });
 
-test("saving extension settings preserves an in-flight task", () => {
+test("saving extension settings is transactional and preserves an in-flight task", () => {
   const worker = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/background/service-worker.js"), "utf8");
-  const configHandler = worker.slice(worker.indexOf('message?.type === "CONFIG_UPDATED"'));
-  assert.match(configHandler, /Saving options must not discard an in-flight task/);
-  assert.doesNotMatch(configHandler.slice(0, configHandler.indexOf('chrome.runtime.onMessage.addListener', 10)), /activeTask\s*=\s*null/);
+  assert.match(worker, /if \(message\?\.type === "CONFIG_UPDATED"\) return false;/);
+  const handlerStart = worker.lastIndexOf('if (message?.type === "CONFIG_UPDATED") {');
+  assert.notEqual(handlerStart, -1);
+  const configHandler = worker.slice(handlerStart);
+  assert.match(configHandler, /const next = message\.config/);
+  assert.match(configHandler, /activeTask\.profileId !== next\.profileId/);
+  assert.match(configHandler, /await chrome\.storage\.local\.set\(next\)/);
+  assert.doesNotMatch(configHandler, /activeTask\s*=\s*null/);
 });
 test("Flow ready state requires playable video and a download control", () => {
   const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");

@@ -223,7 +223,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
           "GENERATION_COMPLETED": "generation_completed", "GENERATION_ALREADY_ACTIVE": "generating", "GENERATION_ALREADY_COMPLETE": "generation_completed", "DOWNLOAD_STARTED": "downloading",
           "DOWNLOAD_COMPLETED": "downloaded", "DOWNLOAD_FAILED": "failed", "SESSION_REQUIRED": "needs_login", "PROMPT_ALREADY_PRESENT": "blocked_ui",
           "FLOW_UI_UNVERIFIED": "blocked_ui", "DOWNLOAD_SELECTOR_UNVERIFIED": "blocked_ui", "PROJECT_URL_MISMATCH": "blocked_ui", "SETTINGS_UNVERIFIED": "blocked_settings", "PROMPT_INSERT_FAILED": "failed",
-          "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_RESUMED": "generating", "TASK_CANCELLED": "cancelled"
+          "TASK_FAILED": "failed", "MONITOR_TIMEOUT": "failed", "TASK_PAUSED": "paused", "TASK_RESUMED": "generating", "TASK_CANCELLED": "cancelled"
         }
         with connect() as conn:
             registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (request.profileId,)).fetchone()
@@ -240,14 +240,14 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             except sqlite3.IntegrityError:
                 return {"accepted": True, "duplicate": True, "status": task["status"]}
             status = status_map.get(request.type, task["status"])
-            error = str(request.payload.get("reason") or request.payload.get("error") or "")[:500] if request.type in ("TASK_FAILED","DOWNLOAD_FAILED","FLOW_UI_UNVERIFIED","DOWNLOAD_SELECTOR_UNVERIFIED","PROJECT_URL_MISMATCH","SETTINGS_UNVERIFIED","PROMPT_ALREADY_PRESENT") else None
+            error = str(request.payload.get("reason") or request.payload.get("error") or "")[:500] if request.type in ("TASK_FAILED","DOWNLOAD_FAILED","FLOW_UI_UNVERIFIED","DOWNLOAD_SELECTOR_UNVERIFIED","PROJECT_URL_MISMATCH","SETTINGS_UNVERIFIED","PROMPT_ALREADY_PRESENT","MONITOR_TIMEOUT") else None
             download = str(request.payload.get("filename", ""))[:1000] if request.type == "DOWNLOAD_COMPLETED" else task["download_path"]
             conn.execute("UPDATE extension_tasks SET status=?,updated_at=?,last_error=COALESCE(?,last_error),download_path=? WHERE task_id=?",
                          (status, now(), error, download, request.taskId))
             if request.type == "DOWNLOAD_COMPLETED":
                 conn.execute("UPDATE clips SET status='downloaded' WHERE id=? AND job_id=?",
                              (request.clipId, request.jobId))
-            elif request.type in ("DOWNLOAD_FAILED", "TASK_FAILED", "PROMPT_INSERT_FAILED"):
+            elif request.type in ("DOWNLOAD_FAILED", "TASK_FAILED", "PROMPT_INSERT_FAILED", "MONITOR_TIMEOUT"):
                 conn.execute("UPDATE clips SET status='failed' WHERE id=? AND job_id=?",
                              (request.clipId, request.jobId))
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",

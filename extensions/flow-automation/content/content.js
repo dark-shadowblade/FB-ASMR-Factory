@@ -3,9 +3,12 @@
   window.__asmrFlowWorkerInstalled = true;
   let currentTask = null;
   let observer = null;
+  let monitorTimer = null;
+  let monitorStartedAt = 0;
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let baselineVideoSources = new Set();
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -63,13 +66,20 @@
     return [el.getAttribute("aria-label"), el.getAttribute("aria-valuetext"),
       el.value, el.innerText, el.textContent].filter(Boolean).join(" ").trim();
   }
+  function selectedOptionText(expected) {
+    const selected = [...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"]')].filter(visible).map(labelOf);
+    const nativeSelected = [...document.querySelectorAll("select")].filter(visible)
+      .map(el => el.selectedOptions?.[0]?.textContent?.trim() || el.value || "");
+    const needle = String(expected || "").toLowerCase();
+    return [...selected, ...nativeSelected].find(value => String(value).toLowerCase().includes(needle)) || "";
+  }
   function verifySettings(settings, requested) {
     const actual = {};
     try {
-      actual.model = selectedText(settings.modelSelector);
-      actual.resolution = selectedText(settings.resolutionSelector);
-      actual.duration = selectedText(settings.durationSelector);
-      actual.aspectRatio = selectedText(settings.aspectRatioSelector);
+      actual.model = settings.modelSelector ? selectedText(settings.modelSelector) : selectedOptionText(requested.model);
+      actual.resolution = settings.resolutionSelector ? selectedText(settings.resolutionSelector) : selectedOptionText(requested.resolution);
+      actual.duration = settings.durationSelector ? selectedText(settings.durationSelector) : selectedOptionText(String(requested.durationSeconds));
+      actual.aspectRatio = settings.aspectRatioSelector ? selectedText(settings.aspectRatioSelector) : selectedOptionText(requested.aspectRatio);
     } catch (_) {
       return { ok: false, reason: "One or more selected-setting CSS selectors are invalid.", actual };
     }
@@ -80,11 +90,11 @@
     if (!expectedModel || !expectedResolution || !Number.isFinite(expectedDuration) || expectedDuration <= 0) {
       return { ok: false, reason: "The assigned task is missing model, resolution or duration settings from the desktop app.", actual };
     }
-    if (!settings.modelSelector || !settings.resolutionSelector || !settings.durationSelector) {
-      return { ok: false, reason: "Model, resolution and duration selectors must all be configured in this browser profile.", actual };
+    if (!actual.model || !actual.resolution || !actual.duration) {
+      return { ok: false, reason: "Could not verify the selected Flow model, resolution and duration from the live controls.", actual };
     }
-    if (expectedRatio && !settings.aspectRatioSelector) {
-      return { ok: false, reason: "The desktop app requested an aspect ratio, but this profile has no verified aspect-ratio selector.", actual };
+    if (expectedRatio && !actual.aspectRatio) {
+      return { ok: false, reason: "Could not verify the selected vertical 9:16 aspect ratio in this Flow account.", actual };
     }
     if (!actual.model.toLowerCase().includes(expectedModel.toLowerCase())) return { ok: false, reason: "Selected model does not match " + expectedModel + ".", actual };
     if (!actual.resolution.toLowerCase().includes(expectedResolution.toLowerCase())) return { ok: false, reason: "Selected resolution does not match " + expectedResolution + ".", actual };
@@ -92,7 +102,7 @@
     if (expectedRatio && !actual.aspectRatio.replace(/\s/g, "").includes(expectedRatio)) {
       return { ok: false, reason: "Selected aspect ratio does not match " + expectedRatio + ".", actual };
     }
-    return { ok: true, actual, aspectRatioVerified: Boolean(settings.aspectRatioSelector) };
+    return { ok: true, actual, aspectRatioVerified: Boolean(actual.aspectRatio) };
   }
   function setFieldValue(field, value) {
     field.focus();
@@ -125,7 +135,8 @@
   }
   function videoReady() {
     const playable = [...document.querySelectorAll("video")].some(v =>
-      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
+      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 &&
+      !!v.currentSrc && !baselineVideoSources.has(v.currentSrc)
     );
     return playable && !!findButton(/download/);
   }
@@ -171,6 +182,7 @@
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
     }
+    baselineVideoSources = new Set([...document.querySelectorAll("video")].map(v => v.currentSrc).filter(Boolean));
     const state = detectState();
     if (state === "SESSION_CHECK") {
       send("SESSION_REQUIRED", { url: location.href });
@@ -203,21 +215,17 @@
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
     }
-    // Safe-by-default: never click an unverified Flow control. The extension reports
-    // the detected controls; selectors must be verified against the live account UI.
-    if (settings.selectorsVerified !== true || !settings.promptSelector || !settings.generateSelector) {
-      send("FLOW_UI_UNVERIFIED", {
-        reason: "Live Flow selectors have not been verified for this account.",
-        candidates: { prompt: field.tagName, promptLabel: labelOf(field).slice(0, 100) },
-        detectedState: state
-      });
-      return;
-    }
-    let configuredField = null;
+    // Prefer manually verified selectors; otherwise use unique semantic controls.
+    // Ambiguous matches fail closed rather than clicking an arbitrary control.
+    let configuredField = field;
     let generate = null;
     try {
-      configuredField = document.querySelector(settings.promptSelector);
-      generate = document.querySelector(settings.generateSelector);
+      if (settings.selectorsVerified === true && settings.promptSelector) {
+        configuredField = document.querySelector(settings.promptSelector);
+      }
+      generate = settings.selectorsVerified === true && settings.generateSelector
+        ? document.querySelector(settings.generateSelector)
+        : findButton(/generate|create video|make video|start generation|submit/i);
     } catch (_) {
       send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
       return;
@@ -244,25 +252,30 @@
       send("PROMPT_INSERT_FAILED", {});
       return;
     }
+    submittedField = configuredField;
+    submissionClicked = true;
+    submittedField = configuredField;
+    submissionClicked = true;
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
     lastState = "PROJECT_LOADED";
     startMonitor();
   }
   let downloadRequested = false;
+  let submissionClicked = false;
+  let submittedField = null;
   function requestDownload() {
     if (downloadRequested) return;
     downloadRequested = true;
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
-      if (settings.selectorsVerified !== true || !settings.downloadSelector) {
-        downloadRequested = false;
-        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
-        return;
-      }
       let button = null;
-      try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
+      try {
+        button = settings.selectorsVerified === true && settings.downloadSelector
+          ? document.querySelector(settings.downloadSelector)
+          : findButton(/download/i);
+      } catch (_) {}
       if (!visible(button)) {
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
         return;
@@ -280,25 +293,42 @@
   }
   function startMonitor() {
     if (observer) observer.disconnect();
-    observer = new MutationObserver(() => {
+    if (monitorTimer) clearInterval(monitorTimer);
+    monitorStartedAt = Date.now();
+    const inspect = () => {
+      if (Date.now() - monitorStartedAt > 15 * 60 * 1000) {
+        if (monitorTimer) clearInterval(monitorTimer);
+        monitorTimer = null;
+        if (observer) observer.disconnect();
+        send("MONITOR_TIMEOUT", { reason: "Flow generation was not detected within 15 minutes." });
+        return;
+      }
       const state = detectState();
       if (state !== lastState) {
         lastState = state;
         if (state === "SESSION_CHECK") send("SESSION_REQUIRED", { url: location.href });
-        if (state === "GENERATING") send("GENERATION_STARTED", {});
+        if (state === "GENERATING") {
+          send("GENERATION_STARTED", {});
+          if (submissionClicked && submittedField && submittedField.isConnected) {
+            setFieldValue(submittedField, "");
+            submittedField = null;
+            submissionClicked = false;
+            send("PROMPT_CLEARED_AFTER_ACCEPTANCE", {});
+          }
+        }
         if (state === "VIDEO_READY") {
           send("GENERATION_COMPLETED", { videoElements: document.querySelectorAll("video").length });
           requestDownload();
+          if (monitorTimer) clearInterval(monitorTimer);
+          monitorTimer = null;
+          if (observer) observer.disconnect();
         }
       }
-    });
+    };
+    observer = new MutationObserver(inspect);
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-    const state = detectState();
-    if (state === "GENERATING") send("GENERATION_STARTED", {});
-    if (state === "VIDEO_READY") {
-      send("GENERATION_COMPLETED", {});
-      requestDownload();
-    }
+    monitorTimer = setInterval(inspect, 2000);
+    inspect();
   }
   const detectedProject = projectIdentity(location.href);
   if (detectedProject) {
@@ -349,11 +379,11 @@
   function diagnosticElement(el) {
     const rect = el.getBoundingClientRect();
     const selector = diagnosticSelector(el);
-    const isTextEntry = /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox";
+    const textEntry = /^(TEXTAREA|INPUT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox";
     const safeLabel = [
       el.getAttribute("aria-label"), el.getAttribute("placeholder"),
       el.getAttribute("data-placeholder"), el.getAttribute("title"),
-      isTextEntry ? "" : el.innerText
+      textEntry ? "" : el.innerText
     ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 180);
     return {
       tag: el.tagName.toLowerCase(),

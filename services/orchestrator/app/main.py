@@ -35,7 +35,7 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "file://", "null"],
     allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
 )
 
@@ -293,11 +293,12 @@ def approve_job(job_id: str) -> dict[str, Any]:
 
 
 # --- AI Director / Prompt Studio ---
-DEFAULT_STYLE_BIBLE = """Premium photorealistic fruit-cutting ASMR. Macro close-up, locked camera,
-vertical 9:16, shallow depth of field, clean dark charcoal or warm neutral surface,
-soft directional studio light, natural fruit color and realistic moisture. One continuous
-8-second shot: one deliberate controlled knife cut, believable resistance and clean separation.
-Intimate natural cutting audio only; no music, speech, text, logos, jump cuts or surreal physics."""
+DEFAULT_STYLE_BIBLE = """Premium photorealistic material-focused ASMR. Macro close-up, stable camera,
+vertical 9:16 composition, shallow depth of field, clean dark charcoal or warm neutral surface,
+soft directional studio lighting and accurate material colour, texture and physical response.
+One continuous 8-second shot with one deliberate, controlled, material-appropriate action.
+Show believable contact, resistance, deformation, separation and gravity. Capture intimate natural
+foley only; no music, speech, text, logos, jump cuts or surreal physics."""
 class StyleBibleRequest(BaseModel):
     content: str = Field(min_length=40, max_length=5000)
 
@@ -314,7 +315,7 @@ def ai_provider_config() -> dict[str, str]:
 def compose_builtin_prompts(topic: str, theme: str, bible: str) -> list[dict[str, str]]:
     output = []
     for subject in THEME_SUBJECTS[theme]:
-        prompt = (f"{bible.strip()}\n\\nSTYLE: {THEME_DIRECTIONS[theme]}\\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
+        prompt = (f"{bible.strip()}\nSTYLE: {THEME_DIRECTIONS[theme]}\nSCENE: {topic.strip()}. FEATURED SUBJECT: {subject}. "
                   "Create a distinctive material-specific cutting or satisfying action, visually different from the other four clips. "
                   "Use one continuous controlled action with realistic contact, resistance, gravity and texture. "
                   "Vertical 9:16, one standalone 8-second shot. No speech, music, text, logos, unsafe hand placement or impossible physics.")
@@ -554,7 +555,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         tasks = conn.execute(
-            """SELECT t.clip_id,t.status,t.download_path,c.clip_order
+            """SELECT t.clip_id,t.profile_id,t.status,t.download_path,c.clip_order
                FROM extension_tasks t JOIN clips c ON c.id=t.clip_id
                WHERE t.job_id=? ORDER BY c.clip_order""", (job_id,)
         ).fetchall()
@@ -571,7 +572,7 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             "SELECT subject FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)
         ).fetchall()]
 
-    downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
+    downloads_override = os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", "").strip()
     clip_paths: list[Path] = []
     for row in tasks:
         candidate = Path(row["download_path"]).expanduser()
@@ -579,9 +580,14 @@ def assemble_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail=f"Chrome did not report an absolute download path for {row['clip_id']}")
         try:
             resolved = candidate.resolve(strict=True)
+            downloads_root = (
+                Path(downloads_override).expanduser().resolve()
+                if downloads_override
+                else (DATA_DIR / "chrome-profiles" / row["profile_id"] / "downloads").resolve()
+            )
             resolved.relative_to(downloads_root)
         except (OSError, ValueError):
-            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the configured Downloads folder")
+            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the allowed downloads folder for {row['profile_id']}")
         if resolved.suffix.lower() != ".mp4" or not resolved.is_file():
             raise HTTPException(status_code=422, detail=f"Download for {row['clip_id']} is not an MP4 file")
         clip_paths.append(resolved)
@@ -609,7 +615,21 @@ def assemble_job(job_id: str) -> dict[str, Any]:
         conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
-        return {"output": result, "already_assembled": False}
+
+    # Publishing is automatic when a verified Facebook Page is already connected.
+    # A missing/expired Page connection must not invalidate a successfully assembled video.
+    auto_publication = None
+    auto_publish_error = None
+    try:
+        if _get_facebook_account() is not None:
+            auto_publication = publish_facebook_reel(job_id).get("publication")
+    except HTTPException as exc:
+        auto_publish_error = str(exc.detail)[:500]
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Automatic Facebook publishing needs attention: " + auto_publish_error, utc_now()))
+    return {"output": result, "already_assembled": False,
+            "publication": auto_publication, "auto_publish_error": auto_publish_error}
 
 
 class FacebookMetadataRequest(BaseModel):
