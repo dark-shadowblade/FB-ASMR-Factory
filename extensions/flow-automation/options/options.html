@@ -24,7 +24,8 @@ body{font:14px system-ui;background:#10141c;color:#e8edf5;max-width:720px;margin
 <hr>
 <h2>Live Google Flow DOM diagnostic</h2>
 <p><small>Open the target Flow project in this Chrome profile, wait until it finishes loading, then run this read-only scan. It inventories visible controls and suggests CSS selectors. It does not click, submit prompts, change settings, or capture prompt text. Selector suggestions are not automatically trusted.</small></p>
-<div class="actions"><button id="scan" type="button">Scan active Flow tab</button><button id="copyReport" class="secondary" type="button" disabled>Copy diagnostic JSON</button></div>
+<label>Flow tab in this Chrome profile</label><select id="flowTab"><option value="">No Flow tabs found</option></select>
+<div class="actions"><button id="refreshTabs" class="secondary" type="button">Find Flow tabs</button><button id="scan" type="button">Scan selected Flow tab</button><button id="copyReport" class="secondary" type="button" disabled>Copy diagnostic JSON</button></div>
 <div id="diagnosticStatus" role="status" aria-live="polite"></div>
 <pre id="diagnosticReport">No diagnostic captured yet.</pre>
 <div id="status"></div>
