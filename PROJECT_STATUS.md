@@ -54,13 +54,13 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
-- [x] CI workflows cover backend, extension protocol/bridge and desktop build (backend, protocol, bridge and desktop-build jobs passed on the latest fully checked integration commit).
+- [x] GitHub Actions backend tests and Flow extension/bridge tests passed on current HEAD `f6c9790` (14 Nov 2026). The desktop TypeScript build passed on the earlier checked integration commit; latest installer rebuild for code commit `0a2ae59` is still running.
 - [ ] Full job recovery and retry behavior.
 - [x] Basic local Video Library API and per-job final-video details; thumbnails, search/filtering and playback UI remain.
 - [ ] Meta authentication, Page selection and Graph API publishing.
 - [ ] Publication verification and duplicate prevention.
 - [ ] Optional scheduler.
-- [x] GitHub Actions Windows installer workflow built and uploaded an installer artifact on the automatic-production integration commit; a rebuild containing the latest metadata and duration-validation changes is still running.
+- [x] A Windows installer artifact exists for earlier commit `9228ae0` (not the latest code). The rebuild for code commit `0a2ae59`, which includes social metadata and eight-second source validation, was still running at the latest status check.
 - [ ] Full five-account end-to-end test on the user's Windows PC.
 
 **Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search/playback UI and a full five-account end-to-end test remain outstanding.
