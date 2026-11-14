@@ -70,6 +70,33 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.get("/api/v1/style-bible").json()["content"], custom)
 
+    def test_five_flow_profiles_are_seeded_and_persisted(self):
+        response = self.client.get("/api/v1/flow/profiles")
+        self.assertEqual(response.status_code, 200)
+        profiles = response.json()["profiles"]
+        self.assertEqual([p["profile_id"] for p in profiles], ["flow-1", "flow-2", "flow-3", "flow-4", "flow-5"])
+        project_url = "https://flow.google.com/project/cc488538-59da-4ece-ba7a-6236918191a1"
+        saved = self.client.put("/api/v1/flow/profiles/flow-1", json={
+            "display_name": "Primary Flow", "project_url": project_url
+        })
+        self.assertEqual(saved.status_code, 200)
+        refreshed = self.client.get("/api/v1/flow/profiles").json()["profiles"][0]
+        self.assertEqual(refreshed["display_name"], "Primary Flow")
+        self.assertEqual(refreshed["project_url"], project_url)
+        self.assertTrue(refreshed["configured"])
+
+    def test_flow_profile_rejects_non_project_urls(self):
+        response = self.client.put("/api/v1/flow/profiles/flow-1", json={
+            "display_name": "Bad URL", "project_url": "https://example.com/"
+        })
+        self.assertEqual(response.status_code, 422)
+
+    def test_flow_profile_rejects_unknown_profile_id(self):
+        response = self.client.put("/api/v1/flow/profiles/flow-6", json={
+            "display_name": "Extra", "project_url": "https://flow.google.com/project/cc488538-59da-4ece-ba7a-6236918191a1"
+        })
+        self.assertEqual(response.status_code, 404)
+
     def test_prompt_pack_requires_all_five_before_approval(self):
         created = self.client.post("/api/v1/jobs", json={"topic": "Citrus", "theme": "fruits"}).json()["job"]
         response = self.client.post(f"/api/v1/jobs/{created['id']}/approve-prompts")
