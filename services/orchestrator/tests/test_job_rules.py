@@ -223,5 +223,18 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(saved.json(), payload)
         self.assertEqual(self.client.get("/api/v1/settings/flow").json(), payload)
 
+    def test_opaque_origin_api_rejects_missing_desktop_token(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ASMR_FACTORY_DESKTOP_TOKEN", None)
+            response = self.client.get("/api/v1/health", headers={"Origin": "null"})
+        self.assertEqual(response.status_code, 403)
+
+    def test_opaque_origin_api_accepts_matching_desktop_token(self):
+        with patch.dict(os.environ, {"ASMR_FACTORY_DESKTOP_TOKEN": "launch-secret"}):
+            response = self.client.get("/api/v1/health", headers={
+                "Origin": "null", "X-ASMR-Desktop-Token": "launch-secret"
+            })
+        self.assertEqual(response.status_code, 200)
+
 if __name__ == "__main__":
     unittest.main()
