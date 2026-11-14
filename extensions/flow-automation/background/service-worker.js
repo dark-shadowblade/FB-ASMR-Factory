@@ -146,8 +146,27 @@ async function poll() {
       return;
     }
     activeTask = result.task;
-    await chrome.storage.local.set({ instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
-      activeTask });
+    const assignedSettings = activeTask.settings || {};
+    await chrome.storage.local.set({
+      instanceId: (await chrome.storage.local.get("instanceId")).instanceId || crypto.randomUUID(),
+      activeTask,
+      extensionTaskSnapshot: {
+        taskId: activeTask.taskId,
+        jobId: activeTask.jobId,
+        clipId: activeTask.clipId,
+        profileId: activeTask.profileId,
+        projectUrl: activeTask.projectUrl,
+        projectId: flowProjectIdentity(activeTask.projectUrl)?.projectId || null,
+        settings: {
+          model: assignedSettings.model || "",
+          resolution: assignedSettings.resolution || "",
+          durationSeconds: assignedSettings.durationSeconds ?? null,
+          aspectRatio: assignedSettings.aspectRatio || ""
+        },
+        receivedAt: new Date().toISOString(),
+        state: "TASK_ASSIGNED"
+      }
+    });
     const projectTabs = await chrome.tabs.query({ url: "https://flow.google.com/project/*" });
     const existing = projectTabs.find(tab => sameFlowProject(tab.url || "", activeTask.projectUrl));
     const tab = existing
