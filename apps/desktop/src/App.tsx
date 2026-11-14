@@ -102,8 +102,14 @@ export default function App() {
       }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
-      const diagnosticsResponse = await fetch(`${API}/extension/diagnostics/logs?limit=500`);
-      if (diagnosticsResponse.ok) setDiagnosticLogs((await diagnosticsResponse.json()).logs ?? []);
+      // Diagnostics are optional: a logging endpoint failure must not mark the
+      // orchestrator itself offline or interrupt the normal dashboard refresh.
+      try {
+        const diagnosticsResponse = await fetch(`${API}/extension/diagnostics/logs?limit=500`);
+        if (diagnosticsResponse.ok) setDiagnosticLogs((await diagnosticsResponse.json()).logs ?? []);
+      } catch {
+        // Keep the last successfully loaded diagnostic entries.
+      }
       setDebugUpdatedAt(new Date().toISOString());
       if (selected) {
         const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
