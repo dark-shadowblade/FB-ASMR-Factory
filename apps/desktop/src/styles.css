@@ -14,3 +14,15 @@
 .flow-account-fields .flow-url-input:focus{border-color:#e89a5e}
 .flow-account-actions{display:flex;gap:5px;align-items:center;padding-top:18px}
 .flow-account-actions .secondary.compact{height:27px;margin:0;padding:0 9px;font-size:8px;min-width:0}
+
+/* Flow worker queue and per-clip dispatch progress */
+.dispatch-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:13px;padding:13px;border:1px solid #343b49;background:#171c26;border-radius:9px}
+.dispatch-toolbar b,.dispatch-toolbar small{display:block}
+.dispatch-toolbar b{font-size:11px}
+.dispatch-toolbar small{font-size:9px;color:#8c96a8;margin-top:4px}
+.flow-task-list{margin-top:10px;border:1px solid #282f3d;border-radius:8px;overflow:hidden}
+.flow-task-row{display:grid;grid-template-columns:70px 120px minmax(0,1fr);gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid #242936;font-size:9px}
+.flow-task-row:last-child{border-bottom:0}
+.flow-task-row>span{color:#e8a568;font-weight:700}
+.flow-task-row>b{text-transform:capitalize;color:#dce1eb}
+.flow-task-row>small{color:#7f8999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
