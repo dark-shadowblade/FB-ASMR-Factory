@@ -819,7 +819,7 @@ def publish_facebook_reel(job_id: str) -> dict[str, Any]:
         )
     try:
         result = meta_publisher.publish_reel(output["output_path"], title, seo_description, account["page_id"], page_token)
-    except (meta_publisher.MetaPublishError, OSError) as exc:
+    except (meta_publisher.MetaPublishError, httpx.RequestError, OSError) as exc:
         message = str(exc)[:1000]
         with connect() as conn:
             conn.execute("UPDATE facebook_publications SET status='uncertain',error=?,updated_at=? WHERE job_id=?",
