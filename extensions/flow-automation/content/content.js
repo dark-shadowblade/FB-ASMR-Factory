@@ -86,11 +86,11 @@
     if (!expectedModel || !expectedResolution || !Number.isFinite(expectedDuration) || expectedDuration <= 0) {
       return { ok: false, reason: "The assigned task is missing model, resolution or duration settings from the desktop app.", actual };
     }
-    if (!settings.modelSelector || !settings.resolutionSelector || !settings.durationSelector) {
-      return { ok: false, reason: "Model, resolution and duration selectors must all be configured in this browser profile.", actual };
+    if (!actual.model || !actual.resolution || !actual.duration) {
+      return { ok: false, reason: "Could not verify the selected Flow model, resolution and duration from the live controls.", actual };
     }
-    if (expectedRatio && !settings.aspectRatioSelector) {
-      return { ok: false, reason: "The desktop app requested an aspect ratio, but this profile has no verified aspect-ratio selector.", actual };
+    if (expectedRatio && !actual.aspectRatio) {
+      return { ok: false, reason: "Could not verify the selected vertical 9:16 aspect ratio in this Flow account.", actual };
     }
     if (!actual.model.toLowerCase().includes(expectedModel.toLowerCase())) return { ok: false, reason: "Selected model does not match " + expectedModel + ".", actual };
     if (!actual.resolution.toLowerCase().includes(expectedResolution.toLowerCase())) return { ok: false, reason: "Selected resolution does not match " + expectedResolution + ".", actual };
@@ -98,7 +98,7 @@
     if (expectedRatio && !actual.aspectRatio.replace(/\s/g, "").includes(expectedRatio)) {
       return { ok: false, reason: "Selected aspect ratio does not match " + expectedRatio + ".", actual };
     }
-    return { ok: true, actual, aspectRatioVerified: Boolean(settings.aspectRatioSelector) };
+    return { ok: true, actual, aspectRatioVerified: Boolean(actual.aspectRatio) };
   }
   function setFieldValue(field, value) {
     field.focus();
