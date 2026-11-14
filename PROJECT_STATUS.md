@@ -203,3 +203,29 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - Prefer complete, runnable files and explain exact setup commands.
 - Keep the app usable with mock/manual modes when external services are unavailable.
 - Record blockers and decisions here instead of silently changing requirements.
+
+
+## 2026-11-14 — Chrome extension foundation
+
+### Implemented in main
+- Added `extensions/flow-automation/` Manifest V3 package with background service worker, Flow content script, options page and shared protocol module.
+- Added profile-bound task polling and registration for `flow-1` through `flow-5`.
+- Added authenticated loopback API bridge. A random bridge token is generated in the orchestrator data directory as `extension-bridge.token`; the user enters it in each profile's extension options.
+- Added persistent task identity, task/event correlation and pause/resume/cancel command queue endpoints.
+- Added dispatch endpoint assigning five approved clip tasks deterministically to five profile IDs, rejecting missing project URLs or busy profiles.
+- Added idempotent event ingestion and strict task/profile/job/clip identity checks.
+- Added Node protocol tests and Python API tests for profile isolation and bridge authentication.
+- Content script is intentionally safe-by-default: it refuses to submit or click when Flow selectors/settings are not verified. The live website has not been inspected in an authenticated browser during this implementation, so no Flow selector is claimed as working.
+
+### Not yet verified
+- Real Chrome extension load in the five managed browser profiles.
+- Live Flow prompt field, Generate, model/quality/duration/aspect ratio selectors.
+- Reliable completion detection and actual download-button behavior.
+- Download-to-clip association on Windows and FFprobe validation.
+- Desktop UI wiring for dispatch and extension status.
+
+### Next
+1. Test bridge/API and extension protocol tests.
+2. Install extension into each of the five persistent Chrome profiles and pair each profile ID.
+3. Inspect the live Flow DOM on an authorised account, then add verified selectors and settings interaction.
+4. Implement download reconciliation and FFprobe validation before marking any clip ready.
