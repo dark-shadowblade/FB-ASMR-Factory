@@ -72,6 +72,27 @@ def test_event_identity_mismatch_is_rejected(tmp_path):
     assert client.post("/api/v1/extension/events", json=payload, headers=headers).status_code == 409
 
 
+def test_download_completed_event_marks_the_matching_clip_downloaded(tmp_path):
+    client, headers, _ = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    payload = {
+        "protocolVersion": 1, "messageId": "message-download-001", "type": "DOWNLOAD_COMPLETED",
+        "taskId": task["taskId"], "jobId": task["jobId"], "clipId": task["clipId"],
+        "profileId": "flow-1", "instanceId": "instance-flow-1",
+        "timestamp": "2026-11-14T00:00:00Z",
+        "payload": {"filename": "/tmp/clip-1.mp4", "fileSize": 12345},
+    }
+    response = client.post("/api/v1/extension/events", json=payload, headers=headers)
+    assert response.status_code == 200
+    with sqlite3.connect(tmp_path / "test.sqlite3") as conn:
+        status = conn.execute("SELECT status FROM clips WHERE id=?", (task["clipId"],)).fetchone()[0]
+    assert status == "downloaded"
+
+
 def test_bridge_requires_local_secret(tmp_path):
     client, _, _ = make_client(tmp_path)
     assert client.get("/api/v1/extension/health").status_code == 401
