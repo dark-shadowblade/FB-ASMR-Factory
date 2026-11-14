@@ -826,8 +826,13 @@ def refresh_facebook_publication(job_id: str) -> dict[str, Any]:
         if not row["video_id"] or row["status"] in ("published", "failed", "uncertain"):
             return {"publication": dict(row)}
         video_id = row["video_id"]
+        account_id = row["account_id"]
+    selected = _get_facebook_account(account_id) if account_id else None
+    if selected is None:
+        raise HTTPException(status_code=409, detail="The Facebook Page credentials used for this publication are no longer available. Reconnect that Page to refresh its status.")
+    _, page_token = selected
     try:
-        result = meta_publisher.get_reel_status(video_id)
+        result = meta_publisher.get_reel_status(video_id, page_token)
     except meta_publisher.MetaPublishError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     with connect() as conn:
