@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import os
+from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -185,3 +187,20 @@ def test_commands_are_scoped_to_exact_profile_instance_and_task(tmp_path):
     )
     assert own_task.status_code == 200
     assert own_task.json()["commands"][0]["command"] == "PAUSE"
+
+
+def test_desktop_config_rejects_opaque_origin_without_secret(tmp_path):
+    client, _, _ = make_client(tmp_path)
+    response = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+    assert response.status_code == 403
+
+
+def test_desktop_config_accepts_opaque_origin_only_with_per_launch_secret(tmp_path):
+    client, _, _ = make_client(tmp_path)
+    with patch.dict(os.environ, {"ASMR_FACTORY_DESKTOP_TOKEN": "test-desktop-secret"}):
+        denied = client.get("/api/v1/extension/desktop-config", headers={"Origin": "null"})
+        assert denied.status_code == 403
+        allowed = client.get("/api/v1/extension/desktop-config", headers={
+            "Origin": "null", "X-ASMR-Desktop-Token": "test-desktop-secret"
+        })
+        assert allowed.status_code == 200
