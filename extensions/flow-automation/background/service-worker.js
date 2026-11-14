@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message?.type === "FLOW_EVENT" && activeTask) {
       await report(message.event, message.payload || {});
-      if (message.event === "TASK_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
+      if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
         activeTabId = null;
         await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadId"]);
@@ -139,7 +139,10 @@ chrome.downloads.onChanged.addListener(async delta => {
   if (delta.state.current === "interrupted") {
     await report("DOWNLOAD_FAILED", { downloadId: delta.id, error: "Browser download interrupted" });
     activeDownloadIds.delete(delta.id);
-    await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
+    activeTask = null;
+    activeTabId = null;
+    activeDownloadIds.clear();
+    await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds"]);
     return;
   }
   if (delta.state.current !== "complete") return;
