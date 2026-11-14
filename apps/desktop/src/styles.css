@@ -136,3 +136,7 @@
 .settings-info{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:15px;border:1px solid #30394a;border-radius:10px;background:#111722;font-size:11px}
 .settings-info b{color:#cbd3df}.settings-info span{color:#929db0;line-height:1.5}
 @media(max-width:700px){.settings-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.settings-info{grid-template-columns:1fr;gap:5px}.settings-info span{margin-bottom:8px}}
+
+.facebook-accounts-page{grid-column:1/-1}
+.facebook-accounts-page .panel-head{margin-bottom:10px}
+.facebook-accounts-page .facebook-account{margin-top:9px}
