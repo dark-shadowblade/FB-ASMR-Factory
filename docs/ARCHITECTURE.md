@@ -140,6 +140,7 @@ Every message should include:
 - job ID
 - clip ID
 - browser profile ID
+- unique extension instance ID
 - event type
 - timestamp
 - structured payload
