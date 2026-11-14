@@ -8,7 +8,8 @@
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron": "wait-on tcp:127.0.0.1:5173 && electron .",
     "build": "tsc -b && vite build",
-    "start": "electron ."
+    "start": "electron .",
+    "dist:win": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -21,9 +22,26 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "electron": "^34.0.0",
+    "electron-builder": "^26.0.12",
     "typescript": "~5.7.2",
     "vite": "^6.1.0",
     "wait-on": "^8.0.2"
   },
-  "main": "electron/main.cjs"
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.darkshadowblade.asmrfactory",
+    "productName": "ASMR Factory",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "extraResources": [
+      { "from": "backend/asmr-orchestrator", "to": "backend/asmr-orchestrator" }
+    ],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
 }
