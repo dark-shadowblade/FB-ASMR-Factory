@@ -203,5 +203,25 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(approved.status_code, 200)
         self.assertEqual(approved.json()["job"]["status"], "prompts_approved")
 
+    def test_weekday_rotation_defaults_new_jobs_to_the_scheduled_theme(self):
+        with patch.object(main_module, "scheduled_theme", return_value="clay"):
+            response = self.client.post("/api/v1/jobs", json={"topic": "Scheduled"} )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job"]["theme"], "clay")
+
+    def test_weekly_rotation_order_is_monday_through_sunday(self):
+        response = self.client.get("/api/v1/schedule")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["theme"] for row in response.json()["rotation"]], [
+            "fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr"
+        ])
+
+    def test_flow_settings_are_saved_and_returned(self):
+        payload = {"model": "Veo 3.1 Lite", "resolution": "1080p", "duration_seconds": 6, "aspect_ratio": "9:16"}
+        saved = self.client.put("/api/v1/settings/flow", json=payload)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json(), payload)
+        self.assertEqual(self.client.get("/api/v1/settings/flow").json(), payload)
+
 if __name__ == "__main__":
     unittest.main()
