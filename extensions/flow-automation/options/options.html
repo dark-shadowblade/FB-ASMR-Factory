@@ -38,7 +38,7 @@
 
     <section class="panel">
       <div class="section-heading"><div><p class="eyebrow">03 / FLOW CONTROLS</p><h2>Verified selectors</h2></div><span class="step">Advanced</span></div>
-      <p class="help">Only configure selectors after scanning the real Flow page in this browser profile. Suggested selectors are clues, not proof. Automation remains blocked until you explicitly verify them.</p>
+      <p class="help">The worker first detects unique prompt, Generate, Download and selected-setting controls automatically. Use these selectors only if automatic detection cannot identify a control; custom selectors require explicit verification.</p>
       <div class="field"><label for="promptSelector">Prompt editor</label><input id="promptSelector" placeholder="Unique CSS selector"></div>
       <div class="field"><label for="generateSelector">Generate button</label><input id="generateSelector" placeholder="Unique CSS selector"></div>
       <div class="field"><label for="downloadSelector">Download button</label><input id="downloadSelector" placeholder="Unique CSS selector"></div>
@@ -48,7 +48,7 @@
         <div class="field"><label for="durationSelector">Selected duration</label><input id="durationSelector" placeholder="Selector showing 8 seconds"></div>
         <div class="field"><label for="aspectRatioSelector">Selected aspect ratio</label><input id="aspectRatioSelector" placeholder="Optional · 9:16"></div>
       </div>
-      <label class="toggle verify"><input id="selectorsVerified" type="checkbox"><span><b>I verified these selectors on the current Flow page</b><small>Check only after testing each selector in the correct signed-in account.</small></span></label>
+      <label class="toggle verify"><input id="selectorsVerified" type="checkbox"><span><b>I verified these selectors on the current Flow page</b><small>Check only after testing every custom selector in the correct signed-in account. Automatic control detection does not require this checkbox.</small></span></label>
     </section>
 
     <section class="panel diagnostic">
