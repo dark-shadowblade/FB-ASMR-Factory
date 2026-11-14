@@ -1,32 +1,62 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FB-ASMR Flow Worker</title><style>
-body{font:14px system-ui;background:#10141c;color:#e8edf5;max-width:720px;margin:32px auto;padding:0 20px}h1{font-size:22px}label{display:block;margin:16px 0 6px;color:#aab7c9}input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #344154;border-radius:8px;background:#1a2230;color:#fff}button{margin-top:20px;padding:11px 18px;border:0;border-radius:8px;background:#70a7ff;color:#07101e;font-weight:700}small{color:#aab7c9}#status{margin-top:14px}pre{white-space:pre-wrap;word-break:break-word;max-height:520px;overflow:auto;background:#0b1018;border:1px solid #344154;border-radius:8px;padding:12px;font-size:12px}.actions{display:flex;gap:10px;flex-wrap:wrap}.actions button{margin-top:10px}button.secondary{background:#263449;color:#e8edf5}
-</style></head>
-<body><h1>FB-ASMR Factory — Flow Worker</h1>
-<p>Configure this extension separately in each of the five persistent Chrome profiles. The selected profile ID is the isolation key; tasks for other profiles are rejected.</p>
-<label>Local orchestrator URL</label><input id="baseUrl" value="http://127.0.0.1:8765">
-<label>Bridge token (from the desktop app's local data folder)</label><input id="bridgeToken" type="password" autocomplete="off">
-<label>Assigned profile</label><select id="profileId"><option>flow-1</option><option>flow-2</option><option>flow-3</option><option>flow-4</option><option>flow-5</option></select>
-<label><input id="enabled" type="checkbox" style="width:auto"> Enable task polling in this profile</label>
-<hr>
-<h2>Live Flow selector configuration</h2>
-<p><small>Automation is disabled until the selectors are verified against the current Google Flow UI. Do not guess these values. Use Chrome DevTools on the Flow page to inspect the actual accessible controls.</small></p>
-<label>Prompt field CSS selector</label><input id="promptSelector" placeholder="Leave blank until verified">
-<label>Generate button CSS selector</label><input id="generateSelector" placeholder="Leave blank until verified">
-<label>Download button CSS selector</label><input id="downloadSelector" placeholder="Leave blank until verified">
-<label>Selected model value CSS selector</label><input id="modelSelector" placeholder="Element showing the currently selected model">
-<label>Selected resolution value CSS selector</label><input id="resolutionSelector" placeholder="Element showing 720p when selected">
-<label>Selected duration value CSS selector</label><input id="durationSelector" placeholder="Element showing 8 seconds when selected">
-<label>Selected aspect ratio value CSS selector (optional)</label><input id="aspectRatioSelector" placeholder="Element showing 9:16 if Flow supports it">
-<label><input id="selectorsVerified" type="checkbox" style="width:auto"> I verified these selectors on the current Flow page</label>
-<button id="save">Save settings</button>
-<hr>
-<h2>Live Google Flow DOM diagnostic</h2>
-<p><small>Open the target Flow project in this Chrome profile, wait until it finishes loading, then run this read-only scan. It inventories visible controls and suggests CSS selectors. It does not click, submit prompts, change settings, or capture prompt text. Selector suggestions are not automatically trusted.</small></p>
-<label>Flow tab in this Chrome profile</label><select id="flowTab"><option value="">No Flow tabs found</option></select>
-<div class="actions"><button id="refreshTabs" class="secondary" type="button">Find Flow tabs</button><button id="scan" type="button">Scan selected Flow tab</button><button id="copyReport" class="secondary" type="button" disabled>Copy diagnostic JSON</button></div>
-<div id="diagnosticStatus" role="status" aria-live="polite"></div>
-<pre id="diagnosticReport">No diagnostic captured yet.</pre>
-<div id="status"></div>
-<script src="options.js"></script></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FB-ASMR Factory — Flow Worker</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-mark">AF</div>
+      <div><p class="eyebrow">FB-ASMR FACTORY</p><h1>Flow Worker</h1><p class="subhead">Connect this browser profile to your local production desk.</p></div>
+      <span class="version">PROFILE WORKER</span>
+    </header>
+
+    <section class="notice"><strong>One browser profile = one Flow account.</strong><span>Configure this extension separately inside each managed browser (01–05). Never share a profile ID between browser profiles.</span></section>
+
+    <section class="panel">
+      <div class="section-heading"><div><p class="eyebrow">01 / CONNECTION</p><h2>Desktop connection</h2></div><span class="step">Required</span></div>
+      <div class="field"><label for="baseUrl">Local orchestrator URL</label><input id="baseUrl" value="http://127.0.0.1:8765" spellcheck="false"></div>
+      <div class="field"><label for="bridgeToken">Bridge token</label><input id="bridgeToken" type="password" autocomplete="off" placeholder="Paste token from FB-ASMR-Factory"></div>
+      <div class="field"><label for="profileId">Assigned browser slot</label><select id="profileId"><option value="flow-1">01 · Flow account 1</option><option value="flow-2">02 · Flow account 2</option><option value="flow-3">03 · Flow account 3</option><option value="flow-4">04 · Flow account 4</option><option value="flow-5">05 · Flow account 5</option></select></div>
+      <label class="toggle"><input id="enabled" type="checkbox"><span><b>Enable task polling</b><small>Allow this profile to receive its assigned clip tasks.</small></span></label>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading"><div><p class="eyebrow">02 / FLOW CONTROLS</p><h2>Verified selectors</h2></div><span class="step">Advanced</span></div>
+      <p class="help">Only configure selectors after scanning the real Flow page in this browser profile. Suggested selectors are clues, not proof. Automation remains blocked until you explicitly verify them.</p>
+      <div class="field"><label for="promptSelector">Prompt editor</label><input id="promptSelector" placeholder="Unique CSS selector"></div>
+      <div class="field"><label for="generateSelector">Generate button</label><input id="generateSelector" placeholder="Unique CSS selector"></div>
+      <div class="field"><label for="downloadSelector">Download button</label><input id="downloadSelector" placeholder="Unique CSS selector"></div>
+      <div class="field-grid">
+        <div class="field"><label for="modelSelector">Selected model</label><input id="modelSelector" placeholder="Selector showing Veo 3.1 Lite"></div>
+        <div class="field"><label for="resolutionSelector">Selected resolution</label><input id="resolutionSelector" placeholder="Selector showing 720p"></div>
+        <div class="field"><label for="durationSelector">Selected duration</label><input id="durationSelector" placeholder="Selector showing 8 seconds"></div>
+        <div class="field"><label for="aspectRatioSelector">Selected aspect ratio</label><input id="aspectRatioSelector" placeholder="Optional · 9:16"></div>
+      </div>
+      <label class="toggle verify"><input id="selectorsVerified" type="checkbox"><span><b>I verified these selectors on the current Flow page</b><small>Check only after testing each selector in the correct signed-in account.</small></span></label>
+    </section>
+
+    <section class="panel diagnostic">
+      <div class="section-heading"><div><p class="eyebrow">03 / INSPECTION</p><h2>Live Flow diagnostic</h2></div><span class="step">Read-only</span></div>
+      <p class="help">Scan the project tab in this same browser profile. The diagnostic inventories visible controls and suggests selectors. It does not click controls, change settings, submit prompts or capture prompt text.</p>
+      <div class="field"><label for="flowTab">Google Flow project tab</label><select id="flowTab"><option value="">Find Flow tabs first</option></select></div>
+      <div class="actions">
+        <button id="refreshTabs" class="button ghost" type="button">Find Flow tabs</button>
+        <button id="scan" class="button primary" type="button">Scan selected tab</button>
+        <button id="copyReport" class="button ghost" type="button" disabled>Copy JSON</button>
+      </div>
+      <div id="diagnosticStatus" class="status" role="status" aria-live="polite">Open a Flow project in this profile to begin.</div>
+      <pre id="diagnosticReport">No diagnostic captured yet.</pre>
+    </section>
+
+    <footer class="footer">
+      <div id="status" class="save-status" role="status" aria-live="polite">Settings are stored only in this Chrome profile.</div>
+      <button id="save" class="button primary save-button" type="button">Save profile settings</button>
+    </footer>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>
