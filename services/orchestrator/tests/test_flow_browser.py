@@ -1,8 +1,10 @@
 import unittest
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
+from app.flow_browser import FlowProfileManager, PROFILE_IDS, resolve_flow_extension_dir, validate_flow_project_url
 
 
 class FlowProfileTests(unittest.TestCase):
@@ -35,3 +37,17 @@ class FlowProfileTests(unittest.TestCase):
             self.assertNotEqual(manager.root / "flow-1", manager.root / "flow-2")
 
 
+
+    def test_resolves_extension_from_pyinstaller_bundle(self):
+        with TemporaryDirectory() as temp:
+            extension = Path(temp) / "extensions" / "flow-automation"
+            extension.mkdir(parents=True)
+            (extension / "manifest.json").write_text("{}", encoding="utf-8")
+            with patch.object(sys, "frozen", True, create=True), patch.object(sys, "_MEIPASS", temp, create=True):
+                self.assertEqual(resolve_flow_extension_dir(), extension)
+
+    def test_missing_bundled_extension_has_actionable_error(self):
+        with TemporaryDirectory() as temp:
+            with patch.object(sys, "frozen", True, create=True), patch.object(sys, "_MEIPASS", temp, create=True):
+                with self.assertRaisesRegex(RuntimeError, "not packaged or found"):
+                    resolve_flow_extension_dir()
