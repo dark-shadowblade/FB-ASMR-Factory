@@ -170,7 +170,7 @@ export default function App() {
       return;
     }
     if (flowAutomation.tasks.some(t=>t.job_id===job.id)) {
-      setNotice("This job already has Flow tasks. Use the per-clip retry action for failed clips.");
+      setNotice("This job already has Flow tasks. Existing task state is preserved; failed tasks are reported in the production status.");
       return;
     }
     setDispatching(true);
