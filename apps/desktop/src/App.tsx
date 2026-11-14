@@ -183,6 +183,18 @@ export default function App() {
     } finally { setDispatching(false); }
   }
 
+  async function retryFlowTask(task: FlowAutomationStatus["tasks"][number]) {
+    try {
+      const response = await fetch(API + "/extension/tasks/" + task.task_id + "/retry", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not retry Flow task");
+      setNotice("Retry queued on " + data.profileId + ". The matching Flow worker will pick it up.");
+      await refresh();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not retry Flow task."); }
+  }
+
   async function assembleJob(job: Job) {
     setAssembling(true);
     try {
@@ -301,7 +313,7 @@ export default function App() {
             <div><b>Google Flow task queue</b><small>{flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
             <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>dispatchFlowJob(active)}>{dispatching ? "Dispatching…" : flowAutomation.registered_count!==5 ? "Connect all five Flow workers" : "Start five Flow tasks"}</button>
           </div>
-          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small></div>)}</div>}
+          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
           {active.final_video && <div className="approved-note">✓ Final video saved · {Math.round(active.final_video.duration_seconds)}s · {active.final_video.width}×{active.final_video.height}<br/><small>{active.final_video.output_path}</small></div>}
         </>}
