@@ -58,8 +58,7 @@ class MediaPipelineTests(unittest.TestCase):
                     return CompletedProcess(command, 0, self.metadata(duration=duration), "")
                 raise AssertionError("FFmpeg must not run for invalid source durations")
 
-            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), \\
-                 patch.object(media_pipeline, "_run", side_effect=fake_run):
+            with patch.object(media_pipeline.shutil, "which", return_value="/usr/bin/tool"), patch.object(media_pipeline, "_run", side_effect=fake_run):
                 with self.assertRaisesRegex(media_pipeline.MediaPipelineError, "expected approximately 8 seconds"):
                     media_pipeline.assemble_five_clips(clips, root / "final.mp4")
 
