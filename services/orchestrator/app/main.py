@@ -14,10 +14,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
+
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "asmr_factory.sqlite3"
+FLOW_MANAGER = FlowProfileManager(DATA_DIR / "chrome-profiles")
 
 app = FastAPI(title="ASMR Factory Local Orchestrator", version="0.1.0")
 app.add_middleware(
@@ -91,7 +94,18 @@ def init_db() -> None:
             event TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS flow_profiles (
+            profile_id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            project_url TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
         """)
+        for index, profile_id in enumerate(PROFILE_IDS, start=1):
+            conn.execute(
+                "INSERT OR IGNORE INTO flow_profiles(profile_id, display_name, project_url, updated_at) VALUES(?,?,?,?)",
+                (profile_id, f"Google Flow Account {index}", "", utc_now()),
+            )
 
 
 def serialize_job(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
@@ -301,6 +315,66 @@ def approve_prompts(job_id: str) -> dict[str, Any]:
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
                      (job_id, "Five " + THEME_LABELS[job["theme"]] + " prompts approved; Flow automation is next", utc_now()))
         return {"job": serialize_job(conn, job_id)}
+
+
+class FlowProfileRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+    project_url: str = Field(min_length=1, max_length=500)
+
+
+@app.get("/api/v1/flow/profiles")
+def list_flow_profiles() -> dict[str, Any]:
+    with connect() as conn:
+        rows = conn.execute("SELECT profile_id, display_name, project_url, updated_at FROM flow_profiles ORDER BY profile_id").fetchall()
+        profiles = []
+        for row in rows:
+            item = dict(row)
+            item["browser_open"] = FLOW_MANAGER.status(item["profile_id"])["browser_open"]
+            item["configured"] = bool(item["project_url"])
+            profiles.append(item)
+        return {"profiles": profiles}
+
+
+@app.put("/api/v1/flow/profiles/{profile_id}")
+def save_flow_profile(profile_id: str, request: FlowProfileRequest) -> dict[str, Any]:
+    if profile_id not in PROFILE_IDS:
+        raise HTTPException(status_code=404, detail="Unknown Flow profile")
+    try:
+        project_url = validate_flow_project_url(request.project_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    display_name = request.display_name.strip()
+    if not display_name:
+        raise HTTPException(status_code=422, detail="Account label cannot be empty")
+    with connect() as conn:
+        conn.execute(
+            "UPDATE flow_profiles SET display_name=?, project_url=?, updated_at=? WHERE profile_id=?",
+            (display_name, project_url, utc_now(), profile_id),
+        )
+        row = conn.execute("SELECT profile_id, display_name, project_url, updated_at FROM flow_profiles WHERE profile_id=?", (profile_id,)).fetchone()
+        return {"profile": {**dict(row), "configured": True, "browser_open": FLOW_MANAGER.status(profile_id)["browser_open"]}}
+
+
+@app.post("/api/v1/flow/profiles/{profile_id}/open")
+async def open_flow_profile(profile_id: str) -> dict[str, Any]:
+    if profile_id not in PROFILE_IDS:
+        raise HTTPException(status_code=404, detail="Unknown Flow profile")
+    with connect() as conn:
+        row = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id=?", (profile_id,)).fetchone()
+    if row is None or not row["project_url"]:
+        raise HTTPException(status_code=409, detail="Save a Google Flow project URL for this account first")
+    try:
+        result = await FLOW_MANAGER.open_profile(profile_id, row["project_url"])
+        return {"profile": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.on_event("shutdown")
+async def shutdown_flow_profiles() -> None:
+    await FLOW_MANAGER.close_all()
 
 
 if __name__ == "__main__":
