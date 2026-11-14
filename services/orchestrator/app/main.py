@@ -455,6 +455,41 @@ async def open_flow_profile(profile_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
+@app.post("/api/v1/flow/profiles/open-all")
+async def open_all_flow_profiles() -> dict[str, Any]:
+    """Open all five saved Flow projects in their own persistent Chrome profiles."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT profile_id,display_name,project_url FROM flow_profiles ORDER BY profile_id"
+        ).fetchall()
+    missing = [row["profile_id"] for row in rows if not row["project_url"]]
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail="Save a Flow project URL for every account before starting: " + ", ".join(missing),
+        )
+
+    import asyncio
+    async def open_one(row: sqlite3.Row) -> dict[str, Any]:
+        try:
+            profile = await FLOW_MANAGER.open_profile(row["profile_id"], row["project_url"])
+            return {"profile_id": row["profile_id"], "display_name": row["display_name"],
+                    "opened": True, "login_required": profile.get("login_required", False),
+                    "current_url": profile.get("current_url", "")}
+        except (ValueError, RuntimeError) as exc:
+            return {"profile_id": row["profile_id"], "display_name": row["display_name"],
+                    "opened": False, "error": str(exc)}
+
+    results = await asyncio.gather(*(open_one(row) for row in rows))
+    failed = [item for item in results if not item["opened"]]
+    if failed:
+        raise HTTPException(status_code=503, detail={
+            "message": "Some Chrome profiles could not be opened.",
+            "profiles": results,
+        })
+    return {"opened": len(results), "profiles": results}
+
+
 @app.get("/api/v1/flow/automation/status")
 def flow_automation_status() -> dict[str, Any]:
     with connect() as conn:
