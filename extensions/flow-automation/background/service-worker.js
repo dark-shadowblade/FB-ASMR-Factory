@@ -194,3 +194,15 @@ async function pollCommands() {
   } catch (error) { console.warn("[ASMR Flow] command poll failed", error.message); }
 }
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) pollCommands(); });
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (!changeInfo.url) return;
+  await restoreTask();
+  if (!activeTask || tabId !== activeTabId) return;
+  try {
+    const host = new URL(changeInfo.url).hostname;
+    if (host === "accounts.google.com") {
+      await report("SESSION_REQUIRED", { url: changeInfo.url, reason: "Google redirected this profile to sign-in." });
+    }
+  } catch (_) {}
+});
