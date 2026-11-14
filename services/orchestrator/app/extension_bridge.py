@@ -213,7 +213,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             except sqlite3.IntegrityError:
                 return {"accepted": True, "duplicate": True, "status": task["status"]}
             status = status_map.get(request.type, task["status"])
-            error = str(request.payload.get("reason", ""))[:500] if request.type in ("TASK_FAILED","FLOW_UI_UNVERIFIED","SETTINGS_UNVERIFIED") else None
+            error = str(request.payload.get("reason") or request.payload.get("error") or "")[:500] if request.type in ("TASK_FAILED","DOWNLOAD_FAILED","FLOW_UI_UNVERIFIED","DOWNLOAD_SELECTOR_UNVERIFIED","PROJECT_URL_MISMATCH","SETTINGS_UNVERIFIED","PROMPT_ALREADY_PRESENT") else None
             download = str(request.payload.get("filename", ""))[:1000] if request.type == "DOWNLOAD_COMPLETED" else task["download_path"]
             conn.execute("UPDATE extension_tasks SET status=?,updated_at=?,last_error=COALESCE(?,last_error),download_path=? WHERE task_id=?",
                          (status, now(), error, download, request.taskId))
@@ -236,7 +236,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             return {"queued": True, "taskId": task_id, "profileId": task["profile_id"], "command": command}
 
     @router.get("/commands")
-    def get_commands(profile_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+    def get_commands(profile_id: str = Query(...), task_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
         require_token(x_asmr_bridge_token)
         if profile_id not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unknown profile ID")
