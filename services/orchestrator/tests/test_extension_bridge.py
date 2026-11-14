@@ -52,7 +52,7 @@ def test_dispatch_assigns_one_task_to_each_profile(tmp_path):
 def test_profile_cannot_poll_another_profiles_task(tmp_path):
     client, headers, _ = make_client(tmp_path)
     client.post("/api/v1/extension/dispatch/job-a", headers=headers)
-    one = client.get("/api/v1/extension/next-task?profile_id=flow-1", headers=headers).json()["task"]
+    one = client.get("/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers).json()["task"]
     two = client.get("/api/v1/extension/next-task?profile_id=flow-2&instance_id=instance-flow-2", headers=headers).json()["task"]
     assert one["taskId"] != two["taskId"]
     assert one["profileId"] == "flow-1"
