@@ -84,7 +84,7 @@
   }
   function waitForPromptField(resolveField, timeoutMs = 45000) {
     const immediate = resolveField();
-    if (immediate) return Promise.resolve(immediate);
+    if (immediate && visible(immediate)) return Promise.resolve(immediate);
     return new Promise(resolve => {
       let finished = false;
       const finish = value => {
@@ -159,8 +159,11 @@
       send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
       return;
     }
-    if (!visible(configuredField) || !visible(generate) || !/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") {
-      send("FLOW_UI_UNVERIFIED", { reason: "Configured prompt/generate selectors did not resolve to visible controls." });
+    if (!visible(configuredField) || !visible(generate) ||
+        (!/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") ||
+        generate.disabled || generate.getAttribute("aria-disabled") === "true" ||
+        configuredField.disabled || configuredField.readOnly) {
+      send("FLOW_UI_UNVERIFIED", { reason: "Configured prompt/generate selectors did not resolve to visible, enabled controls." });
       return;
     }
     const settingsCheck = verifySettings(settings, task.settings || {});
