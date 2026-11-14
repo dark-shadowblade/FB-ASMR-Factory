@@ -139,7 +139,8 @@
   function detectState(baseline = []) {
     const text = (document.body?.innerText || "").toLowerCase();
     if (/sign in|choose an account|session expired/.test(text) && location.hostname === "flow.google.com") return "SESSION_CHECK";
-    const progress = [...document.querySelectorAll('[role="progressbar"],[aria-busy="true"],[data-testid*="progress" i],[aria-label*="generating" i],[aria-label*="creating video" i]')].some(visible);
+    const statusNodes = [...document.querySelectorAll('[role="progressbar"],[aria-busy="true"],[aria-live],[role="status"],[data-testid*="progress" i],[data-testid*="generation" i],[aria-label*="generating" i],[aria-label*="creating video" i]')].filter(visible);
+    const progress = statusNodes.some(node => node.getAttribute("aria-busy") === "true" || /generating|creating video|queued|in progress/.test((node.getAttribute("aria-label") || node.textContent || "").toLowerCase()));
     if (progress) return "GENERATING";
     if (videoReady(baseline)) return "VIDEO_READY";
     return "PROJECT_LOADED";
