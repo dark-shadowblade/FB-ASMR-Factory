@@ -16,11 +16,11 @@ def make_client(tmp_path):
         CREATE TABLE flow_profiles(profile_id TEXT PRIMARY KEY, project_url TEXT, updated_at TEXT DEFAULT 'now');
         CREATE TABLE job_events(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, event TEXT, created_at TEXT);
         INSERT INTO jobs VALUES('job-a','prompts_approved','now');
-        INSERT INTO flow_profiles VALUES('flow-1','https://flow.google.com/project/12345678-abcd');
-        INSERT INTO flow_profiles VALUES('flow-2','https://flow.google.com/project/23456789-abcd');
-        INSERT INTO flow_profiles VALUES('flow-3','https://flow.google.com/project/34567890-abcd');
-        INSERT INTO flow_profiles VALUES('flow-4','https://flow.google.com/project/45678901-abcd');
-        INSERT INTO flow_profiles VALUES('flow-5','https://flow.google.com/project/56789012-abcd');
+        INSERT INTO flow_profiles(profile_id,project_url) VALUES('flow-1','https://flow.google.com/project/12345678-abcd');
+        INSERT INTO flow_profiles(profile_id,project_url) VALUES('flow-2','https://flow.google.com/project/23456789-abcd');
+        INSERT INTO flow_profiles(profile_id,project_url) VALUES('flow-3','https://flow.google.com/project/34567890-abcd');
+        INSERT INTO flow_profiles(profile_id,project_url) VALUES('flow-4','https://flow.google.com/project/45678901-abcd');
+        INSERT INTO flow_profiles(profile_id,project_url) VALUES('flow-5','https://flow.google.com/project/56789012-abcd');
         """)
         for i in range(1, 6):
             conn.execute("INSERT INTO clips(id,job_id,prompt,clip_order) VALUES(?,?,?,?)",
