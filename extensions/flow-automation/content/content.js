@@ -102,6 +102,25 @@
     lastState = "GENERATING";
     startMonitor();
   }
+  let downloadRequested = false;
+  function requestDownload() {
+    if (downloadRequested) return;
+    downloadRequested = true;
+    chrome.storage.local.get(["downloadSelector", "selectorsVerified"], settings => {
+      if (settings.selectorsVerified !== true || !settings.downloadSelector) {
+        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "A verified download selector is required." });
+        return;
+      }
+      let button = null;
+      try { button = document.querySelector(settings.downloadSelector); } catch (_) {}
+      if (!visible(button)) {
+        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: "Configured download selector did not resolve to a visible element." });
+        return;
+      }
+      button.click();
+      send("DOWNLOAD_STARTED", { source: "configured Flow download control" });
+    });
+  }
   function startMonitor() {
     if (observer) observer.disconnect();
     observer = new MutationObserver(() => {
@@ -110,13 +129,19 @@
         lastState = state;
         if (state === "SESSION_CHECK") send("SESSION_REQUIRED", { url: location.href });
         if (state === "GENERATING") send("GENERATION_STARTED", {});
-        if (state === "VIDEO_READY") send("GENERATION_COMPLETED", { videoElements: document.querySelectorAll("video").length });
+        if (state === "VIDEO_READY") {
+          send("GENERATION_COMPLETED", { videoElements: document.querySelectorAll("video").length });
+          requestDownload();
+        }
       }
     });
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
     const state = detectState();
     if (state === "GENERATING") send("GENERATION_STARTED", {});
-    if (state === "VIDEO_READY") send("GENERATION_COMPLETED", {});
+    if (state === "VIDEO_READY") {
+      send("GENERATION_COMPLETED", {});
+      requestDownload();
+    }
   }
   chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title }, response => {
     if (chrome.runtime.lastError || !response?.task) return;
