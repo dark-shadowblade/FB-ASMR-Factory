@@ -1,0 +1,223 @@
+from __future__ import annotations
+
+import json
+import secrets
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Header, HTTPException, Query
+from pydantic import BaseModel, Field
+
+PROFILE_IDS = tuple(f"flow-{i}" for i in range(1, 6))
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class RegisterRequest(BaseModel):
+    protocolVersion: int = 1
+    profileId: str
+    instanceId: str = Field(min_length=8, max_length=100)
+    extensionVersion: str = Field(min_length=1, max_length=30)
+
+
+class EventRequest(BaseModel):
+    protocolVersion: int = 1
+    messageId: str = Field(min_length=8, max_length=100)
+    type: str = Field(min_length=2, max_length=60)
+    taskId: str
+    jobId: str
+    clipId: str
+    profileId: str
+    timestamp: str
+    payload: dict[str, Any] = {}
+
+
+class CommandRequest(BaseModel):
+    command: str
+
+
+def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
+    router = APIRouter(prefix="/api/v1/extension", tags=["chrome-extension"])
+    token_path = Path(data_dir) / "extension-bridge.token"
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    if not token_path.exists():
+        token_path.write_text(secrets.token_urlsafe(48), encoding="utf-8")
+        try:
+            token_path.chmod(0o600)
+        except OSError:
+            pass
+    bridge_token = token_path.read_text(encoding="utf-8").strip()
+
+    def connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
+    def require_token(value: str) -> None:
+        if not value or not secrets.compare_digest(value, bridge_token):
+            raise HTTPException(status_code=401, detail="Invalid local extension bridge token")
+
+    def init_tables() -> None:
+        with connect() as conn:
+            conn.executescript("""
+            CREATE TABLE IF NOT EXISTS extension_tasks (
+              task_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, clip_id TEXT NOT NULL UNIQUE,
+              profile_id TEXT NOT NULL, project_url TEXT NOT NULL, prompt TEXT NOT NULL,
+              settings_json TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL, last_error TEXT, download_path TEXT,
+              UNIQUE(task_id, profile_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_extension_tasks_profile_status
+              ON extension_tasks(profile_id, status, created_at);
+            CREATE TABLE IF NOT EXISTS extension_instances (
+              profile_id TEXT PRIMARY KEY, instance_id TEXT NOT NULL, extension_version TEXT NOT NULL,
+              last_seen TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS extension_events (
+              message_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, job_id TEXT NOT NULL,
+              clip_id TEXT NOT NULL, profile_id TEXT NOT NULL, event_type TEXT NOT NULL,
+              payload_json TEXT NOT NULL, created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS extension_commands (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, profile_id TEXT NOT NULL,
+              command TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL
+            );
+            """)
+    init_tables()
+
+    @router.get("/health")
+    def bridge_health(x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        return {"status": "ok", "protocolVersion": 1, "profiles": list(PROFILE_IDS)}
+
+    @router.post("/register")
+    def register(request: RegisterRequest, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if request.protocolVersion != 1 or request.profileId not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unsupported protocol version or profile ID")
+        with connect() as conn:
+            conn.execute("""INSERT INTO extension_instances(profile_id,instance_id,extension_version,last_seen)
+              VALUES(?,?,?,?) ON CONFLICT(profile_id) DO UPDATE SET
+              instance_id=excluded.instance_id, extension_version=excluded.extension_version,last_seen=excluded.last_seen""",
+              (request.profileId, request.instanceId, request.extensionVersion, now()))
+        return {"registered": True, "profileId": request.profileId}
+
+    @router.post("/dispatch/{job_id}")
+    def dispatch(job_id: str, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        with connect() as conn:
+            job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if job is None:
+                raise HTTPException(status_code=404, detail="Job not found")
+            if job["status"] != "prompts_approved":
+                raise HTTPException(status_code=409, detail="Approve all five prompts before dispatch")
+            clips = conn.execute("SELECT id,prompt,clip_order FROM clips WHERE job_id=? ORDER BY clip_order", (job_id,)).fetchall()
+            if len(clips) != 5 or any(len((r["prompt"] or "").strip()) < 40 for r in clips):
+                raise HTTPException(status_code=409, detail="Exactly five complete prompts are required")
+            profiles = conn.execute("SELECT profile_id,project_url FROM flow_profiles ORDER BY profile_id").fetchall()
+            by_id = {r["profile_id"]: r["project_url"] for r in profiles}
+            if any(not by_id.get(pid) for pid in PROFILE_IDS):
+                raise HTTPException(status_code=409, detail="Configure a Flow project URL for all five profiles before dispatch")
+            active = conn.execute("SELECT profile_id FROM extension_tasks WHERE status IN ('queued','leased','project_open','submitted','generating','generation_completed','downloading','paused')").fetchall()
+            busy = {r["profile_id"] for r in active}
+            if busy:
+                raise HTTPException(status_code=409, detail="One or more Flow profiles already have active tasks: " + ", ".join(sorted(busy)))
+            settings = {"model": "Veo 3.1 Lite", "resolution": "720p", "durationSeconds": 8, "aspectRatio": "9:16"}
+            created = []
+            for index, clip in enumerate(clips):
+                profile_id = PROFILE_IDS[index]
+                task_id = secrets.token_urlsafe(18)
+                conn.execute("""INSERT INTO extension_tasks(task_id,job_id,clip_id,profile_id,project_url,prompt,
+                  settings_json,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                  (task_id, job_id, clip["id"], profile_id, by_id[profile_id], clip["prompt"],
+                   json.dumps(settings), "queued", now(), now()))
+                created.append({"taskId": task_id, "clipId": clip["id"], "profileId": profile_id})
+            conn.execute("UPDATE jobs SET status='running',updated_at=? WHERE id=?", (now(), job_id))
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Dispatched five isolated Flow tasks to flow-1 through flow-5", now()))
+            return {"dispatched": len(created), "tasks": created}
+
+    @router.get("/next-task")
+    def next_task(profile_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if profile_id not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unknown profile ID")
+        with connect() as conn:
+            row = conn.execute("""SELECT * FROM extension_tasks WHERE profile_id=?
+              AND status IN ('queued','leased') ORDER BY created_at LIMIT 1""", (profile_id,)).fetchone()
+            if row is None:
+                return {"task": None}
+            if row["status"] == "queued":
+                conn.execute("UPDATE extension_tasks SET status='leased',updated_at=? WHERE task_id=?", (now(), row["task_id"]))
+            return {"task": {
+              "protocolVersion": 1, "taskId": row["task_id"], "jobId": row["job_id"],
+              "clipId": row["clip_id"], "profileId": row["profile_id"], "projectUrl": row["project_url"],
+              "prompt": row["prompt"], "settings": json.loads(row["settings_json"]),
+              "settingsVerified": False
+            }}
+
+    @router.post("/events")
+    def receive_event(request: EventRequest, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if request.protocolVersion != 1 or request.profileId not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unsupported protocol or profile")
+        status_map = {
+          "TASK_ACCEPTED": "leased", "PROJECT_PAGE_READY": "project_open",
+          "PROMPT_SUBMITTED": "submitted", "GENERATION_STARTED": "generating",
+          "GENERATION_COMPLETED": "generation_completed", "DOWNLOAD_STARTED": "downloading",
+          "DOWNLOAD_COMPLETED": "downloaded", "SESSION_REQUIRED": "needs_login",
+          "FLOW_UI_UNVERIFIED": "blocked_ui", "SETTINGS_UNVERIFIED": "blocked_settings",
+          "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_CANCELLED": "cancelled"
+        }
+        with connect() as conn:
+            task = conn.execute("SELECT * FROM extension_tasks WHERE task_id=?", (request.taskId,)).fetchone()
+            if task is None or task["profile_id"] != request.profileId or task["job_id"] != request.jobId or task["clip_id"] != request.clipId:
+                raise HTTPException(status_code=409, detail="Task/profile/job/clip identity mismatch")
+            try:
+                conn.execute("""INSERT INTO extension_events(message_id,task_id,job_id,clip_id,profile_id,event_type,payload_json,created_at)
+                  VALUES(?,?,?,?,?,?,?,?)""",
+                  (request.messageId, request.taskId, request.jobId, request.clipId, request.profileId,
+                   request.type, json.dumps(request.payload), now()))
+            except sqlite3.IntegrityError:
+                return {"accepted": True, "duplicate": True, "status": task["status"]}
+            status = status_map.get(request.type, task["status"])
+            error = str(request.payload.get("reason", ""))[:500] if request.type in ("TASK_FAILED","FLOW_UI_UNVERIFIED","SETTINGS_UNVERIFIED") else None
+            download = str(request.payload.get("filename", ""))[:1000] if request.type == "DOWNLOAD_COMPLETED" else task["download_path"]
+            conn.execute("UPDATE extension_tasks SET status=?,updated_at=?,last_error=COALESCE(?,last_error),download_path=? WHERE task_id=?",
+                         (status, now(), error, download, request.taskId))
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (request.jobId, f"Flow {request.profileId}: {request.type}", now()))
+            return {"accepted": True, "duplicate": False, "status": status}
+
+    @router.post("/tasks/{task_id}/command")
+    def enqueue_command(task_id: str, request: CommandRequest, x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        command = request.command.upper()
+        if command not in ("PAUSE", "RESUME", "CANCEL", "CHECK_STATUS", "DOWNLOAD_VIDEO"):
+            raise HTTPException(status_code=422, detail="Unsupported extension command")
+        with connect() as conn:
+            task = conn.execute("SELECT profile_id FROM extension_tasks WHERE task_id=?", (task_id,)).fetchone()
+            if task is None:
+                raise HTTPException(status_code=404, detail="Task not found")
+            conn.execute("INSERT INTO extension_commands(task_id,profile_id,command,created_at) VALUES(?,?,?,?)",
+                         (task_id, task["profile_id"], command, now()))
+            return {"queued": True, "taskId": task_id, "profileId": task["profile_id"], "command": command}
+
+    @router.get("/commands")
+    def get_commands(profile_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        if profile_id not in PROFILE_IDS:
+            raise HTTPException(status_code=422, detail="Unknown profile ID")
+        with connect() as conn:
+            rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id,)).fetchall()
+            ids = [r["id"] for r in rows]
+            if ids:
+                conn.executemany("UPDATE extension_commands SET status='delivered' WHERE id=?", [(i,) for i in ids])
+            return {"commands": [dict(r) for r in rows]}
+
+    return router
