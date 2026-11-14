@@ -61,13 +61,24 @@ At verification on 2026-11-14, GitHub reports repository visibility as **Public*
 - [x] GitHub Actions backend tests, extension protocol tests, extension bridge tests and desktop build passed on commit `eb1fae1` (14 Nov 2026). Newest HEAD `4ef0a82` has fresh backend and extension/bridge workflows running; Chrome extension tests already passed on `4ef0a82`.
 - [ ] Full job recovery and retry behavior; current per-task retry and interrupted-download reporting are implemented, but restart reconciliation and automatic retry/backoff are not.
 - [x] Basic local Video Library API and UI, including inline MP4 playback and download; thumbnails, search/filtering and richer library browsing remain.
-- [ ] Meta authentication, Page selection and Graph API publishing.
-- [ ] Publication verification and duplicate prevention.
+- [x] Initial Facebook Page Reel publishing through Meta Graph API using a locally configured Page ID and Page access token (OAuth onboarding and Page picker are not yet implemented).
+- [x] Persist per-job Facebook publication state, poll Meta processing status, and block automatic re-upload for published or uncertain jobs.
 - [ ] Optional scheduler.
 - [x] Windows installer artifact successfully built for commit `f380ca1` (run `43600477183`) and an earlier artifact for `0a2ae59` (run `43598548348`). A newer installer build for commit `ee26516`, including the one-click five-profile launch, is still running; it does not yet include the latest Flow Worker options polish.
 - [ ] Full five-account end-to-end test on the user's Windows PC.
 
-**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. The current content script inserts a prompt and clicks Generate after configured selectors/settings pass, but it does not yet clear the prompt after confirmed submission; the live state detector and download association still need real-account testing. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing, actual Facebook publishing and a full five-account end-to-end test remain outstanding.
+**Current truthful milestone:** The desktop/backend scaffold, seven-style AI Director, five isolated Chrome profiles, extension task bridge, reference-informed Flow prompt discovery, five-profile dispatch, download event correlation, and backend media assembly API are implemented. The media API accepts only the five task-associated MP4 downloads under the configured Downloads directory, verifies each clip with FFprobe, requires vertical 9:16 compatible H.264/AAC streams, assembles them with FFmpeg, validates the final file, and records it in the local library. The desktop exposes the merge action, final-video details and generated social title/caption/hashtags. Social metadata uses the configured OpenAI-compatible provider with a built-in fallback. Google Flow setting selection and live prompt/Generate/download behavior still require testing against the user's signed-in accounts. The current content script inserts a prompt and clicks Generate after configured selectors/settings pass, but it does not yet clear the prompt after confirmed submission; the live state detector and download association still need real-account testing. Meta authentication and actual Reel publishing, robust restart recovery, thumbnails/search and richer library browsing, OAuth-based Meta account onboarding/Page selection, real Page upload verification, robust restart recovery, thumbnails/search and richer library browsing, and a full five-account end-to-end test remain outstanding.
+
+
+
+### Facebook publishing implementation update (14 Nov 2026)
+- [x] Added Meta Graph API Page connection check using environment-configured Page ID and Page access token.
+- [x] Added three-stage Facebook Reels upload: initialize, stream local MP4 to Meta's upload URL in 4 MB chunks, then finish with title and SEO description.
+- [x] Added editable Reel title, caption, description and hashtags in the desktop job view.
+- [x] Added per-job publication ledger, duplicate submission guard, uncertain-upload lockout and Meta processing-status refresh.
+- [x] Added basic client tests for missing credentials and invalid source files.
+- [ ] CI validation and real Facebook Page test are pending; no actual Reel has been published from this environment.
+- [ ] Full OAuth login, managed Page discovery/selection and secure token onboarding remain future work. For now, the Page token is supplied through environment variables and is not written to SQLite.
 
 ## 2. Product rules that must not be lost
 
