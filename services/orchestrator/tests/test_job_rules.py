@@ -80,6 +80,16 @@ class JobRulesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
 
+    def test_prompt_generation_falls_back_when_ai_provider_fails(self):
+        created = self.client.post("/api/v1/jobs", json={"topic": "Tropical Fruits", "theme": "fruits"}).json()["job"]
+        with patch.object(main_module, "ai_provider_config", return_value={"api_key": "test", "model": "test", "base_url": "https://invalid"}), \
+             patch.object(main_module, "compose_ai_prompts", side_effect=RuntimeError("provider down")):
+            response = self.client.post(f"/api/v1/jobs/{created['id']}/generate-prompts")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("built-in fallback", response.json()["source"])
+        self.assertEqual(len(response.json()["job"]["clips"]), 5)
+        self.assertTrue(all(len(clip["prompt"]) > 40 for clip in response.json()["job"]["clips"]))
+
     def test_prompt_generation_creates_five_distinct_prompts(self):
         created = self.client.post("/api/v1/jobs", json={"topic": "Tropical Fruits", "theme": "fruits"}).json()["job"]
         response = self.client.post(f"/api/v1/jobs/{created['id']}/generate-prompts")
