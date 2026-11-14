@@ -46,10 +46,6 @@ def probe_video(path: Path, ffprobe: str = "ffprobe") -> dict[str, Any]:
     duration = float(data.get("format", {}).get("duration", 0) or 0)
     if not video:
         raise MediaPipelineError(f"Clip must contain a video stream: {path.name}")
-    if video.get("codec_name") != "h264":
-        raise MediaPipelineError(f"Clip must use H.264 video: {path.name}")
-    if audio and audio.get("codec_name") != "aac":
-        raise MediaPipelineError(f"Clip audio must use AAC: {path.name}")
     if not video.get("width") or not video.get("height") or duration <= 0:
         raise MediaPipelineError(f"Clip has invalid dimensions or duration: {path.name}")
     return {
