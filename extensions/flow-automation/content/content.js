@@ -18,7 +18,20 @@
     isTextEntry(el) ? "" : el.innerText || el.textContent
   ].filter(Boolean).join(" ").replace(/\\s+/g, " ").trim();
 
-  function projectIdentity(url) {\n    try {\n      const parsed = new URL(url);\n      if (parsed.protocol !== "https:" || parsed.hostname !== "flow.google.com") return null;\n      const match = parsed.pathname.match(/^\\/project\\/([A-Za-z0-9-]{12,})\\/?$/);\n      return match ? { projectId: match[1], path: "/project/" + match[1] } : null;\n    } catch (_) { return null; }\n  }\n  function sameProject(left, right) {\n    const a = projectIdentity(left);\n    const b = projectIdentity(right);\n    return Boolean(a && b && a.projectId === b.projectId);\n  }\n  function findPromptField() {
+  function projectIdentity(url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" || parsed.hostname !== "flow.google.com") return null;
+      const match = parsed.pathname.match(/^\/project\/([A-Za-z0-9-]{12,})\/?$/);
+      return match ? { projectId: match[1], path: "/project/" + match[1] } : null;
+    } catch (_) { return null; }
+  }
+  function sameProject(left, right) {
+    const a = projectIdentity(left);
+    const b = projectIdentity(right);
+    return Boolean(a && b && a.projectId === b.projectId);
+  }
+  function findPromptField() {
     const explicit = document.querySelector("[data-asmr-flow-prompt]");
     if (explicit && visible(explicit)) return explicit;
     // Selector patterns observed in the supplied Veo Automation reference extension.
@@ -287,7 +300,11 @@
       requestDownload();
     }
   }
-  const detectedProject = projectIdentity(location.href);\n  if (detectedProject) {\n    chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });\n  }\n  chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
+  const detectedProject = projectIdentity(location.href);
+  if (detectedProject) {
+    chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });
+  }
+  chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
     if (chrome.runtime.lastError || !response?.task) return;
     execute(response.task);
   });
