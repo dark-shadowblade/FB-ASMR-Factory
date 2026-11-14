@@ -54,6 +54,31 @@ async function api(path, options = {}) {
   }
   return response.status === 204 ? null : response.json();
 }
+let diagnosticQueue = [];
+async function sendDiagnostic(level, message) {
+  try {
+    const c = await config();
+    if (!c.bridgeToken || !c.enabled) return;
+    await fetch(c.baseUrl + "/api/v1/extension/diagnostics/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-ASMR-Bridge-Token": c.bridgeToken },
+      body: JSON.stringify({ source: "FLOW_EXTENSION", level, message: String(message).slice(0, 3500), profileId: c.profileId || null, taskId: activeTask?.taskId || null })
+    });
+  } catch (_) {}
+}
+function installDiagnosticCapture() {
+  for (const level of ["warn", "error"]) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      sendDiagnostic(level, args.map(value => value instanceof Error ? value.stack || value.message : String(value)).join(" "));
+    };
+  }
+  self.addEventListener("error", event => sendDiagnostic("error", event.message + " at " + event.filename + ":" + event.lineno));
+  self.addEventListener("unhandledrejection", event => sendDiagnostic("error", "Unhandled rejection: " + String(event.reason?.stack || event.reason)));
+}
+installDiagnosticCapture();
+
 let flushingEvents = false;
 async function flushEvents() {
   if (flushingEvents) return;
