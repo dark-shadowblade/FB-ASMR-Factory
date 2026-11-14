@@ -1,6 +1,39 @@
 const ids = ["baseUrl","bridgeToken","profileId","enabled","promptSelector","generateSelector","downloadSelector","modelSelector","resolutionSelector","durationSelector","aspectRatioSelector","selectorsVerified"];
 async function load(){const v=await chrome.storage.local.get(ids);for(const id of ids){const el=document.getElementById(id);if(v[id]!==undefined){if(el.type==="checkbox")el.checked=v[id];else el.value=v[id];}}}
-document.getElementById("save").addEventListener("click",async()=>{const v={};for(const id of ids){const el=document.getElementById(id);v[id]=el.type==="checkbox"?el.checked:el.value.trim();}await chrome.storage.local.set(v);document.getElementById("status").textContent="Settings saved for this Chrome profile.";chrome.runtime.sendMessage({type:"CONFIG_UPDATED"});});
+document.getElementById("save").addEventListener("click", async () => {
+  const status = document.getElementById("status");
+  const v = {};
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    v[id] = el.type === "checkbox" ? el.checked : el.value.trim();
+  }
+  if (!/^http:\/\/(127\.0\.0\.1|localhost):8765\/?$/.test(v.baseUrl)) {
+    status.textContent = "Use the local orchestrator URL http://127.0.0.1:8765.";
+    return;
+  }
+  if (v.enabled && !v.bridgeToken) {
+    status.textContent = "Add the desktop bridge token before enabling task polling.";
+    return;
+  }
+  if (v.selectorsVerified && (!v.promptSelector || !v.generateSelector || !v.downloadSelector ||
+      !v.modelSelector || !v.resolutionSelector || !v.durationSelector)) {
+    status.textContent = "To verify automation, provide prompt, Generate, download, model, resolution and duration selectors.";
+    return;
+  }
+  await chrome.storage.local.set(v);
+  status.textContent = "Saving…";
+  chrome.runtime.sendMessage({ type: "CONFIG_UPDATED" }, response => {
+    if (chrome.runtime.lastError) {
+      status.textContent = "Saved locally. Worker refresh will retry the connection.";
+      return;
+    }
+    if (response?.error === "PROFILE_CHANGE_BLOCKED_ACTIVE_TASK") {
+      status.textContent = "Settings saved, but profile change is blocked while a task is active. Finish or recover that task first.";
+      return;
+    }
+    status.textContent = "Settings saved for this browser profile.";
+  });
+});
 load();
 const diagnosticStatus = document.getElementById("diagnosticStatus");
 const diagnosticReport = document.getElementById("diagnosticReport");
@@ -33,7 +66,7 @@ async function refreshFlowTabs() {
 document.getElementById("refreshTabs").addEventListener("click", async () => {
   try {
     const tabs = await refreshFlowTabs();
-    diagnosticStatus.textContent = tabs.length ? tabs.length + " Google Flow tab(s) found." : "Open a Google Flow project in this Chrome profile first.";
+    diagnosticStatus.textContent = tabs.length ? tabs.length + " Flow project tab(s) found in this browser profile." : "Open a Google Flow project in this browser profile first.";
   } catch (error) { diagnosticStatus.textContent = String(error?.message || error); }
 });
 document.getElementById("scan").addEventListener("click", async () => {
