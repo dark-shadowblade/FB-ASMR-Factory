@@ -132,3 +132,13 @@ These are initial default subjects and can be refined later; do not reduce the s
 - Prompt editing remains available before starting, but reviewing/approving the prompt pack is no longer a required step in the default production path.
 - The per-clip retry path remains available for failed or blocked tasks.
 - Updated the product specification so the final validated video is automatically published to the configured Facebook Page as a Reel when Meta publishing is connected; there is no mandatory video preview/approval gate. Meta API integration is still outstanding.
+
+## 2026-11-14 — Automatic Reel metadata generation
+
+- Added metadata generation after successful final-video validation.
+- When an OpenAI-compatible provider is configured, the backend requests structured title, caption, description and 5–8 hashtags using the job topic, selected style and five clip subjects.
+- Provider errors or invalid responses fall back to a built-in metadata composer; video assembly is not failed because social copy generation is unavailable.
+- Stored the social metadata with the job output and exposed it through the job-output and library APIs.
+- The desktop displays the generated title, caption and hashtags alongside the validated MP4.
+- Added assertions that assembled outputs and library records include social metadata.
+- Meta authentication, Page selection and actual Graph API Reel upload remain unimplemented.
