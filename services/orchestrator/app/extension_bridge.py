@@ -107,6 +107,37 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             """)
     init_tables()
 
+    with connect() as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS diagnostic_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, level TEXT NOT NULL,
+          message TEXT NOT NULL, profile_id TEXT, task_id TEXT, created_at TEXT NOT NULL
+        )""")
+
+    @router.post("/diagnostics/log")
+    def add_diagnostic_log(payload: dict[str, Any], x_asmr_bridge_token: str = Header(default="")):
+        require_token(x_asmr_bridge_token)
+        source = str(payload.get("source", "EXTENSION"))[:30]
+        level = str(payload.get("level", "info")).lower()
+        if level not in ("debug", "info", "warn", "error"):
+            raise HTTPException(status_code=422, detail="Invalid log level")
+        message = str(payload.get("message", ""))[:4000]
+        if not message:
+            raise HTTPException(status_code=422, detail="Log message is required")
+        profile_id = str(payload.get("profileId") or "")[:20] or None
+        task_id = str(payload.get("taskId") or "")[:100] or None
+        with connect() as conn:
+            conn.execute("INSERT INTO diagnostic_logs(source,level,message,profile_id,task_id,created_at) VALUES(?,?,?,?,?,?)",
+                         (source, level, message, profile_id, task_id, now()))
+            conn.execute("DELETE FROM diagnostic_logs WHERE id NOT IN (SELECT id FROM diagnostic_logs ORDER BY id DESC LIMIT 2000)")
+        return {"accepted": True}
+
+    @router.get("/diagnostics/logs")
+    def get_diagnostic_logs(limit: int = Query(default=300, ge=1, le=1000), origin: str = Header(default="")):
+        require_desktop_origin(origin)
+        with connect() as conn:
+            rows = conn.execute("SELECT id,source,level,message,profile_id,task_id,created_at FROM diagnostic_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return {"logs": [dict(row) for row in reversed(rows)]}
+
     @router.get("/health")
     def bridge_health(x_asmr_bridge_token: str = Header(default="")):
         require_token(x_asmr_bridge_token)
