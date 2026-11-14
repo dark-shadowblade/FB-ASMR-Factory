@@ -491,7 +491,6 @@ export default function App() {
       </>}
       {(activePage === "home" || activePage === "accounts") && <div className="content-grid">
         {activePage === "home" && <section className="panel create-panel">
-        <section className="panel create-panel">
           <div className="panel-head"><div><div className="eyebrow">NEW PRODUCTION</div><h2>Create a video job</h2></div><span className="step-tag">STEP 01 / 05</span></div>
           <label htmlFor="topic">WHAT SHOULD WE CREATE?</label>
           <input id="topic" value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createJob()} placeholder="e.g. tropical fruit cutting" />
