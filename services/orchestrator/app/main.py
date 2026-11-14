@@ -24,6 +24,7 @@ from app import media_pipeline
 from app import meta_publisher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("asmr_factory.orchestrator")
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).resolve()
