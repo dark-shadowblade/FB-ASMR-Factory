@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
 from app.extension_bridge import create_extension_router
+from app import media_pipeline
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).resolve()
@@ -102,6 +103,16 @@ def init_db() -> None:
             display_name TEXT NOT NULL,
             project_url TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS job_outputs (
+            job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+            output_path TEXT NOT NULL,
+            duration_seconds REAL NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            metadata_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
         );
         """)
         for index, profile_id in enumerate(PROFILE_IDS, start=1):
@@ -406,6 +417,89 @@ def flow_automation_status() -> dict[str, Any]:
         return {"profiles": profiles, "registered_count": sum(p["registered"] for p in profiles),
                 "tasks": [dict(row) for row in tasks]}
 
+
+
+@app.post("/api/v1/jobs/{job_id}/assemble")
+def assemble_job(job_id: str) -> dict[str, Any]:
+    """Validate the five browser downloads and create one verified vertical MP4."""
+    with connect() as conn:
+        job = conn.execute("SELECT topic,theme FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        tasks = conn.execute(
+            """SELECT t.clip_id,t.status,t.download_path,c.clip_order
+               FROM extension_tasks t JOIN clips c ON c.id=t.clip_id
+               WHERE t.job_id=? ORDER BY c.clip_order""", (job_id,)
+        ).fetchall()
+        if len(tasks) != 5:
+            raise HTTPException(status_code=409, detail="This job does not have exactly five Flow tasks")
+        incomplete = [row["clip_id"] for row in tasks
+                      if row["status"] != "downloaded" or not row["download_path"]]
+        if incomplete:
+            raise HTTPException(status_code=409, detail="Five completed downloads are required before assembly")
+        existing = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if existing:
+            return {"output": dict(existing), "already_assembled": True}
+
+    downloads_root = Path(os.environ.get("ASMR_FACTORY_DOWNLOADS_DIR", str(Path.home() / "Downloads"))).expanduser().resolve()
+    clip_paths: list[Path] = []
+    for row in tasks:
+        candidate = Path(row["download_path"]).expanduser()
+        if not candidate.is_absolute():
+            raise HTTPException(status_code=422, detail=f"Chrome did not report an absolute download path for {row['clip_id']}")
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(downloads_root)
+        except (OSError, ValueError):
+            raise HTTPException(status_code=403, detail=f"Download for {row['clip_id']} is missing or outside the configured Downloads folder")
+        if resolved.suffix.lower() != ".mp4" or not resolved.is_file():
+            raise HTTPException(status_code=422, detail=f"Download for {row['clip_id']} is not an MP4 file")
+        clip_paths.append(resolved)
+
+    output_dir = DATA_DIR / "outputs" / safe_topic_slug(job["topic"]) / job_id
+    output_path = output_dir / "final.mp4"
+    try:
+        result = media_pipeline.assemble_five_clips(clip_paths, output_path)
+    except media_pipeline.MediaPipelineError as exc:
+        with connect() as conn:
+            conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                         (job_id, "Media assembly failed: " + str(exc)[:400], utc_now()))
+        raise HTTPException(status_code=422, detail=str(exc))
+    metadata = {key: value for key, value in result.items() if key != "output"}
+    with connect() as conn:
+        conn.execute(
+            """INSERT INTO job_outputs(job_id,output_path,duration_seconds,width,height,size_bytes,metadata_json,created_at)
+               VALUES(?,?,?,?,?,?,?,?)""",
+            (job_id, result["output"], result["duration_seconds"], result["width"], result["height"],
+             result["size_bytes"], json.dumps(metadata), utc_now())
+        )
+        conn.execute("UPDATE clips SET status='ready' WHERE job_id=?", (job_id,))
+        conn.execute("UPDATE jobs SET status='media_ready',updated_at=? WHERE id=?", (utc_now(), job_id))
+        conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                     (job_id, "Five source clips validated and assembled into " + result["output"], utc_now()))
+        return {"output": result, "already_assembled": False}
+
+
+@app.get("/api/v1/jobs/{job_id}/output")
+def get_job_output(job_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="No assembled output exists for this job")
+        output = dict(row)
+        output["metadata"] = json.loads(output.pop("metadata_json"))
+        return {"output": output}
+
+
+@app.get("/api/v1/library")
+def list_video_library() -> dict[str, list[dict[str, Any]]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT o.job_id,o.output_path,o.duration_seconds,o.width,o.height,o.size_bytes,o.created_at,
+                      j.topic,j.theme,j.status
+               FROM job_outputs o JOIN jobs j ON j.id=o.job_id ORDER BY o.created_at DESC"""
+        ).fetchall()
+        return {"videos": [dict(row) for row in rows]}
 
 @app.on_event("shutdown")
 async def shutdown_flow_profiles() -> None:
