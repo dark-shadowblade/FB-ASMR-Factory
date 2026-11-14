@@ -684,7 +684,7 @@ export default function App() {
           <label>VIDEO MODEL<input value={flowSettings.model} onChange={e=>setFlowSettings(v=>({...v,model:e.target.value}))} placeholder="Exact model label shown in Flow"/></label>
           <label>RESOLUTION<select value={flowSettings.resolution} onChange={e=>setFlowSettings(v=>({...v,resolution:e.target.value}))}><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
           <label>CLIP DURATION<select value={flowSettings.duration_seconds} onChange={e=>setFlowSettings(v=>({...v,duration_seconds:Number(e.target.value)}))}><option value={4}>4 seconds</option><option value={6}>6 seconds</option><option value={8}>8 seconds</option></select></label>
-          <label>ASPECT RATIO<select value={flowSettings.aspect_ratio} onChange={e=>setFlowSettings(v=>({...v,aspect_ratio:e.target.value}))}><option value="9:16">9:16 vertical</option><option value="16:9">16:9 landscape</option><option value="1:1">1:1 square</option></select></label>
+          <label>ASPECT RATIO<select value={flowSettings.aspect_ratio} onChange={e=>setFlowSettings(v=>({...v,aspect_ratio:e.target.value}))}><option value="9:16">9:16 vertical · Facebook Reels</option></select></label>
           <button className="primary compact" onClick={saveFlowSettings} disabled={savingFlowSettings}>{savingFlowSettings ? "Saving…" : "Save Flow settings"}</button>
         </div>
         <div className="settings-summary-grid"><div><small>CLIPS PER VIDEO</small><b>5</b></div><div><small>WEEKLY ROTATION</small><b>Monday–Sunday</b></div></div>
