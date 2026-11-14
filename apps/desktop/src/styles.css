@@ -123,3 +123,16 @@
 .ai-setup-actions button{margin:0;min-width:72px;height:32px;padding:0 11px;font-size:9px}
 .ai-privacy-note{margin:0;color:#7f8b9e;font-size:8px;line-height:1.45}
 @media(max-width:700px){.ai-provider-collapsed{align-items:flex-start;flex-direction:column}.ai-setup-actions{justify-content:stretch}.ai-setup-actions button{flex:1}}
+
+/* Functional workspace navigation and page layouts */
+.nav-item{width:100%;border:0;text-align:left;font:inherit;cursor:pointer}
+.nav-item:hover{background:#1b2230;color:#f1f4fa}
+.nav-item.active{background:#202a3a;color:#fff;box-shadow:inset 2px 0 #8d79ed}
+.settings-page{margin-top:18px}
+.settings-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}
+.settings-summary-grid>div{padding:15px;border:1px solid #30394a;border-radius:10px;background:#141a25;display:grid;gap:7px}
+.settings-summary-grid small{font-size:9px;letter-spacing:.1em;color:#8995a8}
+.settings-summary-grid b{font-size:14px;color:#eef1f7}
+.settings-info{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:15px;border:1px solid #30394a;border-radius:10px;background:#111722;font-size:11px}
+.settings-info b{color:#cbd3df}.settings-info span{color:#929db0;line-height:1.5}
+@media(max-width:700px){.settings-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.settings-info{grid-template-columns:1fr;gap:5px}.settings-info span{margin-bottom:8px}}
