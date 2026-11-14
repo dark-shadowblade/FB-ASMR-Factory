@@ -1,6 +1,7 @@
 importScripts("../shared/protocol.js");
 const P = self.ASMRFlowProtocol;
 const POLL_ALARM = "asmr-flow-poll";
+const DOWNLOAD_START_TIMEOUT = "asmr-flow-download-start-timeout";
 let activeTask = null;
 let pollBusy = false;
 let activeTabId = null;
@@ -222,6 +223,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         lastEventAt: new Date().toISOString(), lastEventPayload: message.payload || {}
       }});
       await report(message.event, message.payload || {});
+      if (message.event === "DOWNLOAD_CLICKED") chrome.alarms.create(DOWNLOAD_START_TIMEOUT, { delayInMinutes: 1 });
       if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
         activeTask = null;
         activeTabId = null;
@@ -244,6 +246,7 @@ chrome.downloads.onCreated.addListener(async item => {
   // attribute an unrelated browser download to the active ASMR clip.
   await restoreTask();
   if (!activeTask || !Number.isInteger(activeTabId) || item.tabId !== activeTabId) return;
+  chrome.alarms.clear(DOWNLOAD_START_TIMEOUT);
   activeDownloadIds.add(item.id);
   await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
   await report("DOWNLOAD_STARTED", { downloadId: item.id, filename: item.filename || "", mime: item.mime || "" });
@@ -324,7 +327,17 @@ async function pollCommands() {
     }
   } catch (error) { console.warn("[ASMR Flow] command poll failed", error.message); }
 }
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === POLL_ALARM) pollCommands(); });
+chrome.alarms.onAlarm.addListener(async alarm => {
+  if (alarm.name === POLL_ALARM) pollCommands();
+  if (alarm.name === DOWNLOAD_START_TIMEOUT) {
+    await restoreTask();
+    if (activeTask && activeDownloadIds.size === 0) {
+      await report("DOWNLOAD_FAILED", { error: "No browser download started within 60 seconds after the Flow download button was clicked." });
+      activeTask = null; activeTabId = null;
+      await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+    }
+  }
+});
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   await restoreTask();
