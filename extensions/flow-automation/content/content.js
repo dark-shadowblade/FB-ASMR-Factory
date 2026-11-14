@@ -6,6 +6,7 @@
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let baselineVideoSources = new Set();
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -64,10 +65,11 @@
       el.value, el.innerText, el.textContent].filter(Boolean).join(" ").trim();
   }
   function selectedOptionText(expected) {
-    const selected = [...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"],option:checked')].filter(visible);
+    const selected = [...document.querySelectorAll('[aria-selected="true"],[aria-pressed="true"],[aria-checked="true"],[data-state="on"]')].filter(visible).map(labelOf);
+    const nativeSelected = [...document.querySelectorAll("select")].filter(visible)
+      .map(el => el.selectedOptions?.[0]?.textContent?.trim() || el.value || "");
     const needle = String(expected || "").toLowerCase();
-    const match = selected.find(el => labelOf(el).toLowerCase().includes(needle));
-    return match ? labelOf(match) : "";
+    return [...selected, ...nativeSelected].find(value => String(value).toLowerCase().includes(needle)) || "";
   }
   function verifySettings(settings, requested) {
     const actual = {};
@@ -131,7 +133,8 @@
   }
   function videoReady() {
     const playable = [...document.querySelectorAll("video")].some(v =>
-      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
+      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 &&
+      !!v.currentSrc && !baselineVideoSources.has(v.currentSrc)
     );
     return playable && !!findButton(/download/);
   }
@@ -177,6 +180,7 @@
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
     }
+    baselineVideoSources = new Set([...document.querySelectorAll("video")].map(v => v.currentSrc).filter(Boolean));
     const state = detectState();
     if (state === "SESSION_CHECK") {
       send("SESSION_REQUIRED", { url: location.href });
