@@ -46,6 +46,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Associate browser downloads with the active Flow tab and report completed video path/size.
 - [x] FFprobe validates all five downloaded MP4 files during assembly; source clips are marked ready only after the final MP4 also passes validation.
 - [x] FFmpeg/FFprobe pipeline validates five compatible vertical 9:16 H.264/AAC MP4 clips, concatenates them, and probes the final output.
+- [x] Generate Facebook Reel title, caption, description and hashtags after assembly using the configured AI provider with a built-in fallback; expose metadata through job/library APIs and desktop details.
 - [x] Initial extension task queue, five-profile dispatch, unique Chrome instance binding, idempotent task/event identity validation, persistent event outbox and pause/resume/cancel command queue.
 - [x] Guarded retry for failed/blocked individual clip tasks, with live-worker checks and optional profile reassignment at the API layer.
 - [x] Desktop pairing token display/copy and five-worker readiness check before dispatch.
@@ -154,7 +155,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Normalize dimensions/aspect ratio/frame rate/audio.
 - [ ] Merge five clips in the approved order.
 - [ ] Validate the final MP4.
-- [ ] Generate thumbnail and metadata.
+- [ ] Generate thumbnail.
 - [ ] Preserve source files and diagnostics.
 
 **Exit condition:** Five valid source clips produce one verified vertical MP4 of approximately 40 seconds.
