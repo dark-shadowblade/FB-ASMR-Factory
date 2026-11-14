@@ -4,7 +4,8 @@ type Clip = { id: string; subject: string; prompt: string; status: string; order
 type Job = { id: string; topic: string; theme: string; status: string; created_at: string; clips: Clip[]; final_video?: { output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string; social_metadata?: { title: string; caption: string; description: string; hashtags: string[]; source: string } } | null };
 type FlowProfile = { profile_id: string; display_name: string; project_url: string; configured: boolean; browser_open: boolean; extension_connected?: boolean };
 type LibraryVideo = { job_id: string; output_path: string; duration_seconds: number; width: number; height: number; size_bytes: number; created_at: string; topic: string; theme: string; status: string };
-type FacebookStatus = { configured: boolean; connected?: boolean; page_name?: string; message?: string };
+type FacebookStatus = { configured: boolean; connected?: boolean; page_name?: string; message?: string; account_id?: string; label?: string };
+type FacebookAccount = { account_id: string; label: string; page_id: string; page_name: string; is_active: boolean; created_at?: string };
 type FacebookPublication = { status: string; video_id?: string | null; post_id?: string | null; error?: string | null; created_at?: string };
 type FlowAutomationStatus = { profiles: { profile_id: string; registered: boolean; last_seen: string | null; extension_version: string | null }[]; registered_count: number; tasks: { task_id: string; job_id: string; clip_id: string; profile_id: string; status: string; updated_at: string; last_error: string | null; download_path: string | null }[] };
 
@@ -49,6 +50,12 @@ export default function App() {
   const [aiConfigured, setAiConfigured] = useState(false);
   const [styleBible, setStyleBible] = useState("");
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus>({ configured: false });
+  const [facebookAccounts, setFacebookAccounts] = useState<FacebookAccount[]>([]);
+  const [showAddFacebook, setShowAddFacebook] = useState(false);
+  const [facebookAccountLabel, setFacebookAccountLabel] = useState("");
+  const [facebookPageId, setFacebookPageId] = useState("");
+  const [facebookPageToken, setFacebookPageToken] = useState("");
+  const [savingFacebookAccount, setSavingFacebookAccount] = useState(false);
   const [facebookPublication, setFacebookPublication] = useState<FacebookPublication | null>(null);
   const [seoTitle, setSeoTitle] = useState("");
   const [seoCaption, setSeoCaption] = useState("");
@@ -90,7 +97,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refresh(); fetch(API + "/facebook/status").then(r=>r.json()).then(setFacebookStatus).catch(()=>{}); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { refresh(); loadFacebookAccounts(); fetch(API + "/style-bible").then(r=>r.json()).then(d=>setStyleBible(d.content || "")).catch(()=>{}); fetch(API + "/settings/ai").then(r=>r.json()).then(d=>setAiConfigured(Boolean(d.configured))).catch(()=>{}); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, []);
 
   async function saveFlowProfile(profile: FlowProfile) {
     try {
@@ -287,6 +294,54 @@ export default function App() {
     finally { setAssembling(false); }
   }
 
+  async function loadFacebookAccounts() {
+    try {
+      const [accountsResponse, statusResponse] = await Promise.all([fetch(API + "/facebook/accounts"), fetch(API + "/facebook/status")]);
+      if (accountsResponse.ok) setFacebookAccounts((await accountsResponse.json()).accounts || []);
+      if (statusResponse.ok) setFacebookStatus(await statusResponse.json());
+    } catch {}
+  }
+
+  async function addFacebookAccount() {
+    setSavingFacebookAccount(true);
+    try {
+      const response = await fetch(API + "/facebook/accounts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: facebookAccountLabel, page_id: facebookPageId, page_access_token: facebookPageToken })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not connect Facebook Page");
+      setFacebookPageToken("");
+      setFacebookPageId("");
+      setFacebookAccountLabel("");
+      setShowAddFacebook(false);
+      setNotice(data.account.page_name + " connected and saved securely on this computer.");
+      await loadFacebookAccounts();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not connect Facebook Page."); }
+    finally { setSavingFacebookAccount(false); }
+  }
+
+  async function selectFacebookAccount(account: FacebookAccount) {
+    try {
+      const response = await fetch(API + "/facebook/accounts/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account_id: account.account_id }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not select Page");
+      setNotice("Publishing Page changed to " + account.page_name + ".");
+      await loadFacebookAccounts();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not select Page."); }
+  }
+
+  async function removeFacebookAccount(account: FacebookAccount) {
+    if (!window.confirm("Remove " + account.page_name + " from this computer?")) return;
+    try {
+      const response = await fetch(API + "/facebook/accounts/" + account.account_id, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not remove Page");
+      setNotice(account.page_name + " removed from saved accounts.");
+      await loadFacebookAccounts();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Could not remove Page."); }
+  }
+
   async function saveFacebookMetadata(job: Job) {
     try {
       const response = await fetch(API + "/jobs/" + job.id + "/facebook-metadata", {
@@ -457,7 +512,23 @@ export default function App() {
           {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
           {active.final_video && <div className="facebook-publish-panel">
             <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS · SEO</div><h3>Publish finished video</h3></div><span className="count-pill">{facebookStatus.connected ? "PAGE CONNECTED" : "NOT CONNECTED"}</span></div>
-            <p className="muted">{facebookStatus.connected ? "Connected Page: " + (facebookStatus.page_name || "Facebook Page") : (facebookStatus.message || "Configure the Meta Page ID and Page access token in the backend environment.")}</p>
+            <div className="facebook-account-manager">
+              <div className="facebook-account-heading"><div><b>Connected Pages</b><small>Manage the Pages that can publish Reels from this computer.</small></div><button className="secondary compact" onClick={()=>setShowAddFacebook(v=>!v)}>{showAddFacebook ? "Close" : "＋ Add account"}</button></div>
+              {facebookAccounts.length === 0 && <div className="facebook-empty-account">No Facebook Pages added yet. Add a Page ID and Page access token to connect your first account.</div>}
+              {facebookAccounts.map(account=><div className={account.is_active ? "facebook-account active" : "facebook-account"} key={account.account_id}>
+                <div className="facebook-account-avatar">f</div><div className="facebook-account-details"><b>{account.label}</b><span>{account.page_name} · ID {account.page_id}</span><small>{account.is_active ? "Selected for publishing" : "Connected"}</small></div>
+                {!account.is_active && <button className="secondary compact" onClick={()=>selectFacebookAccount(account)}>Use Page</button>}
+                <button className="account-remove" title="Remove account" onClick={()=>removeFacebookAccount(account)}>×</button>
+              </div>)}
+              {showAddFacebook && <div className="facebook-add-form">
+                <div><b>Add a Facebook Page</b><small>Use a Page access token with permission to publish content. Tokens are saved in your computer's secure credential vault.</small></div>
+                <label>ACCOUNT LABEL</label><input value={facebookAccountLabel} onChange={e=>setFacebookAccountLabel(e.target.value)} placeholder="e.g. Main ASMR Page"/>
+                <label>FACEBOOK PAGE ID</label><input value={facebookPageId} onChange={e=>setFacebookPageId(e.target.value)} placeholder="Enter Page ID"/>
+                <label>PAGE ACCESS TOKEN</label><input type="password" autoComplete="off" value={facebookPageToken} onChange={e=>setFacebookPageToken(e.target.value)} placeholder="Paste Page access token"/>
+                <button className="primary" disabled={savingFacebookAccount || !facebookAccountLabel.trim() || !facebookPageId.trim() || facebookPageToken.trim().length<20} onClick={addFacebookAccount}>{savingFacebookAccount ? "Verifying with Meta…" : "Connect account"}</button>
+              </div>}
+            </div>
+            <p className="muted">{facebookStatus.connected ? "Ready to publish to " + (facebookStatus.page_name || "the selected Page") + "." : facebookStatus.message || "Add a Facebook Page account to enable publishing."}</p>
             <label>REEL TITLE</label><input value={seoTitle} maxLength={100} onChange={e=>setSeoTitle(e.target.value)}/>
             <label>CAPTION</label><textarea value={seoCaption} onChange={e=>setSeoCaption(e.target.value)}/>
             <label>DESCRIPTION</label><textarea value={seoDescription} onChange={e=>setSeoDescription(e.target.value)}/>
