@@ -73,7 +73,13 @@ THEME_DIRECTIONS = {
 
 class CreateJobRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=120)
-    theme: str = "fruits"
+    theme: str | None = None
+
+WEEKLY_THEME_ROTATION = ("fruits", "soaps", "clay", "kinetic_sand", "slime", "satisfying_objects", "mixed_asmr")
+
+
+def scheduled_theme(now_value: datetime | None = None) -> str:
+    return WEEKLY_THEME_ROTATION[(now_value or datetime.now()).weekday()]
 
 
 def utc_now() -> str:
@@ -265,7 +271,7 @@ def list_jobs() -> dict[str, list[dict[str, Any]]]:
 @app.post("/api/v1/jobs")
 def create_job(request: CreateJobRequest) -> dict[str, Any]:
     topic = request.topic.strip()
-    theme = request.theme.strip().lower()
+    theme = (request.theme or scheduled_theme()).strip().lower()
     if not topic:
         raise HTTPException(status_code=422, detail="Topic cannot be empty")
     if theme not in THEME_SUBJECTS:
@@ -294,7 +300,7 @@ def approve_job(job_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail="Only draft jobs can be approved")
         clip_count = conn.execute("SELECT COUNT(*) AS n FROM clips WHERE job_id = ?", (job_id,)).fetchone()["n"]
         if clip_count != 5:
-            raise HTTPException(status_code=409, detail="A Fruits job must contain exactly five clip tasks")
+            raise HTTPException(status_code=409, detail="A job must contain exactly five clip tasks")
         conn.execute("UPDATE jobs SET status = 'approved', updated_at = ? WHERE id = ?", (now, job_id))
         conn.execute(
             "INSERT INTO job_events (job_id, event, created_at) VALUES (?, ?, ?)",
@@ -336,6 +342,51 @@ def ai_provider_config() -> dict[str, str]:
     except Exception:
         api_key = os.environ.get("ASMR_AI_API_KEY", "")
     return {"provider": provider, "base_url": base_url.rstrip("/"), "api_key": api_key, "model": model}
+
+class FlowSettingsRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=80)
+    resolution: str = Field(pattern="^(720p|1080p)$")
+    duration_seconds: int = Field(ge=4, le=8)
+    aspect_ratio: str = Field(pattern="^(9:16|16:9|1:1)$")
+
+
+@app.get("/api/v1/settings/flow")
+def get_flow_settings() -> dict[str, Any]:
+    defaults = {"model": "Veo 3.1 Lite", "resolution": "720p", "duration_seconds": 8, "aspect_ratio": "9:16"}
+    with connect() as conn:
+        rows = {row["key"]: row["value"] for row in conn.execute(
+            "SELECT key,value FROM settings WHERE key LIKE 'flow_%'"
+        ).fetchall()}
+    return {
+        "model": rows.get("flow_model", defaults["model"]),
+        "resolution": rows.get("flow_resolution", defaults["resolution"]),
+        "duration_seconds": int(rows.get("flow_duration_seconds", defaults["duration_seconds"])),
+        "aspect_ratio": rows.get("flow_aspect_ratio", defaults["aspect_ratio"]),
+    }
+
+
+@app.put("/api/v1/settings/flow")
+def put_flow_settings(request: FlowSettingsRequest) -> dict[str, Any]:
+    values = {
+        "flow_model": request.model.strip(),
+        "flow_resolution": request.resolution,
+        "flow_duration_seconds": str(request.duration_seconds),
+        "flow_aspect_ratio": request.aspect_ratio,
+    }
+    with connect() as conn:
+        for key, value in values.items():
+            conn.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (key, value, utc_now()))
+    return get_flow_settings()
+
+
+@app.get("/api/v1/schedule")
+def get_weekly_schedule() -> dict[str, Any]:
+    return {"today": scheduled_theme(), "rotation": [
+        {"weekday": name, "theme": theme} for name, theme in zip(
+            ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"), WEEKLY_THEME_ROTATION
+        )
+    ]}
+
 
 class AISettingsRequest(BaseModel):
     provider: str = Field(pattern="^(gemini|openai-compatible)$")
