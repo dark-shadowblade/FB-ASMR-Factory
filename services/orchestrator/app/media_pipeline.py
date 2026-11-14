@@ -95,7 +95,7 @@ def assemble_five_clips(
         return str(path.resolve()).replace("'", "'\\''")
 
     manifest.write_text(
-        "".join(f"file '{quote_concat_path(clip['path'])}'\\n" for clip in clips),
+        "".join(f"file '{quote_concat_path(clip['path'])}'\n" for clip in clips),
         encoding="utf-8",
     )
     try:
