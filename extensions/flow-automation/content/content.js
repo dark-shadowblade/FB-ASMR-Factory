@@ -209,21 +209,17 @@
       send("FLOW_UI_UNVERIFIED", { reason: "Flow project did not expose one verified prompt field before the page readiness timeout", state });
       return;
     }
-    // Safe-by-default: never click an unverified Flow control. The extension reports
-    // the detected controls; selectors must be verified against the live account UI.
-    if (settings.selectorsVerified !== true || !settings.promptSelector || !settings.generateSelector) {
-      send("FLOW_UI_UNVERIFIED", {
-        reason: "Live Flow selectors have not been verified for this account.",
-        candidates: { prompt: field.tagName, promptLabel: labelOf(field).slice(0, 100) },
-        detectedState: state
-      });
-      return;
-    }
-    let configuredField = null;
+    // Prefer manually verified selectors; otherwise use unique semantic controls.
+    // Ambiguous matches fail closed rather than clicking an arbitrary control.
+    let configuredField = field;
     let generate = null;
     try {
-      configuredField = document.querySelector(settings.promptSelector);
-      generate = document.querySelector(settings.generateSelector);
+      if (settings.selectorsVerified === true && settings.promptSelector) {
+        configuredField = document.querySelector(settings.promptSelector);
+      }
+      generate = settings.selectorsVerified === true && settings.generateSelector
+        ? document.querySelector(settings.generateSelector)
+        : findButton(/generate|create video|make video|start generation|submit/i);
     } catch (_) {
       send("FLOW_UI_UNVERIFIED", { reason: "A configured CSS selector is invalid." });
       return;
