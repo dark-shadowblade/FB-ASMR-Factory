@@ -148,3 +148,29 @@
 .job-progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#7b72e8,#62c9a5);transition:width .25s ease}
 .job-progress-error{display:block!important;color:#f0a0a0!important;margin-top:5px}
 .job-row .job-info{min-width:0;flex:1}
+
+
+/* Live Debug Window */
+.debug-page{margin-top:24px}
+.debug-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:24px 0 18px}
+.debug-heading h1{font:600 27px 'Space Grotesk';margin:7px 0}
+.debug-heading p{max-width:680px;color:#929db0;font-size:11px;line-height:1.6;margin:0}
+.debug-actions{display:flex;gap:8px;flex-wrap:wrap}
+.debug-actions button{margin:0}
+.debug-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.debug-summary>div{padding:14px;border:1px solid #30394a;border-radius:10px;background:#141a25;display:grid;gap:8px}
+.debug-summary small{font-size:8px;letter-spacing:.1em;color:#8995a8}
+.debug-summary b{font-size:14px;color:#eef1f7}
+.debug-ok{color:#70d5a2!important}.debug-bad{color:#f19a9a!important}
+.debug-panel{padding:0;overflow:hidden}
+.debug-panel>.panel-head{padding:17px 18px 12px;margin:0;border-bottom:1px solid #293142}
+.debug-filter{width:140px;height:34px;font-size:10px}
+.debug-feed{max-height:560px;overflow:auto}
+.debug-entry{display:grid;grid-template-columns:85px 58px 70px minmax(0,1fr);gap:10px;align-items:start;padding:11px 16px;border-bottom:1px solid #222a37;font:10px/1.5 'DM Sans',sans-serif}
+.debug-entry time{color:#778498;font-variant-numeric:tabular-nums}
+.debug-entry>b{color:#dce3ed;font-size:9px}
+.debug-entry p{margin:0;color:#aeb8c8;overflow-wrap:anywhere}
+.debug-level{font-size:8px;font-weight:700;letter-spacing:.06em}
+.debug-level.error{color:#ff8585}.debug-level.warn{color:#e9b16f}.debug-level.info{color:#70cda2}
+.debug-foot{display:block;padding:12px 16px;color:#778498;font-size:9px;line-height:1.5}
+@media(max-width:800px){.debug-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.debug-heading{flex-direction:column}.debug-entry{grid-template-columns:65px 48px 55px minmax(0,1fr);gap:6px;font-size:9px}}
