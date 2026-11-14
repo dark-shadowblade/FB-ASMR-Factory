@@ -32,6 +32,7 @@ class EventRequest(BaseModel):
     jobId: str
     clipId: str
     profileId: str
+    instanceId: str
     timestamp: str
     payload: dict[str, Any] = {}
 
@@ -186,11 +187,14 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             return {"dispatched": len(created), "tasks": created}
 
     @router.get("/next-task")
-    def next_task(profile_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+    def next_task(profile_id: str = Query(...), instance_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
         require_token(x_asmr_bridge_token)
         if profile_id not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unknown profile ID")
         with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            if registered is None or registered["instance_id"] != instance_id:
+                raise HTTPException(status_code=409, detail="This extension instance is not paired to the selected browser profile")
             row = conn.execute("""SELECT * FROM extension_tasks WHERE profile_id=?
               AND status IN ('queued','leased') ORDER BY created_at LIMIT 1""", (profile_id,)).fetchone()
             if row is None:
@@ -218,7 +222,10 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
           "TASK_FAILED": "failed", "TASK_PAUSED": "paused", "TASK_RESUMED": "generating", "TASK_CANCELLED": "cancelled"
         }
         with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (request.profileId,)).fetchone()
             task = conn.execute("SELECT * FROM extension_tasks WHERE task_id=?", (request.taskId,)).fetchone()
+            if registered is None or registered["instance_id"] != request.instanceId:
+                raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
             if task is None or task["profile_id"] != request.profileId or task["job_id"] != request.jobId or task["clip_id"] != request.clipId:
                 raise HTTPException(status_code=409, detail="Task/profile/job/clip identity mismatch")
             try:
@@ -252,11 +259,14 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             return {"queued": True, "taskId": task_id, "profileId": task["profile_id"], "command": command}
 
     @router.get("/commands")
-    def get_commands(profile_id: str = Query(...), task_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
+    def get_commands(profile_id: str = Query(...), task_id: str = Query(...), instance_id: str = Query(...), x_asmr_bridge_token: str = Header(default="")):
         require_token(x_asmr_bridge_token)
         if profile_id not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unknown profile ID")
         with connect() as conn:
+            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            if registered is None or registered["instance_id"] != instance_id:
+                raise HTTPException(status_code=409, detail="This extension instance is not paired to the selected browser profile")
             rows = conn.execute("SELECT id,task_id,command FROM extension_commands WHERE profile_id=? AND task_id=? AND status='pending' ORDER BY id LIMIT 10", (profile_id, task_id)).fetchall()
             ids = [r["id"] for r in rows]
             if ids:
