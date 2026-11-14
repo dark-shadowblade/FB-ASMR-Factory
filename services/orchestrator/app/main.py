@@ -28,6 +28,7 @@ app.include_router(create_extension_router(DB_PATH, DATA_DIR))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "file://", "null"],
+    allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-ASMR-Bridge-Token"],
