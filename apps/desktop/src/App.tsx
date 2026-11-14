@@ -74,6 +74,7 @@ export default function App() {
   const [seoHashtags, setSeoHashtags] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
+  const [autoPublishAttempted, setAutoPublishAttempted] = useState<Set<string>>(new Set());
   const [debugUpdatedAt, setDebugUpdatedAt] = useState(new Date().toISOString());
   const [debugFilter, setDebugFilter] = useState("all");
   const [diagnosticLogs, setDiagnosticLogs] = useState<DiagnosticLog[]>([]);
@@ -472,6 +473,12 @@ export default function App() {
   }, [active?.id, active?.final_video?.created_at, flowAutomation.tasks, assembling, autoAssemblyAttempted]);
 
   useEffect(() => {
+    if (!active || !active.final_video || !facebookStatus.connected || facebookPublication || publishing || autoPublishAttempted.has(active.id)) return;
+    setAutoPublishAttempted(current => new Set(current).add(active.id));
+    publishFacebook(active);
+  }, [active?.id, active?.final_video?.created_at, facebookStatus.connected, facebookPublication?.status, publishing, autoPublishAttempted]);
+
+  useEffect(() => {
     if (!active) { setFacebookPublication(null); return; }
     let stopped = false;
     const loadPublication = async () => {
@@ -623,54 +630,24 @@ export default function App() {
       </section>}
 
       {activePage === "prompts" && active && <section className="panel detail-panel">
-        <div className="panel-head"><div><div className="eyebrow">AI DIRECTOR · PROMPT STUDIO</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
-        <div className="director-toolbar"><div><b>Five-clip prompt pack</b><small>{aiConfigured ? "AI provider configured" : "Built-in prompt composer · no API key required"}</small></div><button className="primary compact" disabled={generating || active.status==="prompts_approved"} onClick={()=>generatePrompts(active)}>{generating ? "Creating prompts…" : active.clips.some(c=>c.prompt) ? "Regenerate five prompts" : "✦ Generate five prompts"}</button></div>
-        <div className="prompt-grid">{active.clips.map(clip=><PromptEditor key={clip.id} clip={clip} locked={active.status==="prompts_approved"} onSave={(value)=>savePrompt(active,clip,value)}/>)}</div>
-        {active.clips.every(c=>c.prompt.length>=40) && active.status!=="prompts_approved" && <button className="secondary" onClick={()=>approvePrompts(active)}>Approve all five prompts</button>}
-        {["draft","prompts_ready"].includes(active.status) && <div className="dispatch-toolbar">
-          <div><b>Automatic five-account production</b><small>Generate missing prompts, approve the pack and dispatch all five clips without a manual preview step.</small></div>
-          <button className="primary compact" disabled={dispatching || flowProfiles.filter(p=>p.configured).length!==5} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Opening browsers…" : "Generate Video · Open 01–05"}</button>
+        <div className="panel-head"><div><div className="eyebrow">AUTOMATED PROMPT PACK</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
+        <p className="muted">The five prompts are generated, internally approved and dispatched automatically when you click Generate Video on Home. There is no separate prompt-generation or approval step.</p>
+        <div className="prompt-grid">{active.clips.map(clip=><div className="prompt-card" key={clip.id}>
+          <div className="clip-top"><span>CLIP 0{clip.order}</span><span>{clip.status.replaceAll("_"," ")}</span></div>
+          <b>{clip.subject}</b><p className="prompt-readonly">{clip.prompt || "Generated automatically when production starts."}</p>
+        </div>)}</div>
+        <div className="dispatch-toolbar">
+          <div><b>Production progress</b><small>{flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 Flow tasks · {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length}/5 downloads · {active.final_video ? "video assembled" : "assembly runs automatically after all downloads"}</small></div>
+          <span className="count-pill">{active.final_video ? "ASSEMBLED" : "AUTOMATIC"}</span>
+        </div>
+        {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small></div>)}</div>}
+        {active.final_video && <div className="facebook-publish-panel">
+          <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS</div><h3>Automatic publishing</h3></div><span className="count-pill">{facebookPublication?.status?.toUpperCase() || (facebookStatus.connected ? "QUEUED" : "PAGE SETUP REQUIRED")}</span></div>
+          <p className="muted">{facebookPublication?.status === "published" ? "Reel successfully published." : facebookPublication?.status === "processing" ? "Meta accepted the Reel. Publication status is being checked automatically." : facebookPublication?.status === "uncertain" ? "Meta upload needs manual verification; duplicate protection is active." : facebookStatus.connected ? "Final video assembled. Upload to the selected Page starts automatically." : "Connect and select a Facebook Page once in Accounts. Publishing will then run automatically for future videos."}</p>
+          {facebookPublication?.error && <small>{facebookPublication.error}</small>}
+          {facebookPublication?.video_id && <small>Meta video ID: {facebookPublication.video_id}</small>}
+          <small>Title, caption, description and hashtags are generated automatically. Duplicate upload protection remains enabled.</small>
         </div>}
-        {["prompts_approved","running","media_ready"].includes(active.status) && <>
-          <div className="approved-note">✓ Prompt pack approved.</div>
-          <div className="dispatch-toolbar">
-            <div><b>Google Flow task queue</b><small>Chrome profiles 01–05 open automatically · {flowProfiles.filter(p=>p.extension_connected).length}/5 extension workers connected · {flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 tasks dispatched</small></div>
-            <button className="primary compact" disabled={dispatching || flowAutomation.registered_count!==5 || flowAutomation.tasks.some(t=>t.job_id===active.id)} onClick={()=>startAutomaticProduction(active)}>{dispatching ? "Starting production…" : "Start automatic production"}</button>
-          </div>
-          {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small>{["failed","blocked_ui","blocked_settings","needs_login","cancelled"].includes(task.status) && <button className="secondary compact" onClick={()=>retryFlowTask(task)}>Retry</button>}</div>)}</div>}
-          {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length===5 && !active.final_video && <button className="primary compact" disabled={assembling} onClick={()=>assembleJob(active)}>{assembling ? "Validating and merging…" : "Merge five downloaded clips"}</button>}
-          {active.final_video && <div className="facebook-publish-panel">
-            <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS · SEO</div><h3>Publish finished video</h3></div><span className="count-pill">{facebookStatus.connected ? "PAGE CONNECTED" : "NOT CONNECTED"}</span></div>
-            <div className="facebook-account-manager">
-              <div className="facebook-account-heading"><div><b>Connected Pages</b><small>Manage the Pages that can publish Reels from this computer.</small></div><button className="secondary compact" onClick={()=>setShowAddFacebook(v=>!v)}>{showAddFacebook ? "Close" : "＋ Add account"}</button></div>
-              {facebookAccounts.length === 0 && <div className="facebook-empty-account">No Facebook Pages added yet. Add a Page ID and Page access token to connect your first account.</div>}
-              {facebookAccounts.map(account=><div className={account.is_active ? "facebook-account active" : "facebook-account"} key={account.account_id}>
-                <div className="facebook-account-avatar">f</div><div className="facebook-account-details"><b>{account.label}</b><span>{account.page_name} · ID {account.page_id}</span><small>{account.is_active ? "Selected for publishing" : "Connected"}</small></div>
-                {!account.is_active && <button className="secondary compact" onClick={()=>selectFacebookAccount(account)}>Use Page</button>}
-                <button className="account-remove" title="Remove account" onClick={()=>removeFacebookAccount(account)}>×</button>
-              </div>)}
-              {showAddFacebook && <div className="facebook-add-form">
-                <div><b>Add a Facebook Page</b><small>Use a Page access token with permission to publish content. Tokens are saved in your computer's secure credential vault.</small></div>
-                <label>ACCOUNT LABEL</label><input value={facebookAccountLabel} onChange={e=>setFacebookAccountLabel(e.target.value)} placeholder="e.g. Main ASMR Page"/>
-                <label>FACEBOOK PAGE ID</label><input value={facebookPageId} onChange={e=>setFacebookPageId(e.target.value)} placeholder="Enter Page ID"/>
-                <label>PAGE ACCESS TOKEN</label><input type="password" autoComplete="off" value={facebookPageToken} onChange={e=>setFacebookPageToken(e.target.value)} placeholder="Paste Page access token"/>
-                <button className="primary" disabled={savingFacebookAccount || !facebookAccountLabel.trim() || !facebookPageId.trim() || facebookPageToken.trim().length<20} onClick={addFacebookAccount}>{savingFacebookAccount ? "Verifying with Meta…" : "Connect account"}</button>
-              </div>}
-            </div>
-            <p className="muted">{facebookStatus.connected ? "Ready to publish to " + (facebookStatus.page_name || "the selected Page") + "." : facebookStatus.message || "Add a Facebook Page account to enable publishing."}</p>
-            <label>REEL TITLE</label><input value={seoTitle} maxLength={100} onChange={e=>setSeoTitle(e.target.value)}/>
-            <label>CAPTION</label><textarea value={seoCaption} onChange={e=>setSeoCaption(e.target.value)}/>
-            <label>DESCRIPTION</label><textarea value={seoDescription} onChange={e=>setSeoDescription(e.target.value)}/>
-            <label>HASHTAGS</label><input value={seoHashtags} onChange={e=>setSeoHashtags(e.target.value)} placeholder="#ASMR #OddlySatisfying …"/>
-            <div className="flow-account-actions">
-              <button className="secondary compact" onClick={()=>saveFacebookMetadata(active)}>Save SEO metadata</button>
-              <button className="primary compact" disabled={!facebookStatus.connected || publishing || Boolean(facebookPublication)} onClick={()=>publishFacebook(active)}>{publishing ? "Uploading Reel…" : facebookPublication ? "Upload " + facebookPublication.status : "Publish to Facebook Page"}</button>
-            </div>
-            {facebookPublication && <small>Publication status: {facebookPublication.status}{facebookPublication.video_id ? " · Meta video " + facebookPublication.video_id : ""}{facebookPublication.error ? " · " + facebookPublication.error : ""}</small>}
-            <small>Duplicate protection is enabled: an accepted or uncertain upload cannot be submitted again automatically.</small>
-          </div>}
-
-        </>}
       </section>}
       {activePage === "prompts" && <section className="panel style-panel"><div className="panel-head"><div><div className="eyebrow">PERSISTENT CREATIVE RULES</div><h2>ASMR Style Bible</h2></div><span className="count-pill">SHARED ACROSS JOBS</span></div><p className="muted">Shared camera, lighting, texture and sound rules included in every prompt.</p><textarea className="style-editor" value={styleBible} onChange={e=>setStyleBible(e.target.value)}/><button className="secondary" onClick={saveStyleBible}>Save Style Bible</button></section>}
 
