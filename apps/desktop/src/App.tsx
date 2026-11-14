@@ -33,7 +33,7 @@ function PromptEditor({ clip, locked, onSave }: { clip: Clip; locked: boolean; o
 }
 
 export default function App() {
-  const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings">("home");
+  const [activePage, setActivePage] = useState<"home" | "prompts" | "accounts" | "library" | "settings" | "debug">("home");
   const [topic, setTopic] = useState("");
   const [theme, setTheme] = useState("fruits");
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -73,6 +73,8 @@ export default function App() {
   const [seoHashtags, setSeoHashtags] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [autoAssemblyAttempted, setAutoAssemblyAttempted] = useState<Set<string>>(new Set());
+  const [debugUpdatedAt, setDebugUpdatedAt] = useState(new Date().toISOString());
+  const [debugFilter, setDebugFilter] = useState("all");
 
   async function refresh() {
     try {
@@ -98,6 +100,7 @@ export default function App() {
       }
       const automationResponse = await fetch(`${API}/flow/automation/status`);
       if (automationResponse.ok) setFlowAutomation(await automationResponse.json());
+      setDebugUpdatedAt(new Date().toISOString());
       if (selected) {
         const updated = (data.jobs ?? []).find((j: Job) => j.id === selected.id);
         if (updated) setSelected(updated);
@@ -433,7 +436,13 @@ export default function App() {
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not approve job."); }
   }
 
-  const active = selected ?? jobs[0] ?? null;
+  const debugEntries = [
+    {key:"service",time:new Date(debugUpdatedAt).toLocaleTimeString(),level:health==="offline"?"error":"info",source:"BACKEND",message:health==="online"?"Local API health check passed":"Local API is unreachable"},
+    ...flowAutomation.profiles.map(p=>({key:"worker-"+p.profile_id,time:p.last_seen?new Date(p.last_seen).toLocaleTimeString():"—",level:p.registered?"info":"warn",source:"FLOW",message:p.profile_id+" · "+(p.registered?"extension registered":"worker not connected")+(p.extension_version?" · extension "+p.extension_version:"")})),
+    ...flowAutomation.tasks.map(t=>({key:"task-"+t.task_id,time:new Date(t.updated_at).toLocaleTimeString(),level:["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status)?"error":"info",source:"TASK",message:t.profile_id+" · "+t.status.replaceAll("_"," ")+(t.last_error?" · "+t.last_error:"")+(t.download_path?" · "+t.download_path:"")})),
+    ...jobs.slice(0,8).map(j=>({key:"job-"+j.id,time:new Date(j.created_at).toLocaleTimeString(),level:"info",source:"JOB",message:j.topic+" · "+j.status.replaceAll("_"," ")+(j.final_video?" · final video assembled":"")})),
+    {key:"notice",time:"now",level:"info",source:"DESKTOP",message:notice}
+  ].sort((a,b)=>b.time.localeCompare(a.time));\n  const active = selected ?? jobs[0] ?? null;
   const jobProgress = (job: Job) => {
     const tasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
     const downloaded = tasks.filter(task => task.status === "downloaded").length;
@@ -481,11 +490,25 @@ export default function App() {
       <button className={activePage==="accounts" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("accounts")}><span>◉</span> Accounts</button>
       <div className="nav-label second">SYSTEM</div>
       <button className={activePage==="settings" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("settings")}><span>⚙</span> Settings</button>
+      <button className={activePage==="debug" ? "nav-item active" : "nav-item"} onClick={()=>setActivePage("debug")}><span>⌁</span> Debug Window <em>LIVE</em></button>
       <div className="sidebar-bottom"><div className="service-dot" data-state={health}></div><div><b>Local service</b><small>{health === "online" ? "Connected" : health === "offline" ? "Not running" : "Checking…"}</small></div></div>
     </aside>
 
     <main className="main">
-      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>{({home:"Home",prompts:"Prompt Studio",accounts:"Accounts",library:"Video Library",settings:"Settings"})[activePage]}</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
+      <header className="topbar"><div><span className="crumb">Workspace</span><span className="slash">/</span><b>{({home:"Home",prompts:"Prompt Studio",accounts:"Accounts",library:"Video Library",settings:"Settings",debug:"Debug Window"})[activePage]}</b></div><div className="top-right"><span className="mode">LOCAL WORKSPACE</span><div className="avatar">AS</div></div></header>
+      {activePage === "debug" && <section className="debug-page">
+        <div className="debug-heading"><div><div className="eyebrow">SYSTEM DIAGNOSTICS</div><h1>Debug Window</h1><p>Live operational state from the desktop UI, local service, five Flow workers and clip tasks. Refreshes with the workspace status poll.</p></div><div className="debug-actions"><button className="secondary compact" onClick={()=>refresh()}>↻ Refresh</button><button className="primary compact" onClick={()=>{const lines=debugEntries.map(e=>e.time+" ["+e.level.toUpperCase()+"] ["+e.source+"] "+e.message).join("\n");const blob=new Blob([lines+"\n\nUpdated: "+debugUpdatedAt+"\n"],{type:"text/plain"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="asmr-factory-debug.log";a.click();URL.revokeObjectURL(url);}}>Export log</button></div></div>
+        <div className="debug-summary">
+          <div><small>LOCAL SERVICE</small><b className={health==="online"?"debug-ok":"debug-bad"}>{health.toUpperCase()}</b></div>
+          <div><small>FLOW WORKERS</small><b>{flowAutomation.registered_count}/5 connected</b></div>
+          <div><small>ACTIVE TASKS</small><b>{flowAutomation.tasks.filter(t=>!["downloaded","failed","cancelled"].includes(t.status)).length}</b></div>
+          <div><small>FAILED TASKS</small><b className={flowAutomation.tasks.some(t=>["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status))?"debug-bad":"debug-ok"}>{flowAutomation.tasks.filter(t=>["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status)).length}</b></div>
+        </div>
+        <div className="panel debug-panel"><div className="panel-head"><div><div className="eyebrow">LIVE EVENT FEED</div><h2>System activity</h2></div><select className="theme-select debug-filter" value={debugFilter} onChange={e=>setDebugFilter(e.target.value)}><option value="all">All events</option><option value="error">Errors only</option><option value="worker">Flow workers</option><option value="task">Clip tasks</option></select></div>
+          <div className="debug-feed">{debugEntries.filter(e=>debugFilter==="all"||(debugFilter==="error"&&e.level==="error")||(debugFilter==="worker"&&e.source==="FLOW")||(debugFilter==="task"&&e.source==="TASK")).map((entry,i)=><div className="debug-entry" key={entry.key}><time>{entry.time}</time><span className={"debug-level "+entry.level}>{entry.level.toUpperCase()}</span><b>{entry.source}</b><p>{entry.message}</p></div>)}{debugEntries.filter(e=>debugFilter==="all"||(debugFilter==="error"&&e.level==="error")||(debugFilter==="worker"&&e.source==="FLOW")||(debugFilter==="task"&&e.source==="TASK")).length===0&&<div className="empty">No events match this filter.</div>}</div>
+          <small className="debug-foot">Last status refresh: {new Date(debugUpdatedAt).toLocaleString()} · This feed is reconstructed from persisted task state and current service status; it is not a raw Electron or Chrome console stream.</small>
+        </div>
+      </section>}
       {activePage === "home" && <>
       <section className="welcome"><div><div className="eyebrow">YOUR AUTOMATED VIDEO WORKSHOP</div><h1>Make something <span>satisfying.</span></h1><p>Plan, generate and publish your ASMR videos from one place.</p></div><div className="welcome-art"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="orb-core">✦</div></div></section>
 
