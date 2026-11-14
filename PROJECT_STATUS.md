@@ -22,17 +22,18 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 
 ### Not yet implemented or verified
 - [x] Initial Electron + React + TypeScript desktop scaffold.
-- [x] Initial dashboard UI with Fruits-only job creation and job history.
+- [x] Initial dashboard UI with seven-style job creation and job history.
 - [x] Python/FastAPI local orchestrator scaffold.
 - [x] SQLite persistence for jobs, clips and job events.
 - [x] Backend API to create/list/read jobs and approve the five-clip placeholder plan.
 - [x] Windows development setup guide.
 - [x] One-click `INSTALL.bat` launcher committed; it prepares the Python virtual environment, installs dependencies, starts the backend and launches the desktop dashboard (not yet tested on the user's PC).
 - [x] Initial unit tests for five-clip job rules (written; execution still needs local verification).
-- [x] AI prompt generation API with OpenAI-compatible provider support and built-in fallback composer.
-- [x] Persistent ASMR Style Bible stored in local SQLite.
-- [x] Prompt Studio UI with five editable fruit prompts and explicit approval/locking.
-- [x] AI Director API tests added (local execution still pending).
+- [x] AI prompt generation API supports all seven ASMR styles with exactly five distinct subjects/prompts per selected style.
+- [x] Persistent shared ASMR Style Bible stored in local SQLite and reused across styles.
+- [x] Prompt Studio UI with five editable prompts and explicit approval/locking.
+- [x] Dashboard selector exposes all seven styles.
+- [x] Backend tests cover all seven styles and five unique prompts per style (execution on user's Windows PC still pending).
 - [ ] Chrome Manifest V3 extension.
 - [ ] Chrome profile/session management.
 - [ ] Saved Flow project URL per profile.
@@ -48,12 +49,13 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [ ] Optional scheduler.
 - [ ] Windows installer and end-to-end tests.
 
-**Current truthful milestone:** Initial desktop/backend scaffold and one-click Windows development launcher committed. The local job-planning path is implemented in code, but it has not yet been run or verified on the user's Windows machine. Flow generation, media processing and Facebook publishing remain unimplemented.
+**Current truthful milestone:** Desktop/backend scaffold, seven-style job planning, and AI Director Prompt Studio are committed. The code supports five distinct subjects/prompts for each style using a shared persistent Style Bible, with optional OpenAI-compatible provider support and a built-in fallback. Local test execution remains pending. Google Flow browser automation, media processing and Facebook publishing remain unimplemented.
 
 ## 2. Product rules that must not be lost
 
-- First implementation generates **fruit-cutting ASMR only**.
-- A Fruits job creates exactly **five distinct fruit prompts**.
+- All seven styles are active: Fruits, Soaps, Clay, Kinetic Sand, Slime, Satisfying Objects / Materials and Mixed ASMR.
+- Every selected style creates exactly **five distinct subject prompts**, all within that style.
+- Weekly rotation: Monday Fruits; Tuesday Soaps; Wednesday Clay; Thursday Kinetic Sand; Friday Slime; Saturday Satisfying Objects / Materials; Sunday Mixed ASMR.
 - Each clip targets **8 seconds**, giving an approximately **40-second** compilation.
 - Flow defaults: **Veo 3.1 Lite, 720p, 8 seconds**, subject to availability in the signed-in account.
 - Up to five separate Google Flow browser profiles/accounts, with each prompt assigned to its own session.
@@ -64,7 +66,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - Preserve manual recovery paths.
 - Facebook publishing must use supported official API capabilities, secure credentials and duplicate safeguards.
 - Scheduler is optional and only runs when the computer is awake and the app/service is active.
-- Other reserved themes (Soaps, Clay, Kinetic Sand, Slime, Satisfying Objects/Materials, Mixed ASMR) are future scope and must not enter a Fruits job.
+- Never mix styles within one job. Use the selected style's five subjects and preserve a shared Style Bible across its five prompts.
 
 ## 3. Development roadmap
 
@@ -182,7 +184,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 ## 4. Recommended immediate next actions
 
 1. Pull the latest repository changes and restart the local backend and desktop app.
-2. Generate, review, edit and approve the five prompts for the existing Tropical Fruits job.
+2. Create test jobs for each of the seven styles; verify five distinct prompts per style.
 3. Run backend tests and fix any issues found on Windows.
 4. Continue with Chrome extension/profile management and Flow session connection.
 
