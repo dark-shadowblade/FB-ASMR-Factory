@@ -77,7 +77,10 @@ def assemble_five_clips(
 
     clips = [probe_video(Path(path), ffprobe=ffprobe) for path in clip_paths]
     reference = clips[0]
-    for index, clip in enumerate(clips[1:], start=2):
+    for index, clip in enumerate(clips, start=1):
+        ratio = clip["width"] / clip["height"]
+        if clip["height"] <= clip["width"] or abs(ratio - (9 / 16)) > 0.03:
+            raise MediaPipelineError(f"Clip {index} is not vertical 9:16 video ({clip['width']}x{clip['height']})")
         for key in ("width", "height", "video_codec", "audio_codec", "frame_rate"):
             if clip[key] != reference[key]:
                 raise MediaPipelineError(
@@ -88,6 +91,8 @@ def assemble_five_clips(
     output.parent.mkdir(parents=True, exist_ok=True)
     if output in {clip["path"].resolve() for clip in clips}:
         raise MediaPipelineError("Output path must not overwrite an input clip")
+    if output.exists():
+        raise MediaPipelineError("Output already exists; refusing to overwrite an existing video")
 
     # The concat demuxer manifest is kept beside the output and removed even on failure.
     manifest = output.with_name(output.stem + ".concat.txt")
@@ -104,17 +109,28 @@ def assemble_five_clips(
             "-f", "concat", "-safe", "0", "-i", str(manifest),
             "-c", "copy", "-movflags", "+faststart", str(output),
         ])
+        if not output.is_file() or output.stat().st_size == 0:
+            raise MediaPipelineError("FFmpeg completed without producing a non-empty output file")
+        final = probe_video(output, ffprobe=ffprobe)
+        expected_duration = sum(clip["duration"] for clip in clips)
+        if abs(final["duration"] - expected_duration) > max(0.75, expected_duration * 0.02):
+            raise MediaPipelineError("Final video duration does not match the five source clips")
+        for key in ("width", "height", "video_codec", "audio_codec"):
+            if final[key] != reference[key]:
+                raise MediaPipelineError(f"Final video failed validation ({key} mismatch)")
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
     finally:
         manifest.unlink(missing_ok=True)
 
-    if not output.is_file() or output.stat().st_size == 0:
-        raise MediaPipelineError("FFmpeg completed without producing a non-empty output file")
     return {
         "output": str(output),
         "clip_count": len(clips),
-        "duration_seconds": round(sum(clip["duration"] for clip in clips), 3),
-        "width": reference["width"],
-        "height": reference["height"],
-        "video_codec": reference["video_codec"],
-        "audio_codec": reference["audio_codec"],
+        "duration_seconds": round(final["duration"], 3),
+        "width": final["width"],
+        "height": final["height"],
+        "video_codec": final["video_codec"],
+        "audio_codec": final["audio_codec"],
+        "size_bytes": output.stat().st_size,
     }
