@@ -51,7 +51,7 @@ At verification on 2026-11-14, GitHub reported repository visibility as **Public
 - [x] Configurable prompt/Generate/download and model/resolution/duration/aspect-ratio selector fields.
 - [x] Safe content script with app-hydration wait, duplicate-submit guard, DOM mutation monitoring and download-to-active-tab correlation.
 - [x] Persistent extension event outbox retries unacknowledged events after temporary local-service failures.
-- [x] CI workflow added for extension protocol and backend bridge tests (first run pending).
+- [x] CI workflows cover backend, extension protocol/bridge and desktop build (backend, protocol and bridge jobs pass on latest checked commit; desktop build is still running).
 - [ ] Full job recovery and retry behavior.
 - [x] Basic local Video Library API and per-job final-video details; thumbnails, search/filtering and playback UI remain.
 - [ ] Meta authentication, Page selection and Graph API publishing.
