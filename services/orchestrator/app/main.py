@@ -134,8 +134,16 @@ def serialize_job(conn: sqlite3.Connection, job_id: str) -> dict[str, Any]:
     ).fetchall()
     result = dict(job)
     result["clips"] = [dict(row) for row in clips]
-    artifact = conn.execute("SELECT output_path,duration_seconds,width,height,size_bytes,created_at FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
-    result["final_video"] = dict(artifact) if artifact else None
+    artifact = conn.execute("SELECT output_path,duration_seconds,width,height,size_bytes,metadata_json,created_at FROM job_outputs WHERE job_id=?", (job_id,)).fetchone()
+    if artifact:
+        final_video = dict(artifact)
+        try:
+            final_video["social_metadata"] = json.loads(final_video.pop("metadata_json")).get("social_metadata", {})
+        except (TypeError, ValueError, json.JSONDecodeError):
+            final_video["social_metadata"] = {}
+        result["final_video"] = final_video
+    else:
+        result["final_video"] = None
     return result
 
 
@@ -573,11 +581,19 @@ def download_job_output(job_id: str):
 def list_video_library() -> dict[str, list[dict[str, Any]]]:
     with connect() as conn:
         rows = conn.execute(
-            """SELECT o.job_id,o.output_path,o.duration_seconds,o.width,o.height,o.size_bytes,o.created_at,
+            """SELECT o.job_id,o.output_path,o.duration_seconds,o.width,o.height,o.size_bytes,o.metadata_json,o.created_at,
                       j.topic,j.theme,j.status
                FROM job_outputs o JOIN jobs j ON j.id=o.job_id ORDER BY o.created_at DESC"""
         ).fetchall()
-        return {"videos": [dict(row) for row in rows]}
+        videos = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["social_metadata"] = json.loads(item.pop("metadata_json")).get("social_metadata", {})
+            except (TypeError, ValueError, json.JSONDecodeError):
+                item["social_metadata"] = {}
+            videos.append(item)
+        return {"videos": videos}
 
 @app.on_event("shutdown")
 async def shutdown_flow_profiles() -> None:
