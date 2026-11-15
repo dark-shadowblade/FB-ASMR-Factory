@@ -90,7 +90,16 @@ def test_download_completed_event_marks_the_matching_clip_downloaded(tmp_path):
     assert response.status_code == 200
     with sqlite3.connect(tmp_path / "test.sqlite3") as conn:
         status = conn.execute("SELECT status FROM clips WHERE id=?", (task["clipId"],)).fetchone()[0]
+        task_status, prompt = conn.execute(
+            "SELECT status,prompt FROM extension_tasks WHERE task_id=?", (task["taskId"],)
+        ).fetchone()
+        event_count = conn.execute(
+            "SELECT COUNT(*) FROM extension_events WHERE task_id=?", (task["taskId"],)
+        ).fetchone()[0]
     assert status == "downloaded"
+    assert task_status == "downloaded"
+    assert prompt == ""
+    assert event_count == 1
 
 
 def test_bridge_requires_local_secret(tmp_path):
