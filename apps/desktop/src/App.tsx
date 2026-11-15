@@ -172,6 +172,24 @@ export default function App() {
     }
     setDispatching(true);
     try {
+      // Open the dedicated browser profiles before prompt generation so a slow
+      // AI provider can never prevent the visible Flow windows from launching.
+      setNotice("Opening Chrome profiles 01–05 and their saved Flow projects…");
+      const opened = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+      const openedData = await opened.json();
+      if (!opened.ok) {
+        const detail = typeof openedData.detail === "string" ? openedData.detail : openedData.detail?.message || "Could not open all five Chrome profiles";
+        const failedProfiles = openedData.detail?.profiles;
+        const profileErrors = Array.isArray(failedProfiles)
+          ? failedProfiles.filter((p: any) => !p.opened).map((p: any) => p.profile_id + ": " + (p.error || "launch failed")).join(" · ")
+          : "";
+        throw new Error(profileErrors ? detail + " " + profileErrors : detail);
+      }
+      const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
+      setNotice(loginProfiles.length
+        ? "Chrome profiles 01–05 opened. Complete Google sign-in once in each window; preparing prompts…"
+        : "Chrome profiles 01–05 opened. Preparing the five prompts…");
+
       let current = job;
       if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
         setNotice("Generating and internally approving the five unique prompts…");
@@ -188,19 +206,9 @@ export default function App() {
         current = approvedData.job;
         setSelected(current);
       }
-      setNotice("Opening Chrome profiles 01–05 and their saved Flow projects…");
-      const opened = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
-      const openedData = await opened.json();
-      if (!opened.ok) {
-        const detail = typeof openedData.detail === "string" ? openedData.detail : openedData.detail?.message || "Could not open all five Chrome profiles";
-        throw new Error(detail);
-      }
-      const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
-      if (loginProfiles.length) {
-        setNotice("Chrome 01–05 opened. Sign in to Google in these windows once; waiting for their extensions to connect…");
-      } else {
-        setNotice("Chrome 01–05 opened. Waiting for all five extension workers…");
-      }
+      setNotice(loginProfiles.length
+        ? "Chrome 01–05 are open. Waiting for Google sign-in and all five extension workers…"
+        : "Chrome 01–05 are open. Waiting for all five extension workers…");
 
       let connected = 0;
       for (let attempt = 0; attempt < 300; attempt++) {
