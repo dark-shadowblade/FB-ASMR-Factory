@@ -288,6 +288,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ task: activeTask });
       } else {
         sendResponse({ task: null, projectDetected: Boolean(detectedProject) });
+        // The project tab is ready: wake the worker immediately instead of
+        // waiting for the periodic alarm to discover queued work.
+        poll().catch(error => console.warn("[ASMR Flow] ready-page poll failed", error.message));
       }
       return;
     }
