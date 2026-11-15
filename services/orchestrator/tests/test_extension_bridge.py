@@ -38,7 +38,7 @@ def make_client(tmp_path):
         client.post("/api/v1/extension/project-detected", headers=headers, json={
             "protocolVersion": 1, "profileId": f"flow-{index}",
             "instanceId": f"instance-flow-{index}",
-            "projectUrl": f"https://flow.google.com/project/{index:08d}-abcd",
+            "projectUrl": f"https://flow.google.com/project/{['12345678','23456789','34567890','45678901','56789012'][index-1]}-abcd",
             "projectTitle": "Ready test project",
         })
     return client, headers, db
