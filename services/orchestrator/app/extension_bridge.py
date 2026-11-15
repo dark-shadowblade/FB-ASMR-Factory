@@ -213,26 +213,11 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             by_id = {r["profile_id"]: r["project_url"] for r in profiles}
             if any(not by_id.get(pid) for pid in PROFILE_IDS):
                 raise HTTPException(status_code=409, detail="Configure a Flow project URL for all five profiles before dispatch")
-            active = conn.execute("SELECT profile_id FROM extension_tasks WHERE status IN ('queued','leased','project_open','submitted','generating','generation_completed','downloading','settings_verified','paused','needs_login','blocked_ui','blocked_settings')").fetchall()
-            busy = {r["profile_id"] for r in active}
-            if busy:
-                raise HTTPException(status_code=409, detail="One or more Flow profiles already have active tasks: " + ", ".join(sorted(busy)))
-            instances = conn.execute(
-                "SELECT profile_id, last_seen FROM extension_instances"
-            ).fetchall()
-            recent = {}
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
-            for instance in instances:
-                try:
-                    recent[instance["profile_id"]] = datetime.fromisoformat(instance["last_seen"]) >= cutoff
-                except ValueError:
-                    recent[instance["profile_id"]] = False
-            missing_workers = [pid for pid in PROFILE_IDS if not recent.get(pid, False)]
-            if missing_workers:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Connect all five Flow extension workers before dispatch: " + ", ".join(missing_workers),
-                )
+            existing = conn.execute("SELECT status FROM extension_tasks WHERE job_id=?", (job_id,)).fetchall()
+            if existing and not all(row["status"] == "superseded" for row in existing):
+                raise HTTPException(status_code=409, detail="This job already has a Flow attempt. Retry or supersede it before dispatch.")
+            # Do not require all five workers to be online. Tasks remain queued
+            # for their matching isolated profile and are claimed on heartbeat.
             settings = {"model": "Veo 3.1 Lite", "resolution": "720p", "durationSeconds": 8, "aspectRatio": "9:16"}
             created = []
             for index, clip in enumerate(clips):
@@ -245,7 +230,7 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
                 created.append({"taskId": task_id, "clipId": clip["id"], "profileId": profile_id})
             conn.execute("UPDATE jobs SET status='running',updated_at=? WHERE id=?", (now(), job_id))
             conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
-                         (job_id, "Dispatched five isolated Flow tasks to flow-1 through flow-5", now()))
+                         (job_id, "Queued five isolated Flow tasks; each profile claims independently when online", now()))
             return {"dispatched": len(created), "tasks": created}
 
     @router.get("/next-task")
