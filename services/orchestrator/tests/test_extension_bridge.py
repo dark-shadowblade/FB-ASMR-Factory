@@ -275,6 +275,7 @@ def test_worker_cannot_claim_until_its_flow_project_page_is_ready(tmp_path):
 
 def test_worker_only_claims_task_for_its_detected_project(tmp_path):
     client, headers, db = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE extension_instances SET ready_project_url='https://flow.google.com/project/not-the-assigned-project' WHERE profile_id='flow-1'")
     response = client.get(
