@@ -475,6 +475,38 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
                      (job_id, "Five " + THEME_LABELS[job["theme"]] + " prompts generated with " + source, utc_now()))
         return {"job": serialize_job(conn, job_id), "source": source}
 
+@app.post("/api/v1/jobs/{job_id}/regenerate-prompts")
+def regenerate_failed_job_prompts(job_id: str) -> dict[str, Any]:
+    """Supersede a fully failed attempt and create a fresh prompt pack."""
+    active_statuses = (
+        "queued", "leased", "project_open", "submitted", "generating",
+        "generation_completed", "downloading", "settings_verified", "paused",
+        "needs_login", "blocked_ui", "blocked_settings",
+    )
+    with connect() as conn:
+        job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        tasks = conn.execute("SELECT task_id,status FROM extension_tasks WHERE job_id=?", (job_id,)).fetchall()
+        if not tasks or not any(task["status"] in ("failed", "blocked_ui", "blocked_settings", "needs_login") for task in tasks):
+            raise HTTPException(status_code=409, detail="A failed Flow attempt is required before generating a new prompt pack")
+        active = [task["status"] for task in tasks if task["status"] in active_statuses]
+        if active:
+            raise HTTPException(status_code=409, detail="Wait until every Flow task has stopped before generating a new prompt pack")
+        # Keep task/event rows for history, but make the old attempt ineligible
+        # for worker pickup and erase its temporary prompt payload.
+        conn.execute(
+            """UPDATE extension_tasks SET status='superseded',prompt='',updated_at=?
+               WHERE job_id=? AND status IN ('failed','blocked_ui','blocked_settings','needs_login','cancelled')""",
+            (utc_now(), job_id),
+        )
+        conn.execute("UPDATE clips SET prompt='',status='planned' WHERE job_id=?", (job_id,))
+        conn.execute("UPDATE jobs SET status='draft',updated_at=? WHERE id=?", (utc_now(), job_id))
+        conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
+                     (job_id, "Failed Flow attempt superseded; generating a fresh prompt pack", utc_now()))
+    return generate_prompts(job_id)
+
+
 @app.patch("/api/v1/jobs/{job_id}/clips/{clip_id}/prompt")
 def edit_prompt(job_id: str, clip_id: str, request: PromptUpdateRequest) -> dict[str, Any]:
     with connect() as conn:
