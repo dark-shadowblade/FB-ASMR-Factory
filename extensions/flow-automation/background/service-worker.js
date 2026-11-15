@@ -81,7 +81,7 @@ installDiagnosticCapture();
 
 let flushingEvents = false;
 async function flushEvents() {
-  if (flushingEvents) return;
+  if (flushingEvents) return false;
   flushingEvents = true;
   try {
     while (true) {
@@ -104,13 +104,15 @@ async function flushEvents() {
       }
       await chrome.storage.local.set({ pendingEvents: remaining });
     }
+    const finalState = await chrome.storage.local.get("pendingEvents");
+    return !(finalState.pendingEvents || []).length;
   } finally {
     flushingEvents = false;
   }
 }
 async function report(type, payload = {}) {
   const c = await config();
-  if (!c.profileId || !c.instanceId || !activeTask) return;
+  if (!c.profileId || !c.instanceId || !activeTask) return false;
   const event = {
     protocolVersion: P.VERSION, messageId: crypto.randomUUID(), type,
     taskId: activeTask.taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
@@ -120,7 +122,17 @@ async function report(type, payload = {}) {
   const saved = await chrome.storage.local.get("pendingEvents");
   const queue = [...(saved.pendingEvents || []), event];
   await chrome.storage.local.set({ pendingEvents: queue });
-  await flushEvents();
+  return await flushEvents();
+}
+async function clearCompletedTask(taskId) {
+  if (activeTask?.taskId !== taskId) return;
+  activeTask = null;
+  activeTabId = null;
+  activeDownloadIds.clear();
+  await chrome.storage.local.remove([
+    "activeTask", "activeTabId", "activeDownloadIds",
+    "downloadRequestedTaskId", "extensionTaskSnapshot"
+  ]);
 }
 async function ensureActiveTaskTab() {
   if (!activeTask) return;
@@ -252,12 +264,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ...snapshot, state: message.event, lastEvent: message.event,
         lastEventAt: new Date().toISOString(), lastEventPayload: message.payload || {}
       }});
-      await report(message.event, message.payload || {});
-      if (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED") {
-        activeTask = null;
-        activeTabId = null;
-        activeDownloadIds.clear();
-        await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+      const taskId = activeTask.taskId;
+      const acknowledged = await report(message.event, message.payload || {});
+      if (acknowledged && (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED")) {
+        await clearCompletedTask(taskId);
       }
       sendResponse({ ok: true });
       return;
@@ -309,11 +319,9 @@ chrome.downloads.onChanged.addListener(async delta => {
     }
     return;
   }
-  await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
-  activeDownloadIds.clear();
-  activeTask = null;
-  activeTabId = null;
-  await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+  const completedTaskId = activeTask.taskId;
+  const acknowledged = await report("DOWNLOAD_COMPLETED", { downloadId: item.id, filename: item.filename || "", fileSize: item.fileSize || 0 });
+  if (acknowledged) await clearCompletedTask(completedTaskId);
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "CONFIG_UPDATED") {
