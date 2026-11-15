@@ -93,7 +93,8 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
               ON extension_tasks(profile_id, status, created_at);
             CREATE TABLE IF NOT EXISTS extension_instances (
               profile_id TEXT PRIMARY KEY, instance_id TEXT NOT NULL, extension_version TEXT NOT NULL,
-              last_seen TEXT NOT NULL
+              last_seen TEXT NOT NULL, project_ready INTEGER NOT NULL DEFAULT 0,
+              ready_project_url TEXT
             );
             CREATE TABLE IF NOT EXISTS extension_events (
               message_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, job_id TEXT NOT NULL,
@@ -106,6 +107,12 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             );
             """)
     init_tables()
+    with connect() as conn:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(extension_instances)").fetchall()}
+        if "project_ready" not in columns:
+            conn.execute("ALTER TABLE extension_instances ADD COLUMN project_ready INTEGER NOT NULL DEFAULT 0")
+        if "ready_project_url" not in columns:
+            conn.execute("ALTER TABLE extension_instances ADD COLUMN ready_project_url TEXT")
 
     with connect() as conn:
         conn.execute("""CREATE TABLE IF NOT EXISTS diagnostic_logs (
@@ -149,9 +156,11 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         if request.protocolVersion != 1 or request.profileId not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unsupported protocol version or profile ID")
         with connect() as conn:
-            conn.execute("""INSERT INTO extension_instances(profile_id,instance_id,extension_version,last_seen)
-              VALUES(?,?,?,?) ON CONFLICT(profile_id) DO UPDATE SET
-              instance_id=excluded.instance_id, extension_version=excluded.extension_version,last_seen=excluded.last_seen""",
+            conn.execute("""INSERT INTO extension_instances(profile_id,instance_id,extension_version,last_seen,project_ready,ready_project_url)
+              VALUES(?,?,?,?,0,NULL) ON CONFLICT(profile_id) DO UPDATE SET
+              instance_id=excluded.instance_id, extension_version=excluded.extension_version,last_seen=excluded.last_seen,
+              project_ready=CASE WHEN extension_instances.instance_id=excluded.instance_id THEN extension_instances.project_ready ELSE 0 END,
+              ready_project_url=CASE WHEN extension_instances.instance_id=excluded.instance_id THEN extension_instances.ready_project_url ELSE NULL END""",
               (request.profileId, request.instanceId, request.extensionVersion, now()))
         return {"registered": True, "profileId": request.profileId}
 
@@ -171,6 +180,8 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
                 raise HTTPException(status_code=409, detail="Extension instance/profile pairing mismatch")
             conn.execute("UPDATE flow_profiles SET project_url=?,updated_at=? WHERE profile_id=?",
                          (project_url, now(), request.profileId))
+            conn.execute("UPDATE extension_instances SET project_ready=1,ready_project_url=? WHERE profile_id=? AND instance_id=?",
+                         (project_url, request.profileId, request.instanceId))
         return {"saved": True, "profileId": request.profileId, "projectUrl": project_url}
 
 
@@ -239,13 +250,17 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
         if profile_id not in PROFILE_IDS:
             raise HTTPException(status_code=422, detail="Unknown profile ID")
         with connect() as conn:
-            registered = conn.execute("SELECT instance_id FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
+            registered = conn.execute("SELECT instance_id,project_ready,ready_project_url FROM extension_instances WHERE profile_id=?", (profile_id,)).fetchone()
             if registered is None or registered["instance_id"] != instance_id:
                 raise HTTPException(status_code=409, detail="This extension instance is not paired to the selected browser profile")
+            if not registered["project_ready"]:
+                return {"task": None, "waitingForProjectPage": True}
             row = conn.execute("""SELECT * FROM extension_tasks WHERE profile_id=?
               AND status IN ('queued','leased') ORDER BY created_at LIMIT 1""", (profile_id,)).fetchone()
             if row is None:
                 return {"task": None}
+            if registered["ready_project_url"] != row["project_url"]:
+                return {"task": None, "waitingForProjectPage": True}
             if row["status"] == "queued":
                 conn.execute("UPDATE extension_tasks SET status='leased',updated_at=? WHERE task_id=?", (now(), row["task_id"]))
             return {"task": {
