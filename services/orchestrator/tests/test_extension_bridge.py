@@ -35,6 +35,12 @@ def make_client(tmp_path):
             "protocolVersion": 1, "profileId": f"flow-{index}",
             "instanceId": f"instance-flow-{index}", "extensionVersion": "0.1.0"
         })
+        client.post("/api/v1/extension/project-detected", headers=headers, json={
+            "protocolVersion": 1, "profileId": f"flow-{index}",
+            "instanceId": f"instance-flow-{index}",
+            "projectUrl": f"https://flow.google.com/project/{index:08d}-abcd",
+            "projectTitle": "Ready test project",
+        })
     return client, headers, db
 
 
@@ -253,3 +259,27 @@ def test_diagnostic_log_ingestion_requires_bridge_secret(tmp_path):
         "source": "FLOW_EXTENSION", "level": "error", "message": "should be rejected"
     })
     assert response.status_code == 401
+
+
+def test_worker_cannot_claim_until_its_flow_project_page_is_ready(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE extension_instances SET project_ready=0,ready_project_url=NULL WHERE profile_id='flow-1'")
+    response = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers
+    )
+    assert response.status_code == 200
+    assert response.json()["task"] is None
+    assert response.json()["waitingForProjectPage"] is True
+
+
+def test_worker_only_claims_task_for_its_detected_project(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE extension_instances SET ready_project_url='https://flow.google.com/project/not-the-assigned-project' WHERE profile_id='flow-1'")
+    response = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1", headers=headers
+    )
+    assert response.status_code == 200
+    assert response.json()["task"] is None
+    assert response.json()["waitingForProjectPage"] is True
