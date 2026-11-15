@@ -124,15 +124,42 @@ async function report(type, payload = {}) {
   await chrome.storage.local.set({ pendingEvents: queue });
   return await flushEvents();
 }
-async function clearCompletedTask(taskId) {
+async function releaseAcknowledgedTask(taskId, outcome) {
   if (activeTask?.taskId !== taskId) return;
+  const stored = await chrome.storage.local.get(["extensionTaskSnapshot", "completedTaskIds", "failedTaskSnapshots"]);
+  const snapshot = stored.extensionTaskSnapshot || {};
+  const completedTaskIds = Array.isArray(stored.completedTaskIds) ? stored.completedTaskIds : [];
+  const failedTaskSnapshots = Array.isArray(stored.failedTaskSnapshots) ? stored.failedTaskSnapshots : [];
+
+  if (outcome === "completed") {
+    if (!completedTaskIds.includes(taskId)) completedTaskIds.push(taskId);
+    if (failedTaskSnapshots.length) {
+      const index = failedTaskSnapshots.findIndex(item => item.taskId === taskId);
+      if (index >= 0) failedTaskSnapshots.splice(index, 1);
+    }
+  } else if (outcome === "retryable") {
+    // Keep a local recovery copy; the backend remains the source of truth for retry.
+    const failed = { ...snapshot, taskId, jobId: activeTask.jobId, clipId: activeTask.clipId,
+      profileId: activeTask.profileId, prompt: activeTask.prompt, failedAt: new Date().toISOString() };
+    const index = failedTaskSnapshots.findIndex(item => item.taskId === taskId);
+    if (index >= 0) failedTaskSnapshots[index] = failed;
+    else failedTaskSnapshots.push(failed);
+  }
+
   activeTask = null;
   activeTabId = null;
   activeDownloadIds.clear();
+  await chrome.storage.local.set({
+    completedTaskIds: completedTaskIds.slice(-200),
+    failedTaskSnapshots: failedTaskSnapshots.slice(-20)
+  });
   await chrome.storage.local.remove([
-    "activeTask", "activeTabId", "activeDownloadIds",
-    "downloadRequestedTaskId", "extensionTaskSnapshot"
+    "activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId",
+    "extensionTaskSnapshot"
   ]);
+}
+async function clearCompletedTask(taskId) {
+  return releaseAcknowledgedTask(taskId, "completed");
 }
 async function ensureActiveTaskTab() {
   if (!activeTask) return;
@@ -193,6 +220,7 @@ async function poll() {
       extensionTaskSnapshot: {
         taskId: activeTask.taskId,
         jobId: activeTask.jobId,
+        prompt: activeTask.prompt,
         clipId: activeTask.clipId,
         profileId: activeTask.profileId,
         projectUrl: activeTask.projectUrl,
@@ -266,8 +294,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }});
       const taskId = activeTask.taskId;
       const acknowledged = await report(message.event, message.payload || {});
-      if (acknowledged && (message.event === "TASK_FAILED" || message.event === "PROMPT_INSERT_FAILED" || message.event === "DOWNLOAD_FAILED" || message.event === "DOWNLOAD_COMPLETED" || message.event === "TASK_CANCELLED")) {
+      if (acknowledged && message.event === "DOWNLOAD_COMPLETED") {
         await clearCompletedTask(taskId);
+      } else if (acknowledged && ["TASK_FAILED", "PROMPT_INSERT_FAILED", "DOWNLOAD_FAILED"].includes(message.event)) {
+        await releaseAcknowledgedTask(taskId, "retryable");
+      } else if (acknowledged && message.event === "TASK_CANCELLED") {
+        await releaseAcknowledgedTask(taskId, "cancelled");
       }
       sendResponse({ ok: true });
       return;
@@ -293,13 +325,9 @@ chrome.downloads.onChanged.addListener(async delta => {
   await restoreTask();
   if (!activeTask || !activeDownloadIds.has(delta.id) || !delta.state) return;
   if (delta.state.current === "interrupted") {
-    await report("DOWNLOAD_FAILED", { downloadId: delta.id, error: "Browser download interrupted" });
-    await chrome.storage.local.remove("downloadRequestedTaskId");
-    activeDownloadIds.delete(delta.id);
-    activeTask = null;
-    activeTabId = null;
-    activeDownloadIds.clear();
-    await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+    const failedTaskId = activeTask.taskId;
+    const acknowledged = await report("DOWNLOAD_FAILED", { downloadId: delta.id, error: "Browser download interrupted" });
+    if (acknowledged) await releaseAcknowledgedTask(failedTaskId, "retryable");
     return;
   }
   if (delta.state.current !== "complete") return;
@@ -309,11 +337,9 @@ chrome.downloads.onChanged.addListener(async delta => {
   if (!isVideo) {
     activeDownloadIds.delete(delta.id);
     if (activeDownloadIds.size === 0) {
-      await report("DOWNLOAD_FAILED", { downloadId: item.id, error: "Flow download completed but the file was not recognised as video media." });
-      activeTask = null;
-      activeTabId = null;
-      activeDownloadIds.clear();
-      await chrome.storage.local.remove(["activeTask", "activeTabId", "activeDownloadIds", "downloadRequestedTaskId"]);
+      const failedTaskId = activeTask.taskId;
+      const acknowledged = await report("DOWNLOAD_FAILED", { downloadId: item.id, error: "Flow download completed but the file was not recognised as video media." });
+      if (acknowledged) await releaseAcknowledgedTask(failedTaskId, "retryable");
     } else {
       await chrome.storage.local.set({ activeDownloadIds: [...activeDownloadIds] });
     }
