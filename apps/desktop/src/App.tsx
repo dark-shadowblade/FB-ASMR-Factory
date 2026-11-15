@@ -166,36 +166,33 @@ export default function App() {
       setNotice("Save all five Google Flow project URLs first.");
       return;
     }
-    if (flowAutomation.tasks.some(t=>t.job_id===job.id)) {
-      setNotice("This job already has Flow tasks. Existing task state is preserved; failed tasks are reported in the production status.");
+    const previousTasks = flowAutomation.tasks.filter(t=>t.job_id===job.id);
+    const terminalStatuses = ["superseded","cancelled","failed","blocked_ui","blocked_settings","needs_login","downloaded"];
+    const reusableAttempt = allowSupersededAttempt && previousTasks.length > 0 &&
+      previousTasks.every(t=>terminalStatuses.includes(t.status));
+    if (previousTasks.length && !reusableAttempt) {
+      setNotice("This job already has active Flow tasks. Wait for them to stop before starting another attempt.");
       return;
     }
     setDispatching(true);
     try {
-      // Open the dedicated browser profiles before prompt generation so a slow
-      // AI provider can never prevent the visible Flow windows from launching.
-      setNotice("Opening Chrome profiles 01–05 and their saved Flow projects…");
-      const opened = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
-      const openedData = await opened.json();
-      if (!opened.ok) {
-        const detail = typeof openedData.detail === "string" ? openedData.detail : openedData.detail?.message || "Could not open all five Chrome profiles";
-        const failedProfiles = openedData.detail?.profiles;
-        const profileErrors = Array.isArray(failedProfiles)
-          ? failedProfiles.filter((p: any) => !p.opened).map((p: any) => p.profile_id + ": " + (p.error || "launch failed")).join(" · ")
-          : "";
-        throw new Error(profileErrors ? detail + " " + profileErrors : detail);
-      }
+      setNotice("Opening Chrome profiles 01–05 and generating prompts in parallel…");
+      const openPromise = fetch(API + "/flow/profiles/open-all", { method: "POST" });
+      const needsPrompts = !job.clips.every(c=>c.prompt.trim().length>=40);
+      const promptPromise = needsPrompts
+        ? fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" })
+        : Promise.resolve(null);
+      const [openedResult, promptResult] = await Promise.allSettled([openPromise, promptPromise]);
+      if (openedResult.status === "rejected") throw openedResult.reason;
+      const openedResponse = openedResult.value;
+      const openedData = await openedResponse.json();
+      if (!openedResponse.ok) throw new Error(openedData.detail?.message || openedData.detail || "Could not open Chrome profiles");
       const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
-      setNotice(loginProfiles.length
-        ? "Chrome profiles 01–05 opened. Complete Google sign-in once in each window; preparing prompts…"
-        : "Chrome profiles 01–05 opened. Preparing the five prompts…");
-
       let current = job;
-      if (!current.clips.every(c=>c.prompt.trim().length>=40)) {
-        setNotice("Generating and internally approving the five unique prompts…");
-        const generated = await fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
-        const generatedData = await generated.json();
-        if (!generated.ok) throw new Error(generatedData.detail || "Prompt generation failed");
+      if (promptResult.status === "rejected") throw promptResult.reason;
+      if (promptResult.value) {
+        const generatedData = await promptResult.value.json();
+        if (!promptResult.value.ok) throw new Error(generatedData.detail || "Prompt generation failed");
         current = generatedData.job;
         setSelected(current);
       }
@@ -207,31 +204,13 @@ export default function App() {
         setSelected(current);
       }
       setNotice(loginProfiles.length
-        ? "Chrome 01–05 are open. Waiting for Google sign-in and all five extension workers…"
-        : "Chrome 01–05 are open. Waiting for all five extension workers…");
-
-      let connected = 0;
-      for (let attempt = 0; attempt < 300; attempt++) {
-        const statusResponse = await fetch(API + "/flow/automation/status");
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          setFlowAutomation(statusData);
-          connected = statusData.registered_count || 0;
-          if (connected === 5) break;
-        }
-        if (attempt < 299) await new Promise(resolve => window.setTimeout(resolve, 2000));
-      }
-      if (connected !== 5) {
-        await refresh();
-        throw new Error("All five Chrome windows were opened, but only " + connected + "/5 extension workers connected within 10 minutes. Install/enable the extension in profiles 01–05 and complete Google sign-in in the opened windows. Your generated prompt pack is saved; no prompt approval is needed.");
-      }
-
-      setNotice("Dispatching one clip to each of Chrome profiles 01–05…");
+        ? "Five browser profiles opened. Sign in where requested; clips will queue independently."
+        : "Five browser profiles opened. Queueing each clip for its matching Flow profile…");
       const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
       const dispatchData = await dispatched.json();
       if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
       setSelected(current);
-      setNotice("Production started: five Chrome profiles opened, five workers connected, and five prompts dispatched.");
+      setNotice("Production queued. Each profile will pick up its own clip when its extension is connected.");
       await refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not start automatic production.");
