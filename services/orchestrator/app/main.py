@@ -477,33 +477,32 @@ def generate_prompts(job_id: str) -> dict[str, Any]:
 
 @app.post("/api/v1/jobs/{job_id}/regenerate-prompts")
 def regenerate_failed_job_prompts(job_id: str) -> dict[str, Any]:
-    """Supersede a fully failed attempt and create a fresh prompt pack."""
+    """Supersede a stopped failed attempt and create a fresh five-prompt pack."""
     active_statuses = (
         "queued", "leased", "project_open", "submitted", "generating",
         "generation_completed", "downloading", "settings_verified", "paused",
-        "needs_login", "blocked_ui", "blocked_settings",
     )
     with connect() as conn:
-        job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = conn.execute("SELECT status,final_video FROM jobs WHERE id=?", (job_id,)).fetchone()
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
+        if job["final_video"]:
+            raise HTTPException(status_code=409, detail="This job already has a completed final video")
         tasks = conn.execute("SELECT task_id,status FROM extension_tasks WHERE job_id=?", (job_id,)).fetchall()
         if not tasks or not any(task["status"] in ("failed", "blocked_ui", "blocked_settings", "needs_login") for task in tasks):
             raise HTTPException(status_code=409, detail="A failed Flow attempt is required before generating a new prompt pack")
-        active = [task["status"] for task in tasks if task["status"] in active_statuses]
-        if active:
+        if any(task["status"] in active_statuses for task in tasks):
             raise HTTPException(status_code=409, detail="Wait until every Flow task has stopped before generating a new prompt pack")
-        # Keep task/event rows for history, but make the old attempt ineligible
-        # for worker pickup and erase its temporary prompt payload.
+        # Preserve old task rows and downloaded media for history; clear only transient prompts.
         conn.execute(
             """UPDATE extension_tasks SET status='superseded',prompt='',updated_at=?
-               WHERE job_id=? AND status IN ('failed','blocked_ui','blocked_settings','needs_login','cancelled')""",
+               WHERE job_id=? AND status NOT IN ('superseded','cancelled')""",
             (utc_now(), job_id),
         )
         conn.execute("UPDATE clips SET prompt='',status='planned' WHERE job_id=?", (job_id,))
         conn.execute("UPDATE jobs SET status='draft',updated_at=? WHERE id=?", (utc_now(), job_id))
         conn.execute("INSERT INTO job_events(job_id,event,created_at) VALUES(?,?,?)",
-                     (job_id, "Failed Flow attempt superseded; generating a fresh prompt pack", utc_now()))
+                     (job_id, "Stopped failed attempt superseded; generating a fresh prompt pack", utc_now()))
     return generate_prompts(job_id)
 
 
