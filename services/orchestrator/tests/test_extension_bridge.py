@@ -107,13 +107,19 @@ def test_bridge_requires_local_secret(tmp_path):
     assert client.get("/api/v1/extension/health").status_code == 401
 
 
-def test_dispatch_rejects_missing_worker_heartbeat(tmp_path):
+def test_dispatch_queues_tasks_when_some_workers_are_offline(tmp_path):
     client, headers, db = make_client(tmp_path)
     with sqlite3.connect(db) as conn:
         conn.execute("DELETE FROM extension_instances WHERE profile_id='flow-5'")
     response = client.post("/api/v1/extension/dispatch/job-a", headers=headers)
-    assert response.status_code == 409
-    assert "flow-5" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["dispatched"] == 5
+    assert response.json()["tasks"][-1]["profileId"] == "flow-5"
+    queued = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-5&instance_id=instance-flow-5",
+        headers=headers,
+    )
+    assert queued.status_code == 409
 
 
 def test_failed_task_can_be_retried_on_its_live_profile(tmp_path):
