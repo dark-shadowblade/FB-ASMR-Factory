@@ -161,7 +161,7 @@ export default function App() {
   }
 
 
-  async function startAutomaticProduction(job: Job) {
+  async function startAutomaticProduction(job: Job, allowSupersededAttempt = false) {
     if (flowProfiles.filter(p=>p.configured).length !== 5) {
       setNotice("Save all five Google Flow project URLs first.");
       return;
@@ -237,6 +237,31 @@ export default function App() {
       setNotice(error instanceof Error ? error.message : "Could not start automatic production.");
       await refresh();
     } finally { setDispatching(false); }
+  }
+
+  async function generateFreshPromptsForFailedJob(job: Job) {
+    if (dispatching || busy) return;
+    setDispatching(true);
+    try {
+      setNotice("Superseding the failed attempt and generating five fresh prompts…");
+      const response = await fetch(API + "/jobs/" + job.id + "/regenerate-prompts", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not generate a fresh prompt pack");
+      let updated: Job = data.job;
+      const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
+      const approvedData = await approved.json();
+      if (!approved.ok) throw new Error(approvedData.detail || "Could not approve the fresh prompts");
+      updated = approvedData.job;
+      setSelected(updated);
+      await refresh();
+      setNotice("Fresh prompts ready. Starting a new Flow generation attempt…");
+      await startAutomaticProduction(updated, true);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Fresh prompt generation failed.");
+      await refresh();
+    } finally {
+      setDispatching(false);
+    }
   }
 
   async function assembleJob(job: Job) {
@@ -531,6 +556,9 @@ export default function App() {
           <div><b>Production progress</b><small>{flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 Flow tasks · {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length}/5 downloads · {active.final_video ? "video assembled" : "assembly runs automatically after all downloads"}</small></div>
           <span className="count-pill">{active.final_video ? "ASSEMBLED" : "AUTOMATIC"}</span>
         </div>
+        {flowAutomation.tasks.some(t=>t.job_id===active.id && ["failed","blocked_ui","blocked_settings","needs_login"].includes(t.status)) &&
+          flowAutomation.tasks.filter(t=>t.job_id===active.id).every(t=>["failed","blocked_ui","blocked_settings","needs_login","cancelled","superseded","downloaded"].includes(t.status)) &&
+          !active.final_video && <div className="dispatch-toolbar"><div><b>Generation failed</b><small>The failed attempt is retained in history. Generate a completely new prompt pack and start a fresh attempt.</small></div><button className="primary compact" disabled={dispatching} onClick={()=>generateFreshPromptsForFailedJob(active)}>{dispatching ? "Generating…" : "Generate New Prompts"}</button></div>}
         {flowAutomation.tasks.filter(t=>t.job_id===active.id).length>0 && <div className="flow-task-list">{flowAutomation.tasks.filter(t=>t.job_id===active.id).map(task=><div className="flow-task-row" key={task.task_id}><span>{task.profile_id}</span><b>{task.status.replaceAll("_"," ")}</b><small>{task.last_error || task.download_path || task.updated_at}</small></div>)}</div>}
         {active.final_video && <div className="facebook-publish-panel">
           <div className="panel-head"><div><div className="eyebrow">FACEBOOK REELS</div><h3>Automatic publishing</h3></div><span className="count-pill">{facebookPublication?.status?.toUpperCase() || (facebookStatus.connected ? "QUEUED" : "PAGE SETUP REQUIRED")}</span></div>
