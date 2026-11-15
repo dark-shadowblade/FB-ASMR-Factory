@@ -212,6 +212,11 @@ async function poll() {
       console.error("[ASMR Flow] rejected task: profile or payload mismatch");
       return;
     }
+    const completionState = await chrome.storage.local.get("completedTaskIds");
+    if ((completionState.completedTaskIds || []).includes(result.task.taskId)) {
+      console.warn("[ASMR Flow] rejected stale task already completed", result.task.taskId);
+      return;
+    }
     activeTask = result.task;
     const assignedSettings = activeTask.settings || {};
     await chrome.storage.local.set({
