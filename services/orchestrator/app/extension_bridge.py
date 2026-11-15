@@ -305,6 +305,13 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             if request.type == "DOWNLOAD_COMPLETED":
                 conn.execute("UPDATE clips SET status='downloaded' WHERE id=? AND job_id=?",
                              (request.clipId, request.jobId))
+                # The downloaded clip is now safely recorded. Remove the active
+                # prompt payload from the worker queue while retaining task/event
+                # history and the clip/job records for audit and assembly.
+                conn.execute(
+                    "UPDATE extension_tasks SET prompt='' WHERE task_id=? AND status='downloaded'",
+                    (request.taskId,),
+                )
             elif request.type in ("DOWNLOAD_FAILED", "TASK_FAILED", "PROMPT_INSERT_FAILED"):
                 conn.execute("UPDATE clips SET status='failed' WHERE id=? AND job_id=?",
                              (request.clipId, request.jobId))
