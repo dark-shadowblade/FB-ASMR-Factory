@@ -40,14 +40,14 @@ class FlowProfileManager:
             raise ValueError("Unknown Flow profile.")
         project_url = validate_flow_project_url(project_url)
         async with self._locks[profile_id]:
-            await self._ensure_playwright()
-            context = self._contexts.get(profile_id)
-            if context is None:
-                profile_dir = self.root / profile_id
-                profile_dir.mkdir(parents=True, exist_ok=True)
-                downloads_dir = profile_dir / "downloads"
-                downloads_dir.mkdir(parents=True, exist_ok=True)
-                try:
+            try:
+                await self._ensure_playwright()
+                context = self._contexts.get(profile_id)
+                if context is None:
+                    profile_dir = self.root / profile_id
+                    profile_dir.mkdir(parents=True, exist_ok=True)
+                    downloads_dir = profile_dir / "downloads"
+                    downloads_dir.mkdir(parents=True, exist_ok=True)
                     context = await self._playwright.chromium.launch_persistent_context(
                         user_data_dir=str(profile_dir),
                         channel="chrome",
@@ -56,12 +56,15 @@ class FlowProfileManager:
                         downloads_path=str(downloads_dir),
                         viewport={"width": 1440, "height": 1000},
                     )
-                except Exception as exc:
-                    message = str(exc)
-                    if "executable" in message.lower() or "chrome" in message.lower():
-                        raise RuntimeError("Google Chrome was not found or could not start. Install Chrome and try again.") from exc
-                    raise RuntimeError(f"Could not open Chrome profile {profile_id}: {message[:300]}") from exc
-                self._contexts[profile_id] = context
+                    self._contexts[profile_id] = context
+            except Exception as exc:
+                message = str(exc)
+                lowered = message.lower()
+                if "executable" in lowered or "chrome" in lowered:
+                    raise RuntimeError("Google Chrome was not found or could not start. Install Google Chrome and try again.") from exc
+                if "playwright" in lowered or "browser_type" in lowered or "driver" in lowered:
+                    raise RuntimeError("Playwright could not initialize its browser driver. Reinstall the app dependencies and Playwright browser support, then try again. " + message[:220]) from exc
+                raise RuntimeError(f"Could not initialize Chrome profile {profile_id}: {message[:300]}") from exc
 
             pages = context.pages
             page = pages[0] if pages else await context.new_page()
