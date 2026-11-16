@@ -180,6 +180,10 @@ export default function App() {
       if (loginRequired.length) {
         throw new Error("Google sign-in is required in: " + loginRequired.map((p: any) => p.profile_id).join(", ") + ". Sign in once in those persistent browser windows, then resume this job.");
       }
+      const projectsNotReady = opened.filter((profile: any) => !profile.project_ready);
+      if (projectsNotReady.length) {
+        throw new Error("Flow did not confirm a project in: " + projectsNotReady.map((p: any) => p.profile_id).join(", ") + ". The browser windows remain open; check their Flow pages and retry.");
+      }
 
       setNotice("Step 2/4 · Generating five prompts automatically…");
       const promptData = await requestJson(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
