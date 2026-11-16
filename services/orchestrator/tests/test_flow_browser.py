@@ -105,6 +105,7 @@ class FlowProfileTests(unittest.TestCase):
             browsers = {pid: FakeBrowser(contexts[pid]) for pid in PROFILE_IDS}
             attempts = {}
             processes = []
+            process_options = []
 
             async def connect(endpoint, timeout):
                 port = int(endpoint.rsplit(":", 1)[1])
@@ -115,9 +116,10 @@ class FlowProfileTests(unittest.TestCase):
                     raise RuntimeError("no existing Chrome endpoint")
                 return browsers[profile_id]
 
-            def popen(args, **_kwargs):
+            def popen(args, **kwargs):
                 process = FakeProcess(args)
                 processes.append(process)
+                process_options.append(kwargs)
                 return process
 
             manager = FlowProfileManager(root)
@@ -146,6 +148,9 @@ class FlowProfileTests(unittest.TestCase):
                 for process in processes
             ]
             self.assertEqual(len(set(user_data_dirs)), 5)
+            self.assertTrue(all("--new-window" in process.args for process in processes))
+            self.assertTrue(all("https://flow.google.com/" in process.args for process in processes))
+            self.assertTrue(all("creationflags" not in options for options in process_options))
             self.assertTrue(all(any(arg.startswith("--load-extension=") for arg in process.args) for process in processes))
             self.assertEqual(
                 [workers[pid].configurations[0]["profileId"] for pid in PROFILE_IDS],
