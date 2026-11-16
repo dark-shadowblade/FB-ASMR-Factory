@@ -46,7 +46,7 @@ class FlowProfileManager:
             await page.wait_for_function(
                 """() => Boolean(
                     document.querySelector('a[href*="/project/"]') ||
-                    [...document.querySelectorAll('button')].some(button =>
+                    [...document.querySelectorAll('button,a,[role="button"]')].some(button =>
                         /new project/i.test(button.getAttribute('aria-label') || button.innerText || button.textContent || '')
                     )
                 )""",
@@ -80,7 +80,10 @@ class FlowProfileManager:
         locator = page.get_by_role("button", name=re.compile(r"new project", re.I))
         count = await locator.count()
         if count != 1:
-            locator = page.locator("button").filter(has_text=re.compile(r"^\s*\+?\s*New project\s*$", re.I))
+            locator = page.get_by_role("link", name=re.compile(r"new project", re.I))
+            count = await locator.count()
+        if count != 1:
+            locator = page.locator('button,[role="button"]').filter(has_text=re.compile(r"^\s*\+?\s*New project\s*$", re.I))
             count = await locator.count()
         if count != 1:
             raise RuntimeError(
