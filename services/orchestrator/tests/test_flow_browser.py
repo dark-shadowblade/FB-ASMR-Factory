@@ -126,9 +126,9 @@ class FlowProfileTests(unittest.TestCase):
                     for pid in PROFILE_IDS
                 ))
 
-            with patch("app.flow_browser.find_chrome", return_value="/fake/chrome"), \\
-                 patch("app.flow_browser.subprocess.Popen", side_effect=popen):
-                results = asyncio.run(open_all())
+            with patch("app.flow_browser.find_chrome", return_value="/fake/chrome"):
+                with patch("app.flow_browser.subprocess.Popen", side_effect=popen):
+                    results = asyncio.run(open_all())
 
             self.assertEqual(len(results), 5)
             self.assertTrue(all(result["project_ready"] for result in results))
