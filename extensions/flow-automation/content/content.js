@@ -7,6 +7,7 @@
   let executingPromise = null;
   let lastState = "";
   let baselineMediaIds = [];
+  let baselineCaptured = false;
   let targetMediaId = null;
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
@@ -141,7 +142,7 @@
     }
   }
   function videoReady() {
-    if (baselineMediaIds.length && window.ASMRFlowControls) {
+    if (baselineCaptured && window.ASMRFlowControls) {
       const freshId = targetMediaId || window.ASMRFlowControls.findNewMediaId(baselineMediaIds);
       if (!freshId) return false;
       targetMediaId = freshId;
@@ -205,6 +206,7 @@
       for (const key of keys.slice(0, Math.max(0, keys.length - 20))) delete baselineMap[key];
       await chrome.storage.local.set({ flowBaselineByTask: baselineMap });
     }
+    baselineCaptured = true;
     targetMediaId = null;
     const state = detectState();
     if (state === "SESSION_CHECK") {
