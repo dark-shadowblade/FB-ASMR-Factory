@@ -270,7 +270,8 @@
       send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: "The Flow controls adapter did not load." });
       return;
     }
-    const settingsCheck = await window.ASMRFlowControls.applySettings(task.settings || {});
+    const selectorConfig = settings.selectorsVerified === true ? settings : {};
+    const settingsCheck = await window.ASMRFlowControls.applySettings(task.settings || {}, selectorConfig);
     if (!settingsCheck.ok) {
       send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual, available: settingsCheck.available || [] });
       return;
