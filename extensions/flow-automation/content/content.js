@@ -6,6 +6,9 @@
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let baselineMediaIds = [];
+  let baselineCaptured = false;
+  let targetMediaId = null;
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -53,8 +56,17 @@
   }
   function findButton(regex) {
     const buttons = [...document.querySelectorAll("button,[role=button]")].filter(visible);
-    const matches = buttons.filter(el => regex.test(labelOf(el).toLowerCase()));
+    const matches = buttons.filter(el => {
+      const iconText = [...el.querySelectorAll("mat-icon, i")].map(node => node.textContent || "").join(" ");
+      return regex.test((labelOf(el) + " " + iconText).toLowerCase());
+    });
     return matches.length === 1 ? matches[0] : null;
+  }
+  function findGenerateButton() {
+    const observed = [...document.querySelectorAll('button.generate-icon-button[type="submit"], button[aria-label="Start generation"]')].filter(visible);
+    if (observed.length === 1) return observed[0];
+    if (observed.length > 1) return null;
+    return findButton(/generate|create video|make video|start generation|arrow_forward/i);
   }
   function selectedText(selector) {
     if (!selector) return "";
@@ -139,10 +151,11 @@
     }
   }
   function videoReady() {
-    const playable = [...document.querySelectorAll("video")].some(v =>
-      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
-    );
-    return playable && !!findButton(/download/);
+    if (!baselineCaptured || !window.ASMRFlowControls) return false;
+    const freshId = targetMediaId || window.ASMRFlowControls.findNewMediaId(baselineMediaIds);
+    if (!freshId) return false;
+    targetMediaId = freshId;
+    return window.ASMRFlowControls.mediaTileReady(freshId);
   }
   function detectState() {
     const text = (document.body?.innerText || "").toLowerCase();
@@ -186,6 +199,16 @@
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
     }
+    const baselineState = await chrome.storage.local.get("flowBaselineByTask");
+    const baselineMap = baselineState.flowBaselineByTask || {};
+    if (Array.isArray(baselineMap[task.taskId])) {
+      baselineMediaIds = baselineMap[task.taskId];
+      baselineCaptured = true;
+    } else {
+      baselineMediaIds = [];
+      baselineCaptured = false;
+    }
+    targetMediaId = null;
     const state = detectState();
     if (state === "SESSION_CHECK") {
       send("SESSION_REQUIRED", { url: location.href });
@@ -234,7 +257,7 @@
       }
     } else {
       // Prefer unique, semantically labelled controls discovered on the live page.
-      generate = findButton(/generate|create video|make video|start generation|arrow_forward/i);
+      generate = findGenerateButton();
     }
     if (!visible(configuredField) || !visible(generate) ||
         (!/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") ||
@@ -243,12 +266,16 @@
       send("FLOW_UI_UNVERIFIED", { reason: "Configured prompt/generate selectors did not resolve to visible, enabled controls." });
       return;
     }
-    const settingsCheck = verifySettings(settings, task.settings || {});
-    if (!settingsCheck.ok) {
-      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual });
+    if (!window.ASMRFlowControls || typeof window.ASMRFlowControls.applySettings !== "function") {
+      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: "The Flow controls adapter did not load." });
       return;
     }
-    send("SETTINGS_VERIFIED", { actual: settingsCheck.actual, aspectRatioVerified: settingsCheck.aspectRatioVerified });
+    const settingsCheck = await window.ASMRFlowControls.applySettings(task.settings || {});
+    if (!settingsCheck.ok) {
+      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual, available: settingsCheck.available || [] });
+      return;
+    }
+    send("SETTINGS_VERIFIED", { actual: settingsCheck.actual, verification: settingsCheck.verified });
     if ((configuredField.value || configuredField.textContent || "").trim() === task.prompt.trim()) {
       send("PROMPT_ALREADY_PRESENT", { reason: "Prompt is already present; refusing to click Generate a second time." });
       return;
@@ -258,15 +285,36 @@
       send("PROMPT_INSERT_FAILED", {});
       return;
     }
+    if (!baselineCaptured) {
+      baselineMediaIds = window.ASMRFlowControls.mediaIds();
+      baselineCaptured = true;
+      baselineMap[task.taskId] = baselineMediaIds;
+      const keys = Object.keys(baselineMap);
+      for (const key of keys.slice(0, Math.max(0, keys.length - 20))) delete baselineMap[key];
+      await chrome.storage.local.set({ flowBaselineByTask: baselineMap });
+    }
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
     lastState = "PROJECT_LOADED";
     startMonitor();
   }
   let downloadRequested = false;
-  function requestDownload() {
+  async function requestDownload() {
     if (downloadRequested) return;
     downloadRequested = true;
+    if (targetMediaId && window.ASMRFlowControls) {
+      const requested = await chrome.storage.local.get("downloadRequestedTaskId");
+      if (requested.downloadRequestedTaskId === currentTask?.taskId) return;
+      const result = await window.ASMRFlowControls.downloadMediaTile(targetMediaId);
+      if (!result.ok) {
+        downloadRequested = false;
+        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: result.reason, mediaId: targetMediaId });
+        return;
+      }
+      chrome.storage.local.set({ downloadRequestedTaskId: currentTask?.taskId });
+      send("DOWNLOAD_CLICKED", { source: "generated media tile menu", mediaId: targetMediaId });
+      return;
+    }
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
