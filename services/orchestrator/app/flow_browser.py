@@ -231,18 +231,30 @@ class FlowProfileManager:
             profile_dir = self.root / profile_id
             downloads_dir = profile_dir / "downloads"
             try:
+                # Match the working ASMR-Factory reference: opening the normal,
+                # visible Chrome process is the primary operation. Extension
+                # startup/bridge registration is a separate capability and must
+                # never make a successfully opened browser look like a launch
+                # failure or prevent the remaining profiles from opening.
                 browser, context = await self._connect_or_launch_chrome(profile_id, profile_dir, downloads_dir)
-                if not getattr(context, "_asmr_extension_configured", False):
+            except Exception as exc:
+                message = str(exc)
+                if "Chrome was not found" in message or ("chrome" in message.lower() and "executable" in message.lower()):
+                    raise RuntimeError(message) from exc
+                raise RuntimeError(f"Could not launch visible Chrome profile {profile_id}: {message[:350]}") from exc
+
+            extension_connected = False
+            extension_error = ""
+            if not getattr(context, "_asmr_extension_configured", False):
+                try:
                     await self._configure_worker(context, profile_id)
+                    extension_connected = True
                     try:
                         context._asmr_extension_configured = True
                     except Exception:
                         pass
-            except Exception as exc:
-                message = str(exc)
-                if "Chrome was not found" in message or "chrome" in message.lower() and "executable" in message.lower():
-                    raise RuntimeError(message) from exc
-                raise RuntimeError(f"Could not initialize visible Chrome profile {profile_id}: {message[:350]}") from exc
+                except Exception as exc:
+                    extension_error = str(exc)[:350]
 
             pages = context.pages
             page = pages[0] if pages else await context.new_page()
@@ -270,6 +282,8 @@ class FlowProfileManager:
                 "profile_directory": str(profile_dir),
                 "browser_mode": "visible_chrome_cdp",
                 "debugging_port": self._profile_port(profile_id),
+                "extension_connected": extension_connected or bool(getattr(context, "_asmr_extension_configured", False)),
+                "extension_error": extension_error,
             }
 
     def status(self, profile_id: str) -> dict[str, Any]:
