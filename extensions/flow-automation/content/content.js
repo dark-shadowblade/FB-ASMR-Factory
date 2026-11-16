@@ -243,12 +243,16 @@
       send("FLOW_UI_UNVERIFIED", { reason: "Configured prompt/generate selectors did not resolve to visible, enabled controls." });
       return;
     }
-    const settingsCheck = verifySettings(settings, task.settings || {});
-    if (!settingsCheck.ok) {
-      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual });
+    if (!window.ASMRFlowControls || typeof window.ASMRFlowControls.applySettings !== "function") {
+      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: "The Flow controls adapter did not load." });
       return;
     }
-    send("SETTINGS_VERIFIED", { actual: settingsCheck.actual, aspectRatioVerified: settingsCheck.aspectRatioVerified });
+    const settingsCheck = await window.ASMRFlowControls.applySettings(task.settings || {});
+    if (!settingsCheck.ok) {
+      send("SETTINGS_UNVERIFIED", { requested: task.settings || {}, reason: settingsCheck.reason, actual: settingsCheck.actual, available: settingsCheck.available || [] });
+      return;
+    }
+    send("SETTINGS_VERIFIED", { actual: settingsCheck.actual, verification: settingsCheck.verified });
     if ((configuredField.value || configuredField.textContent || "").trim() === task.prompt.trim()) {
       send("PROMPT_ALREADY_PRESENT", { reason: "Prompt is already present; refusing to click Generate a second time." });
       return;
