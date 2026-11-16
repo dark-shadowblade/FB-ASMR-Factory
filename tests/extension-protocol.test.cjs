@@ -77,7 +77,7 @@ test("Flow adapter uses reference-informed selectors and targets only the new ou
   assert.match(controls, /\[data-media-id\]/);
   assert.match(controls, /findNewMediaId/);
   assert.match(controls, /downloadMediaTile/);
-  assert.match(controls, /More options/);
+  assert.match(controls, /more options/i);
 });
 
 test("extension options render live profile, project and assigned settings", () => {
