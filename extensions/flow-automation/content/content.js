@@ -341,7 +341,7 @@
     }
     console.warn("[ASMR Flow] No unique visible New project control appeared on Flow home.");
   }
-  if (location.pathname === "/" || location.pathname === "") {
+  if (location.hostname === "flow.google.com" && !projectIdentity(location.href)) {
     createProjectFromFlowHome().catch(error => console.warn("[ASMR Flow] project creation check failed", error));
   }
 
