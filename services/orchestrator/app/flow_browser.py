@@ -275,8 +275,18 @@ class FlowProfileManager:
         if profile_id not in PROFILE_IDS:
             raise ValueError("Unknown Flow profile.")
         process = self._processes.get(profile_id)
+        browser = self._browsers.get(profile_id)
         context = self._contexts.get(profile_id)
-        alive = bool(process and process.poll() is None and context is not None)
+        alive = bool(browser is not None and context is not None)
+        if alive:
+            try:
+                alive = context in browser.contexts
+            except Exception:
+                alive = False
+        # A profile reattached over CDP after an orchestrator restart has no
+        # Popen handle in this process, but its browser is still genuinely open.
+        if process is not None and process.poll() is not None:
+            alive = False
         return {
             "profile_id": profile_id,
             "browser_open": alive,
