@@ -52,7 +52,7 @@ CLIP_TRANSITIONS: dict[str, frozenset[str]] = {
 
 TASK_TRANSITIONS: dict[str, frozenset[str]] = {
     "queued": frozenset({"leased", "cancelled", "superseded"}),
-    "leased": frozenset({"project_open", "queued", "submitted", "generating", "generation_completed", "downloading", "downloaded", "needs_login", "blocked_ui", "blocked_settings", "failed", "paused", "cancelled"}),
+    "leased": frozenset({"project_open", "queued", "needs_login", "blocked_ui", "blocked_settings", "failed", "paused", "cancelled"}),
     "project_open": frozenset({"settings_verified", "needs_login", "blocked_ui", "failed", "paused", "cancelled"}),
     "settings_verified": frozenset({"submitted", "blocked_settings", "blocked_ui", "failed", "paused", "cancelled"}),
     "submitted": frozenset({"generating", "generation_completed", "failed", "paused", "blocked_ui"}),
