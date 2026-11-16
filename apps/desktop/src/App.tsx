@@ -163,7 +163,20 @@ export default function App() {
 
   async function startAutomaticProduction(job: Job, allowSupersededAttempt = false) {
     if (dispatching) return;
-    const configured = flowProfiles.filter(profile => profile.configured).length;
+    // Read the latest profile configuration from the backend. React state can
+    // still be stale when the user clicks immediately after the service becomes ready.
+    let latestProfiles: FlowProfile[];
+    try {
+      const profilesResponse = await fetch(API + "/flow/profiles");
+      const profilesData = await profilesResponse.json();
+      if (!profilesResponse.ok) throw new Error(profilesData.detail || "Could not load Flow accounts");
+      latestProfiles = profilesData.profiles ?? [];
+      setFlowProfiles(latestProfiles);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not load Flow accounts.");
+      return;
+    }
+    const configured = latestProfiles.filter(profile => profile.configured).length;
     if (configured !== 5) {
       setNotice(`Save all five Google Flow project URLs first (${configured}/5 configured).`);
       return;
@@ -481,7 +494,7 @@ export default function App() {
           <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
-          <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy || dispatching ? "Starting automated production…" : "▶  Generate Video"}</button>
+          <button className="primary" onClick={createJob} disabled={busy || dispatching}>{busy || dispatching ? "Starting automated production…" : "▶  Generate Video"}</button>
           <p className="helper">One click generates and internally approves five prompts, opens profiles 01–05, dispatches generation, downloads, assembles and publishes automatically. First-time profile pairing, Google sign-in and Facebook Page setup are required; Flow controls are auto-detected when uniquely identifiable.</p>
         </section>}
         {activePage === "accounts" && <section className="panel session-panel">
