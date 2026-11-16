@@ -19,28 +19,29 @@ Implement the production workflow step by step, with backend/orchestrator reliab
 
 ## Partially complete / not yet verified
 
-- [ ] The transition validator is not yet wired into every API route or extension event handler.
+- [x] Extension event ingestion validates task transitions before persisting events; illegal/out-of-order events return HTTP 409 and are not recorded.
+- [ ] The validator is not yet wired into every job/clip API route or all state mutation paths.
 - [ ] State + job-event writes are not yet centralised into one transactional service.
 - [ ] Unique active profile leases and stale-lease reconciliation are not yet implemented.
-- [ ] Tests added in this branch have not yet been run by GitHub Actions in this session.
+- [ ] Backend CI for this branch is pending; the PR will trigger the pytest suite.
 - [ ] No live Google Flow or Facebook account behaviour has been verified by this implementation step.
 
 ## Next steps
 
-1. Integrate transition validation into task event ingestion and job/clip update paths, preserving existing statuses and compatibility.
+1. Extend transition validation to job/clip update paths, preserving existing statuses and compatibility.
 2. Add atomic state-and-event persistence helpers and tests for rollback/idempotency.
 3. Add database-enforced per-profile task leasing and concurrency tests.
 4. Build a single idempotent job-start orchestrator (prompt generation → auto-approval → preflight → dispatch).
 5. Continue through extension execution, download ingestion, restart recovery, media normalization and publication reconciliation.
 
-## Verification record
+## Latest implementation step (2026-11-16)\n\n- Commit `715c3d5`: validate incoming extension task-state transitions before persistence.\n- Commit `8e08d77`: test the ordered worker lifecycle and verify invalid events are rejected without persistence.\n- Commit `398f6ab`: fix backend CI to run pytest; the previous unittest discovery command would not collect the repository's pytest-style tests.\n- Added a PR to `main` to run CI; no merge has been performed.\n\n## Verification record
 
 | Check | Status |
 |---|---|
 | Architecture document committed | Done |
 | State transition module committed | Done |
 | State transition tests committed | Done |
-| Backend CI for this branch | Pending / not checked |
+| Backend CI for this branch | Pending PR run |
 | Extension bridge CI for this branch | Pending / not checked |
 | Windows installer for this branch | Not built |
 | Live five-profile Flow test | Not performed |
