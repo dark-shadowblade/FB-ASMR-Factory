@@ -43,6 +43,7 @@ class FlowProfileManager:
         self.bridge_token_path = self.root.parent / "extension-bridge.token"
         self._playwright: Any = None
         self._contexts: dict[str, Any] = {}
+        self._playwright_lock = asyncio.Lock()
         self._locks = {profile_id: asyncio.Lock() for profile_id in PROFILE_IDS}
 
     async def _configure_worker(self, context: Any, profile_id: str) -> None:
@@ -77,9 +78,10 @@ class FlowProfileManager:
         }""", {"profileId": profile_id, "bridgeToken": bridge_token})
 
     async def _ensure_playwright(self) -> None:
-        if self._playwright is None:
-            from playwright.async_api import async_playwright
-            self._playwright = await async_playwright().start()
+        async with self._playwright_lock:
+            if self._playwright is None:
+                from playwright.async_api import async_playwright
+                self._playwright = await async_playwright().start()
 
     async def open_profile(self, profile_id: str, project_url: str) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
