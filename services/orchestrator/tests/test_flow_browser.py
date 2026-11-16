@@ -72,6 +72,10 @@ class FlowProfileTests(unittest.TestCase):
             browser = FakeBrowser(context)
             manager._connect_or_launch_chrome = AsyncMock(return_value=(browser, context))
             manager._configure_worker = AsyncMock(side_effect=RuntimeError("Extension service worker did not start"))
+            # The connector normally records these handles; the mocked connector
+            # must do the same so status() tests the browser, not the mock.
+            manager._browsers["flow-1"] = browser
+            manager._contexts["flow-1"] = context
             result = asyncio.run(manager.open_profile("flow-1", "https://flow.google.com/"))
             self.assertEqual(result["profile_id"], "flow-1")
             self.assertEqual(result["browser_mode"], "visible_chrome_cdp")
