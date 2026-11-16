@@ -64,6 +64,7 @@ class FlowProfileManager:
             profileId,
             enabled: true
           });
+          await poll();
           return true;
         }""", {"profileId": profile_id, "bridgeToken": bridge_token})
 
