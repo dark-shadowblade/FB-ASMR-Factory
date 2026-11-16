@@ -31,6 +31,7 @@ jobs:
       - name: Check extension JavaScript syntax
         run: |
           node --check extensions/flow-automation/background/service-worker.js
+          node --check extensions/flow-automation/content/flow-controls.js
           node --check extensions/flow-automation/content/content.js
           node --check extensions/flow-automation/options/options.js
           node --check extensions/flow-automation/shared/protocol.js
