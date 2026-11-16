@@ -113,8 +113,13 @@ class FlowProfileManager:
                             f"--load-extension={self.extension_path}",
                         ],
                     )
-                    await self._configure_worker(context, profile_id)
                     self._contexts[profile_id] = context
+                    try:
+                        await self._configure_worker(context, profile_id)
+                    except Exception:
+                        self._contexts.pop(profile_id, None)
+                        await context.close()
+                        raise
             except Exception as exc:
                 message = str(exc)
                 lowered = message.lower()
