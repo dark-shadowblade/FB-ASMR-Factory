@@ -584,10 +584,16 @@ async def open_flow_profile(profile_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Unknown Flow profile")
     with connect() as conn:
         row = conn.execute("SELECT project_url FROM flow_profiles WHERE profile_id=?", (profile_id,)).fetchone()
-    if row is None or not row["project_url"]:
-        raise HTTPException(status_code=409, detail="Save a Google Flow project URL for this account first")
+    if row is None:
+        raise HTTPException(status_code=404, detail="Flow profile not found")
     try:
-        result = await FLOW_MANAGER.open_profile(profile_id, row["project_url"])
+        result = await FLOW_MANAGER.open_profile(profile_id, row["project_url"] or None)
+        if not result.get("login_required"):
+            project_url = validate_flow_project_url(result["current_url"])
+            with connect() as conn:
+                conn.execute("UPDATE flow_profiles SET project_url=?,updated_at=? WHERE profile_id=?",
+                             (project_url, utc_now(), profile_id))
+            result["project_url"] = project_url
         return {"profile": result}
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -602,19 +608,19 @@ async def open_all_flow_profiles() -> dict[str, Any]:
         rows = conn.execute(
             "SELECT profile_id,display_name,project_url FROM flow_profiles ORDER BY profile_id"
         ).fetchall()
-    missing = [row["profile_id"] for row in rows if not row["project_url"]]
-    if missing:
-        raise HTTPException(
-            status_code=409,
-            detail="Save a Flow project URL for every account before starting: " + ", ".join(missing),
-        )
 
     import asyncio
     async def open_one(row: sqlite3.Row) -> dict[str, Any]:
         try:
-            profile = await FLOW_MANAGER.open_profile(row["profile_id"], row["project_url"])
+            profile = await FLOW_MANAGER.open_profile(row["profile_id"], row["project_url"] or None)
+            if not profile.get("login_required"):
+                project_url = validate_flow_project_url(profile["current_url"])
+                with connect() as conn:
+                    conn.execute("UPDATE flow_profiles SET project_url=?,updated_at=? WHERE profile_id=?",
+                                 (project_url, utc_now(), row["profile_id"]))
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
                     "opened": True, "login_required": profile.get("login_required", False),
+                    "project_created": profile.get("project_created", False),
                     "current_url": profile.get("current_url", "")}
         except (ValueError, RuntimeError) as exc:
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],

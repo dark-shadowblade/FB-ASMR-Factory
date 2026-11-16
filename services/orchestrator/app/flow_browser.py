@@ -35,10 +35,44 @@ class FlowProfileManager:
             from playwright.async_api import async_playwright
             self._playwright = await async_playwright().start()
 
-    async def open_profile(self, profile_id: str, project_url: str) -> dict[str, Any]:
+    async def _create_project_from_home(self, page: Any) -> str:
+        """Create a Flow project through the visible + New project control and verify its URL."""
+        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
+        await page.goto("https://flow.google.com/", wait_until="domcontentloaded", timeout=60000)
+        await page.wait_for_timeout(1200)
+        if "accounts.google.com" in page.url:
+            return page.url
+
+        # Google documents the action as "+ New project". Match the visible
+        # button by accessible name/text and refuse ambiguous matches.
+        locator = page.get_by_role("button", name=re.compile(r"new project", re.I))
+        count = await locator.count()
+        if count != 1:
+            locator = page.locator("button").filter(has_text=re.compile(r"^\\s*\\+?\\s*New project\\s*$", re.I))
+            count = await locator.count()
+        if count != 1:
+            raise RuntimeError(
+                "Google Flow opened, but its unique '+ New project' button was not found. "
+                "The project was not created; check the signed-in account and current Flow page."
+            )
+        await locator.click(timeout=15000)
+        try:
+            await page.wait_for_url(
+                re.compile(r"^https://flow\\.google\\.com/project/[A-Za-z0-9-]{12,}"),
+                timeout=60000,
+            )
+        except PlaywrightTimeoutError as exc:
+            raise RuntimeError(
+                "Flow's '+ New project' action was clicked, but no project URL appeared. "
+                "The app will not mark this profile as configured."
+            ) from exc
+        return validate_flow_project_url(page.url)
+
+    async def open_profile(self, profile_id: str, project_url: str | None = None) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
             raise ValueError("Unknown Flow profile.")
-        project_url = validate_flow_project_url(project_url)
+        project_url = validate_flow_project_url(project_url) if project_url else ""
         async with self._locks[profile_id]:
             try:
                 await self._ensure_playwright()
@@ -68,14 +102,32 @@ class FlowProfileManager:
 
             pages = context.pages
             page = pages[0] if pages else await context.new_page()
-            if page.url != project_url:
-                await page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
+            # A saved URL always wins. With no saved URL, reuse an already-open
+            # project in this persistent profile; otherwise create one on Flow.
+            if project_url:
+                if page.url != project_url:
+                    await page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
+            else:
+                try:
+                    current_project = validate_flow_project_url(page.url)
+                except ValueError:
+                    current_project = ""
+                if not current_project:
+                    current_url = await self._create_project_from_home(page)
+                    if "accounts.google.com" in current_url:
+                        page_url = current_url
+                    else:
+                        page_url = validate_flow_project_url(current_url)
+                else:
+                    page_url = current_project
             try:
                 await page.bring_to_front()
             except Exception:
                 pass
             current_url = page.url
             login_required = "accounts.google.com" in current_url
+            if not login_required:
+                current_url = validate_flow_project_url(current_url)
             return {
                 "profile_id": profile_id,
                 "status": "login_required" if login_required else "project_open",
@@ -83,6 +135,7 @@ class FlowProfileManager:
                 "title": await page.title(),
                 "login_required": login_required,
                 "profile_directory": str(self.root / profile_id),
+                "project_created": bool(not project_url and not current_project) if "current_project" in locals() else False,
             }
 
     def status(self, profile_id: str) -> dict[str, Any]:

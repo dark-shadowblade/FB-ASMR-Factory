@@ -39,13 +39,25 @@ It also contains these Generate-control patterns:
 
 The worker now prefers the observed rich-text editor patterns when identifying a unique prompt field, and the read-only diagnostic reports icon text where available so icon-only Generate/Download controls are easier to recognise. For contenteditable editors, prompt insertion now uses the browser editing-command path instead of directly replacing `textContent`; it deliberately avoids private React internals and DevTools Protocol input simulation.
 
-These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker can use unique semantic auto-detection; explicitly verified custom selectors remain an optional override. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
+These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker uses unique semantic auto-detection; explicitly verified custom selectors remain an optional override for prompt, Generate and Download controls. Settings selection is handled by the reference-informed Flow controls adapter. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
 
-## Live Flow controls: automatic detection with guarded overrides
+## Live Flow controls: reference-informed adapter
 
-The content script first detects a unique prompt editor, Generate control and Download control from the live page. It also checks the currently selected model, resolution, duration and aspect ratio from selected/checked UI elements. Explicitly verified selectors in the options page override automatic detection. If the current Flow page does not expose one unique control or a selected value that matches the assigned task, the worker blocks that clip and reports the exact missing control/value instead of guessing. This automatic detection has not yet been confirmed against a live signed-in Google Flow session.
+The supplied Veo Automation 2.0.1 ZIP is used as a technical reference, not imported or loaded as a dependency. Its Flow-specific interaction patterns are adapted in our own content/flow-controls.js module:
 
-Model, quality, duration and aspect-ratio selection are not implemented as verified actions yet. The worker reports this limitation instead of pretending requested settings were applied.
+- Opens Flow's settings panel and selects Video mode when that control is exposed.
+- Selects the requested aspect ratio, defaulting to the factory's vertical 9:16 format.
+- Selects one output (x1) when the output-count control is exposed.
+- Opens the model-family picker and selects a uniquely matched model option. The reference aliases for Nano Banana 2 and Omni Flash are retained.
+- Selects the requested resolution from the visible 360p/720p/1080p-style radio options.
+- Sets the duration slider when Flow exposes it. The reference UI's three-second slider offset is accounted for; models with fixed/no visible duration slider are explicitly reported as not exposed rather than falsely marked as changed.
+- Uses the reference's ProseMirror prompt editor and icon-only Generate button patterns.
+- Captures the existing data-media-id values immediately before submission, then waits for the newly created output tile rather than downloading an older video already in the project.
+- Opens the new tile's More options menu and selects its Download action. The existing service worker still tracks the browser download and reports completion to the orchestrator.
+
+The adapter uses DOM-visible controls and guarded matching. Ambiguous or missing controls stop the clip before Generate; it does not guess between multiple model, ratio, resolution, or download choices. The extension remains independent: no reference-extension code is installed, imported, or required. Its five-profile binding, local bridge, task/event protocol and download validation remain ours.
+
+**Verification limitation:** these selectors and interactions are adapted from the supplied package and still require a controlled live test in each authorised Flow account. In particular, the current Flow UI may change its DOM, model availability, resolution options or duration behavior. A duration reported as model-fixed-or-not-exposed must be checked against the downloaded clip by the existing FFprobe validation before assembly.
 
 ## Protocol
 
@@ -53,7 +65,7 @@ Model, quality, duration and aspect-ratio selection are not implemented as verif
 
 The extension detects the Google Flow project ID from the signed-in tab URL and stores the most recently detected project in that Chrome profile's local extension storage (`lastFlowProject`). The background worker also records the profile ID, page title and detection timestamp. Project matching uses the Flow project ID rather than a raw URL string, so query parameters or a trailing slash do not make the same project look different. A task is never submitted when its assigned project ID differs from the open project.
 
-Generation settings are read from the assigned task's `settings` object supplied by the desktop/orchestrator bridge: `model`, `resolution`, `durationSeconds`, and optionally `aspectRatio`. The extension does not silently substitute defaults. It verifies those requested values against configured selectors or uniquely detected selected/checked UI values and refuses submission if a required value is missing or differs. Each Chrome profile keeps its own selector configuration and saved project detection state.
+Generation settings are read from the assigned task's `settings` object supplied by the desktop/orchestrator bridge: `model`, `resolution`, `durationSeconds`, and optionally `aspectRatio`. The adapter applies the requested settings before inserting the prompt and clicking Generate; the factory defaults aspect ratio to 9:16 and output count to one when those controls are present. Missing/ambiguous model, ratio or resolution controls block submission. If a model has no duration slider, the extension reports that duration as fixed/not exposed and relies on the orchestrator's FFprobe validation of the downloaded clip. Each Chrome profile keeps its own selector configuration and saved project detection state.
 
 The worker expects the local API routes:
 

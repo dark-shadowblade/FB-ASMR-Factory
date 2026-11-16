@@ -27,10 +27,21 @@ class OpenAllFlowProfilesTests(unittest.TestCase):
             conn.execute("UPDATE flow_profiles SET project_url='', updated_at=?",
                          (main.utc_now(),))
 
-    def test_open_all_requires_five_saved_project_urls(self):
-        response = self.client.post("/api/v1/flow/profiles/open-all")
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("flow-1", response.json()["detail"])
+    def test_open_all_auto_creates_projects_when_profiles_have_no_saved_url(self):
+        async def opened(profile_id, url):
+            return {"profile_id": profile_id, "login_required": False,
+                    "current_url": f"https://flow.google.com/project/{profile_id}-12345678",
+                    "status": "project_open", "project_created": True}
+
+        with patch.object(main.FLOW_MANAGER, "open_profile", new=AsyncMock(side_effect=opened)) as opener:
+            response = self.client.post("/api/v1/flow/profiles/open-all")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["opened"], 5)
+        self.assertEqual(opener.await_count, 5)
+        with main.connect() as conn:
+            saved = conn.execute("SELECT COUNT(*) AS n FROM flow_profiles WHERE length(project_url)>0").fetchone()["n"]
+        self.assertEqual(saved, 5)
 
     def test_open_all_launches_each_isolated_profile(self):
         project_url = "https://flow.google.com/project/12345678-abcd"

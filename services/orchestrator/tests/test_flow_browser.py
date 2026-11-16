@@ -34,4 +34,15 @@ class FlowProfileTests(unittest.TestCase):
             self.assertFalse(manager.status("flow-2")["browser_open"])
             self.assertNotEqual(manager.root / "flow-1", manager.root / "flow-2")
 
+    def test_open_profile_accepts_missing_saved_project_for_auto_creation(self):
+        import inspect
+        self.assertIn("project_url: str | None = None", inspect.getsource(FlowProfileManager.open_profile))
+
+    def test_flow_home_new_project_button_is_used_for_first_run(self):
+        import inspect
+        source = inspect.getsource(FlowProfileManager._create_project_from_home)
+        self.assertIn("new project", source.lower())
+        self.assertIn("wait_for_url", source)
+        self.assertIn("/project/", source)
+
 
