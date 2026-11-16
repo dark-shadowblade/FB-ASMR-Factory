@@ -13,7 +13,7 @@
   "background": { "service_worker": "background/service-worker.js" },
   "content_scripts": [{
     "matches": ["https://flow.google.com/*"],
-    "js": ["content/content.js"],
+    "js": ["content/flow-controls.js", "content/content.js"],
     "run_at": "document_idle"
   }],
   "options_page": "options/options.html",
