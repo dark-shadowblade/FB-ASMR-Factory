@@ -117,7 +117,8 @@ class FlowProfileTests(unittest.TestCase):
             manager = FlowProfileManager(root)
             manager.extension_path = extension
             manager._playwright = SimpleNamespace(
-                chromium=SimpleNamespace(connect_over_cdp=AsyncMock(side_effect=connect))
+                chromium=SimpleNamespace(connect_over_cdp=AsyncMock(side_effect=connect)),
+                stop=AsyncMock(),
             )
 
             async def open_all():
