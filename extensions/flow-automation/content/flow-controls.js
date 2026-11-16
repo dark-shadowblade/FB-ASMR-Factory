@@ -85,6 +85,16 @@
     return clickAndVerify(video[0], "Video mode");
   }
 
+
+  async function selectOutputCount(count = 1) {
+    const expected = "x" + Number(count);
+    const candidates = [...document.querySelectorAll('button[role="radio"], [role="radio"]')].filter(visible);
+    const matches = candidates.filter(el => normalized(label(el)) === normalized(expected));
+    if (!matches.length) return { ok: true, verified: "not-exposed" };
+    if (matches.length !== 1) return { ok: false, reason: "Output-count option is ambiguous: " + expected };
+    return clickAndVerify(matches[0], "Output count " + expected);
+  }
+
   async function selectAspectRatio(value) {
     if (!value) return { ok: true, verified: "not-requested" };
     const iconNames = { "1:1": "crop_square", "4:3": "crop_landscape", "3:4": "crop_portrait", "16:9": "crop_16_9", "9:16": "crop_9_16" };
@@ -108,7 +118,9 @@
     if (!triggerResult.element) return { ok: false, reason: "Model picker trigger unavailable: " + triggerResult.reason };
     const trigger = triggerResult.element;
     const current = label(trigger);
-    const wantedTokens = modelTokens(value);
+    const aliases = { "nano banana 2": "Nano Banana 2.1", "omni flash": "Omni 1.1 Flash" };
+    const wantedModel = aliases[String(value).toLowerCase()] || value;
+    const wantedTokens = modelTokens(wantedModel);
     const currentTokens = modelTokens(current);
     if (wantedTokens.length && wantedTokens.every(token => currentTokens.includes(token))) {
       return { ok: true, actual: current, verified: "already-selected" };
@@ -126,7 +138,7 @@
       const tokens = modelTokens(label(el));
       return wantedTokens.length && wantedTokens.every(token => tokens.includes(token));
     });
-    if (matches.length !== 1) return { ok: false, reason: matches.length ? "Model option is ambiguous: " + value : "Model option not found in Flow menu: " + value, available: options.map(label).slice(0, 20) };
+    if (matches.length !== 1) return { ok: false, reason: matches.length ? "Model option is ambiguous: " + wantedModel : "Model option not found in Flow menu: " + wantedModel, available: options.map(label).slice(0, 20) };
     const chosenLabel = label(matches[0]);
     matches[0].click();
     await sleep(350);
@@ -210,11 +222,7 @@
     const playable = [...tile.querySelectorAll("video")].some(video =>
       visible(video) && video.readyState >= 2 && Number.isFinite(video.duration) && video.duration > 0
     );
-    const hasMenu = [...tile.querySelectorAll("button,[role='button']")].some(button =>
-      enabled(button) && (/more options|more actions/i.test(label(button)) ||
-        [...button.querySelectorAll("mat-icon,i")].some(icon => /more_vert|more_horiz|more/i.test(clean(icon.textContent))))
-    );
-    return playable || hasMenu;
+    return playable;
   }
 
   async function downloadMediaTile(mediaId) {
@@ -248,6 +256,9 @@
     const ratio = await selectAspectRatio(settings.aspectRatio || "9:16");
     if (!ratio.ok) return { ok: false, reason: ratio.reason, actual };
     actual.aspectRatio = settings.aspectRatio || "9:16";
+    const outputCount = await selectOutputCount(settings.outputCount ?? 1);
+    if (!outputCount.ok) return { ok: false, reason: outputCount.reason, actual };
+    actual.outputCount = settings.outputCount ?? 1;
     if (panel.openedByUs) {
       const close = uniqueVisible("button.settings-trigger-button, button[aria-label='Settings trigger']");
       if (close.element) {
