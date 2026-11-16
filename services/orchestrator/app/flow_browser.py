@@ -40,9 +40,23 @@ class FlowProfileManager:
         from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
         await page.goto("https://flow.google.com/", wait_until="domcontentloaded", timeout=60000)
-        await page.wait_for_timeout(1200)
         if "accounts.google.com" in page.url:
             return page.url, False
+        try:
+            await page.wait_for_function(
+                """() => Boolean(
+                    document.querySelector('a[href*="/project/"]') ||
+                    [...document.querySelectorAll('button')].some(button =>
+                        /new project/i.test(button.getAttribute('aria-label') || button.innerText || button.textContent || '')
+                    )
+                )""",
+                timeout=30000,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Google Flow home did not finish loading its project list or '+ New project' control. "
+                "No project was selected or created."
+            ) from exc
 
         # Reuse an existing project in this account before creating anything.
         # Flow's home page lists project cards as links to /project/{id}.
