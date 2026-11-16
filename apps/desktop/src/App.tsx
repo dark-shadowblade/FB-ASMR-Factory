@@ -161,56 +161,15 @@ export default function App() {
   }
 
 
-  async function startAutomaticProduction(job: Job, allowSupersededAttempt = false) {
+  async function startAutomaticProduction(job: Job, _allowSupersededAttempt = false) {
     if (dispatching) return;
-    // Read the latest profile configuration from the backend. React state can
-    // still be stale when the user clicks immediately after the service becomes ready.
-    let latestProfiles: FlowProfile[];
-    try {
-      const profilesResponse = await fetch(API + "/flow/profiles");
-      const profilesData = await profilesResponse.json();
-      if (!profilesResponse.ok) throw new Error(profilesData.detail || "Could not load Flow accounts");
-      latestProfiles = profilesData.profiles ?? [];
-      setFlowProfiles(latestProfiles);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not load Flow accounts.");
-      return;
-    }
-    const configured = latestProfiles.filter(profile => profile.configured).length;
-    if (configured !== 5) {
-      setNotice(`Save all five Google Flow project URLs first (${configured}/5 configured).`);
-      return;
-    }
-
-    const previousTasks = flowAutomation.tasks.filter(task => task.job_id === job.id);
-    const terminalStatuses = ["superseded", "cancelled", "failed", "blocked_ui", "blocked_settings", "needs_login", "downloaded"];
-    const reusableAttempt = allowSupersededAttempt && previousTasks.length > 0 &&
-      previousTasks.every(task => terminalStatuses.includes(task.status));
-    if (previousTasks.length > 0 && !reusableAttempt) {
-      setNotice("This job already has Flow tasks. Wait for the current attempt to stop before starting another.");
-      return;
-    }
-
     setDispatching(true);
+    setNotice("Opening your five Google Flow browsers…");
     try {
-      const needsPrompts = !job.clips.every(clip => clip.prompt.trim().length >= 40);
-      setNotice(needsPrompts
-        ? "Opening five Flow browsers and generating five prompts in parallel…"
-        : "Opening five Flow browsers and preparing the five approved prompts…");
-
-      // Browser startup and prompt creation are independent; run both concurrently.
-      const [openedResult, promptResult] = await Promise.allSettled([
-        fetch(API + "/flow/profiles/open-all", { method: "POST" }),
-        needsPrompts
-          ? fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" })
-          : Promise.resolve(null)
-      ]);
-
-      if (openedResult.status === "rejected") throw openedResult.reason;
-      const openedResponse = openedResult.value;
-      const openedData = await openedResponse.json();
-      if (!openedResponse.ok) {
-        const detail = openedData.detail;
+      const response = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        const detail = data.detail;
         if (detail && typeof detail === "object") {
           const failures = (detail.profiles || []).filter((profile: any) => !profile.opened);
           throw new Error(failures.length
@@ -219,51 +178,21 @@ export default function App() {
         }
         throw new Error(detail || "Could not open the five Chrome profiles");
       }
-      const opened = (openedData.profiles || []).filter((profile: any) => profile.opened);
+      const opened = (data.profiles || []).filter((profile: any) => profile.opened);
       if (opened.length !== 5) {
-        const failures = (openedData.profiles || []).filter((profile: any) => !profile.opened);
+        const failures = (data.profiles || []).filter((profile: any) => !profile.opened);
         throw new Error(failures.length
           ? failures.map((profile: any) => profile.profile_id + ": " + (profile.error || "failed to open")).join(" · ")
           : `Only ${opened.length} of 5 Chrome profiles opened.`);
       }
-
-      if (promptResult.status === "rejected") throw promptResult.reason;
-      let current = job;
-      if (promptResult.value) {
-        const generatedResponse = promptResult.value;
-        const generatedData = await generatedResponse.json();
-        if (!generatedResponse.ok) throw new Error(generatedData.detail || "Five-prompt generation failed");
-        current = generatedData.job;
-        setSelected(current);
-      }
-
-      if (!current.clips.every(clip => clip.prompt.trim().length >= 40)) {
-        throw new Error("Prompt generation did not produce five complete prompts. No Flow tasks were dispatched.");
-      }
-
-      if (current.status !== "prompts_approved") {
-        const approvalResponse = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
-        const approvalData = await approvalResponse.json();
-        if (!approvalResponse.ok) throw new Error(approvalData.detail || "Could not approve the five prompts");
-        current = approvalData.job;
-        setSelected(current);
-      }
-
-      const dispatchResponse = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
-      const dispatchData = await dispatchResponse.json();
-      if (!dispatchResponse.ok) throw new Error(dispatchData.detail || "Flow task dispatch failed");
-      if (dispatchData.dispatched !== 5) {
-        throw new Error(`Expected five Flow tasks, but the server queued ${dispatchData.dispatched ?? 0}.`);
-      }
-
       const loginRequired = opened.filter((profile: any) => profile.login_required).length;
-      setSelected(current);
+      setSelected(job);
       setNotice(loginRequired
-        ? `Five prompts generated and queued. All five browsers opened; sign in to Google in ${loginRequired} window(s). Connected extensions will pick up their assigned task.`
-        : "Five prompts generated and dispatched. Each Flow profile will pick up its own clip independently.");
+        ? `Opened all five Flow browsers. Sign in to Google in ${loginRequired} window(s); saved project URLs open automatically when configured.`
+        : "Opened all five Google Flow browsers. Saved project URLs were opened where available.");
       await refresh();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not start the five-account production workflow.");
+      setNotice(error instanceof Error ? error.message : "Could not open the five Google Flow browsers.");
       await refresh();
     } finally {
       setDispatching(false);
