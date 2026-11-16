@@ -32,7 +32,8 @@ class OpenAllFlowProfilesTests(unittest.TestCase):
             return {"profile_id": profile_id, "login_required": False,
                     "current_url": url, "status": "project_open"}
 
-        with patch.object(main.FLOW_MANAGER, "open_profile", new=AsyncMock(side_effect=opened)) as opener:
+        with patch.object(main, "FLOW_PROJECT_DISCOVERY_TIMEOUT_SECONDS", 0), \
+             patch.object(main.FLOW_MANAGER, "open_profile", new=AsyncMock(side_effect=opened)) as opener:
             response = self.client.post("/api/v1/flow/profiles/open-all")
 
         self.assertEqual(response.status_code, 200, response.text)
@@ -40,6 +41,7 @@ class OpenAllFlowProfilesTests(unittest.TestCase):
         self.assertEqual(opener.await_count, 5)
         self.assertTrue(all(p["opened"] for p in response.json()["profiles"]))
         self.assertTrue(all(p["current_url"] == "https://flow.google.com/" for p in response.json()["profiles"]))
+        self.assertTrue(all(not p["project_ready"] for p in response.json()["profiles"]))
 
     def test_open_all_launches_each_isolated_profile(self):
         project_url = "https://flow.google.com/project/12345678-abcd"
@@ -60,6 +62,34 @@ class OpenAllFlowProfilesTests(unittest.TestCase):
         self.assertEqual([p["profile_id"] for p in response.json()["profiles"]],
                          [f"flow-{i}" for i in range(1, 6)])
         self.assertEqual(opener.await_count, 5)
+
+    def test_open_all_waits_for_extension_created_projects_before_returning_ready(self):
+        project_url = "https://flow.google.com/project/12345678-abcd"
+
+        async def opened(profile_id, url):
+            # Simulate the extension's /project-detected callback after it clicks
+            # the unique New project control and Flow changes the SPA route.
+            with main.connect() as conn:
+                conn.execute(
+                    "UPDATE flow_profiles SET project_url=?, updated_at=? WHERE profile_id=?",
+                    (project_url, main.utc_now(), profile_id),
+                )
+            return {
+                "profile_id": profile_id,
+                "login_required": False,
+                "project_ready": False,
+                "current_url": "https://flow.google.com/",
+                "status": "project_open",
+            }
+
+        with patch.object(main.FLOW_MANAGER, "open_profile", new=AsyncMock(side_effect=opened)):
+            response = self.client.post("/api/v1/flow/profiles/open-all")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        profiles = response.json()["profiles"]
+        self.assertEqual(len(profiles), 5)
+        self.assertTrue(all(item["project_ready"] for item in profiles))
+        self.assertTrue(all(item["current_url"] == project_url for item in profiles))
 
     def test_open_all_reports_partial_browser_launch_failure(self):
         project_url = "https://flow.google.com/project/12345678-abcd"
