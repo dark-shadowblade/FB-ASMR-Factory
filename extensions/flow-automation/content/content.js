@@ -350,14 +350,17 @@
   }
 
   let lastReportedProjectId = "";
+  let pendingProjectId = "";
   function reportDetectedProject() {
     const detectedProject = projectIdentity(location.href);
-    if (!detectedProject || detectedProject.projectId === lastReportedProjectId) return;
-    lastReportedProjectId = detectedProject.projectId;
+    if (!detectedProject || detectedProject.projectId === lastReportedProjectId ||
+        detectedProject.projectId === pendingProjectId) return;
+    pendingProjectId = detectedProject.projectId;
     chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });
     chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
-      if (chrome.runtime.lastError || !response?.task) return;
-      execute(response.task);
+      pendingProjectId = "";
+      if (response?.projectSaved) lastReportedProjectId = detectedProject.projectId;
+      if (!chrome.runtime.lastError && response?.task) execute(response.task);
     });
   }
   reportDetectedProject();
