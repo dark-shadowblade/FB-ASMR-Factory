@@ -56,8 +56,17 @@
   }
   function findButton(regex) {
     const buttons = [...document.querySelectorAll("button,[role=button]")].filter(visible);
-    const matches = buttons.filter(el => regex.test(labelOf(el).toLowerCase()));
+    const matches = buttons.filter(el => {
+      const iconText = [...el.querySelectorAll("mat-icon, i")].map(node => node.textContent || "").join(" ");
+      return regex.test((labelOf(el) + " " + iconText).toLowerCase());
+    });
     return matches.length === 1 ? matches[0] : null;
+  }
+  function findGenerateButton() {
+    const observed = [...document.querySelectorAll('button.generate-icon-button[type="submit"], button[aria-label="Start generation"]')].filter(visible);
+    if (observed.length === 1) return observed[0];
+    if (observed.length > 1) return null;
+    return findButton(/generate|create video|make video|start generation|arrow_forward/i);
   }
   function selectedText(selector) {
     if (!selector) return "";
@@ -248,7 +257,7 @@
       }
     } else {
       // Prefer unique, semantically labelled controls discovered on the live page.
-      generate = findButton(/generate|create video|make video|start generation|arrow_forward/i);
+      generate = findGenerateButton();
     }
     if (!visible(configuredField) || !visible(generate) ||
         (!/button/i.test(generate.tagName) && generate.getAttribute("role") !== "button") ||
