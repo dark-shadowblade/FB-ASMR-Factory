@@ -48,6 +48,39 @@ class FlowProfileTests(unittest.TestCase):
             self.assertFalse(manager.status("flow-2")["browser_open"])
             self.assertNotEqual(manager.root / "flow-1", manager.root / "flow-2")
 
+    def test_extension_startup_failure_does_not_hide_successfully_opened_chrome(self):
+        class FakePage:
+            url = "https://flow.google.com/"
+            async def title(self):
+                return "Google Flow"
+            async def bring_to_front(self):
+                return None
+            async def goto(self, url, **_kwargs):
+                self.url = url
+
+        class FakeContext:
+            pages = [FakePage()]
+            service_workers = []
+
+        class FakeBrowser:
+            def __init__(self, context):
+                self.contexts = [context]
+
+        with TemporaryDirectory() as temp:
+            manager = FlowProfileManager(Path(temp))
+            context = FakeContext()
+            browser = FakeBrowser(context)
+            manager._connect_or_launch_chrome = AsyncMock(return_value=(browser, context))
+            manager._configure_worker = AsyncMock(side_effect=RuntimeError("Extension service worker did not start"))
+            result = asyncio.run(manager.open_profile("flow-1", "https://flow.google.com/"))
+            self.assertEqual(result["profile_id"], "flow-1")
+            self.assertEqual(result["browser_mode"], "visible_chrome_cdp")
+            self.assertFalse(result["login_required"])
+            self.assertFalse(result["project_ready"])
+            self.assertFalse(result["extension_connected"])
+            self.assertIn("service worker did not start", result["extension_error"].lower())
+            self.assertTrue(manager.status("flow-1")["browser_open"])
+
     def test_open_five_profiles_launches_five_isolated_chrome_contexts_and_configures_workers(self):
         from unittest.mock import patch
 
