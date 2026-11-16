@@ -15,7 +15,7 @@ const vm = require("node:vm");
 const path = require("node:path");
 test("extension JavaScript files parse without syntax errors", () => {
   const root = path.resolve(__dirname, "../extensions/flow-automation");
-  for (const file of ["background/service-worker.js", "content/content.js", "shared/protocol.js", "options/options.js"]) {
+  for (const file of ["background/service-worker.js", "content/flow-controls.js", "content/content.js", "shared/protocol.js", "options/options.js"]) {
     new vm.Script(fs.readFileSync(path.join(root, file), "utf8"), { filename: file });
   }
 });
@@ -56,13 +56,28 @@ test("Flow project identity is persisted and compared by project ID", () => {
   assert.match(worker, /matchesAssignedProject:/);
 });
 
-test("Flow generation settings must come from the assigned desktop task", () => {
+test("Flow generation settings are actively applied from the assigned desktop task", () => {
   const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
-  assert.match(content, /requested\.model \|\| ""/);
-  assert.match(content, /requested\.resolution \|\| ""/);
-  assert.match(content, /Number\(requested\.durationSeconds\)/);
-  assert.match(content, /missing model, resolution or duration settings from the desktop app/);
-  assert.doesNotMatch(content, /requested\.model \|\| "Veo 3\.1 Lite"/);
+  const controls = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/flow-controls.js"), "utf8");
+  assert.match(content, /window\.ASMRFlowControls\.applySettings\(task\.settings \|\| \{\}\)/);
+  assert.match(controls, /settings\.model/);
+  assert.match(controls, /settings\.resolution/);
+  assert.match(controls, /settings\.durationSeconds/);
+  assert.match(controls, /settings\.aspectRatio/);
+  assert.match(controls, /button\[aria-label="Select model family"\]/);
+  assert.match(controls, /flow-duration-slider input\[type="range"\]/);
+});
+
+test("Flow adapter uses reference-informed selectors and targets only the new output tile", () => {
+  const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
+  const controls = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/flow-controls.js"), "utf8");
+  assert.match(content, /div\.ProseMirror\[contenteditable='true'\]/);
+  assert.match(content, /button\.generate-icon-button\[type="submit"\]/);
+  assert.match(content, /flowBaselineByTask/);
+  assert.match(controls, /\[data-media-id\]/);
+  assert.match(controls, /findNewMediaId/);
+  assert.match(controls, /downloadMediaTile/);
+  assert.match(controls, /More options/);
 });
 
 test("extension options render live profile, project and assigned settings", () => {
