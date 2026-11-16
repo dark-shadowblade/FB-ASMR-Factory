@@ -248,7 +248,26 @@
     return { ok: true, mediaId, method: "tile-menu" };
   }
 
-  async function applySettings(settings = {}) {
+
+  function verifyConfiguredValue(selector, expected, kind) {
+    if (!selector) return { ok: true, verified: "automatic" };
+    const found = uniqueVisible(selector);
+    if (!found.element) return { ok: false, reason: "Configured " + kind + " selector failed: " + found.reason };
+    const actual = label(found.element);
+    let matches = false;
+    if (kind === "duration") {
+      const target = Number(expected);
+      matches = [...actual.matchAll(/(\\d+(?:\\.\\d+)?)\\s*(?:s|sec|seconds?)?/gi)]
+        .some(match => Number(match[1]) === target);
+    } else {
+      matches = normalized(actual).includes(normalized(expected));
+    }
+    return matches
+      ? { ok: true, actual, verified: "configured-selector" }
+      : { ok: false, reason: "Configured " + kind + " selector does not show the requested value.", actual };
+  }
+
+  async function applySettings(settings = {}, selectorConfig = {}) {
     const actual = {};
     const panel = await openSettingsPanel();
     if (!panel.ok) return { ok: false, reason: panel.reason, actual };
@@ -277,7 +296,20 @@
     if (!duration.ok) return { ok: false, reason: duration.reason, actual };
     actual.duration = duration.actual || settings.durationSeconds + "s";
     actual.durationVerification = duration.verified;
-    return { ok: true, actual, verified: { model: model.verified, aspectRatio: ratio.verified, resolution: resolution.verified, duration: duration.verified } };
+    const checks = [
+      ["model", selectorConfig.modelSelector, settings.model],
+      ["resolution", selectorConfig.resolutionSelector, settings.resolution],
+      ["duration", selectorConfig.durationSelector, settings.durationSeconds],
+      ["aspect ratio", selectorConfig.aspectRatioSelector, settings.aspectRatio || "9:16"]
+    ];
+    const configuredVerification = {};
+    for (const [kind, selector, expected] of checks) {
+      if (!selector) continue;
+      const check = verifyConfiguredValue(selector, expected, kind);
+      if (!check.ok) return { ok: false, reason: check.reason, actual: { ...actual, [kind]: check.actual || actual[kind] } };
+      configuredVerification[kind] = check.verified;
+    }
+    return { ok: true, actual, verified: { model: model.verified, aspectRatio: ratio.verified, resolution: resolution.verified, duration: duration.verified, configuredSelectors: configuredVerification } };
   }
 
   window.ASMRFlowControls = Object.freeze({ applySettings, mediaIds, findNewMediaId, mediaTileReady, downloadMediaTile });
