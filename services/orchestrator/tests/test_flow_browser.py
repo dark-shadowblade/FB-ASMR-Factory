@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url
+from app.flow_browser import FlowProfileManager, PROFILE_IDS, validate_flow_project_url, validate_project_page
 
 
 class FlowProfileTests(unittest.TestCase):
@@ -21,6 +21,11 @@ class FlowProfileTests(unittest.TestCase):
         for url in ("https://flow.google.com/", "https://flow.google.com/project", "https://flow.google.com/settings/123456789012"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 validate_flow_project_url(url)
+
+    def test_project_page_readiness_only_accepts_direct_project_urls(self):
+        self.assertTrue(validate_project_page("https://flow.google.com/project/12345678-abcd"))
+        self.assertFalse(validate_project_page("https://flow.google.com/"))
+        self.assertFalse(validate_project_page("https://accounts.google.com/"))
 
     def test_rejects_insecure_and_malformed_urls(self):
         for url in ("http://flow.google.com/project/123456789012", "not a url"):
