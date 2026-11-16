@@ -80,7 +80,7 @@ class FlowProfileManager:
         locator = page.get_by_role("button", name=re.compile(r"new project", re.I))
         count = await locator.count()
         if count != 1:
-            locator = page.locator("button").filter(has_text=re.compile(r"^\\s*\\+?\\s*New project\\s*$", re.I))
+            locator = page.locator("button").filter(has_text=re.compile(r"^\s*\+?\s*New project\s*$", re.I))
             count = await locator.count()
         if count != 1:
             raise RuntimeError(
@@ -90,7 +90,7 @@ class FlowProfileManager:
         await locator.click(timeout=15000)
         try:
             await page.wait_for_url(
-                re.compile(r"^https://flow\\.google\\.com/project/[A-Za-z0-9-]{12,}"),
+                re.compile(r"^https://flow\.google\.com/project/[A-Za-z0-9-]{12,}"),
                 timeout=60000,
             )
         except PlaywrightTimeoutError as exc:
