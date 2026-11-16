@@ -626,11 +626,17 @@ async def open_all_flow_profiles() -> dict[str, Any]:
                 saved = {row["profile_id"]: row["project_url"] for row in conn.execute(
                     "SELECT profile_id,project_url FROM flow_profiles"
                 ).fetchall()}
-            if all(saved.get(profile_id) for profile_id in PROFILE_IDS):
+            if all(
+                saved.get(item["profile_id"], "").rstrip("/") == item.get("current_url", "").rstrip("/")
+                for item in results
+            ):
                 break
             await asyncio.sleep(0.25)
         for item in results:
-            item["project_ready"] = bool(saved.get(item["profile_id"]))
+            item["project_ready"] = bool(
+                saved.get(item["profile_id"]) and
+                saved[item["profile_id"]].rstrip("/") == item.get("current_url", "").rstrip("/")
+            )
     failed = [item for item in results if not item["opened"]]
     if failed:
         raise HTTPException(status_code=503, detail={
