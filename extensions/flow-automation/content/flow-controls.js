@@ -228,7 +228,7 @@
   async function downloadMediaTile(mediaId) {
     const tile = mediaTile(mediaId);
     if (!tile) return { ok: false, reason: "Generated media tile not found for " + mediaId };
-    try { tile.scrollIntoView({ block: "center", behavior: "instant" }); } catch (_) {}
+    try { tile.scrollIntoView({ block: "center", behavior: "auto" }); } catch (_) {}
     tile.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     tile.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
     await sleep(180);
