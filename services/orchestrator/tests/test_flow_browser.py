@@ -85,6 +85,74 @@ class FlowProfileTests(unittest.TestCase):
             self.assertIn("service worker did not start", result["extension_error"].lower())
             self.assertTrue(manager.status("flow-1")["browser_open"])
 
+    def test_missing_extension_does_not_block_visible_chrome_launch(self):
+        from unittest.mock import patch
+
+        class FakePage:
+            url = "https://flow.google.com/"
+            async def title(self):
+                return "Google Flow"
+            async def bring_to_front(self):
+                return None
+            async def goto(self, url, **_kwargs):
+                self.url = url
+
+        class FakeContext:
+            def __init__(self):
+                self.pages = [FakePage()]
+                self.service_workers = []
+
+        class FakeBrowser:
+            def __init__(self):
+                self.contexts = [FakeContext()]
+
+        class FakeProcess:
+            def __init__(self, args):
+                self.args = args
+            def poll(self):
+                return None
+            def terminate(self):
+                return None
+
+        with TemporaryDirectory() as temp:
+            manager = FlowProfileManager(Path(temp))
+            manager.extension_path = Path(temp) / "missing-extension"
+            browser = FakeBrowser()
+            calls = 0
+
+            async def connect(_endpoint, timeout):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    raise RuntimeError("no existing Chrome endpoint")
+                return browser
+
+            manager._playwright = SimpleNamespace(
+                chromium=SimpleNamespace(connect_over_cdp=AsyncMock(side_effect=connect))
+            )
+            manager._ensure_playwright = AsyncMock()
+            launched = []
+
+            def popen(args, **_kwargs):
+                process = FakeProcess(args)
+                launched.append(process)
+                return process
+
+            with patch("app.flow_browser.find_chrome", return_value="/fake/chrome"):
+                with patch("app.flow_browser.subprocess.Popen", side_effect=popen):
+                    opened_browser, _context = asyncio.run(
+                        manager._connect_or_launch_chrome(
+                            "flow-1", Path(temp) / "profile", Path(temp) / "downloads"
+                        )
+                    )
+
+            self.assertIs(opened_browser, browser)
+            self.assertEqual(len(launched), 1)
+            self.assertIn("--new-window", launched[0].args)
+            self.assertIn("https://flow.google.com/", launched[0].args)
+            self.assertFalse(any(arg.startswith("--load-extension=") for arg in launched[0].args))
+            self.assertFalse(any(arg.startswith("--disable-extensions-except=") for arg in launched[0].args))
+
     def test_open_five_profiles_launches_five_isolated_chrome_contexts_and_configures_workers(self):
         from unittest.mock import patch
 
