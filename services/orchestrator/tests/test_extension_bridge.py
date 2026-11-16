@@ -118,7 +118,7 @@ def test_download_completed_event_marks_the_matching_clip_downloaded(tmp_path):
     assert status == "downloaded"
     assert task_status == "downloaded"
     assert prompt == ""
-    assert event_count == 1
+    assert event_count == 7
 
 
 def test_bridge_requires_local_secret(tmp_path):
