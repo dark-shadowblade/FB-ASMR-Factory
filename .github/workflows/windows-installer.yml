@@ -2,13 +2,13 @@ name: Windows installer
 
 on:
   push:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
     paths:
       - "apps/desktop/**"
       - "services/orchestrator/**"
       - ".github/workflows/windows-installer.yml"
   pull_request:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
     paths:
       - "apps/desktop/**"
       - "services/orchestrator/**"
