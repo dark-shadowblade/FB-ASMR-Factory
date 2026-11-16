@@ -603,7 +603,7 @@ async def open_flow_profile(profile_id: str) -> dict[str, Any]:
 
 @app.post("/api/v1/flow/profiles/open-all")
 async def open_all_flow_profiles() -> dict[str, Any]:
-    """Open all five saved Flow projects in their own persistent Chrome profiles."""
+    """Open all five isolated profiles, reusing or creating each account project."""
     with connect() as conn:
         rows = conn.execute(
             "SELECT profile_id,display_name,project_url FROM flow_profiles ORDER BY profile_id"
