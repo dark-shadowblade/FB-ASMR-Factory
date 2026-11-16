@@ -59,13 +59,14 @@ test("Flow project identity is persisted and compared by project ID", () => {
 test("Flow generation settings are actively applied from the assigned desktop task", () => {
   const content = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/content.js"), "utf8");
   const controls = fs.readFileSync(path.resolve(__dirname, "../extensions/flow-automation/content/flow-controls.js"), "utf8");
-  assert.match(content, /window\.ASMRFlowControls\.applySettings\(task\.settings \|\| \{\}\)/);
+  assert.match(content, /window\.ASMRFlowControls\.applySettings\(task\.settings \|\| \{\}, selectorConfig\)/);
   assert.match(controls, /settings\.model/);
   assert.match(controls, /settings\.resolution/);
   assert.match(controls, /settings\.durationSeconds/);
   assert.match(controls, /settings\.aspectRatio/);
   assert.match(controls, /button\[aria-label="Select model family"\]/);
   assert.match(controls, /flow-duration-slider input\[type="range"\]/);
+  assert.match(controls, /verifyConfiguredValue/);
 });
 
 test("Flow adapter uses reference-informed selectors and targets only the new output tile", () => {
