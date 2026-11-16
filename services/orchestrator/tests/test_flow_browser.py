@@ -40,8 +40,10 @@ class FlowProfileTests(unittest.TestCase):
 
     def test_flow_home_new_project_button_is_used_for_first_run(self):
         import inspect
-        source = inspect.getsource(FlowProfileManager._create_project_from_home)
+        source = inspect.getsource(FlowProfileManager._ensure_project_from_home)
         self.assertIn("new project", source.lower())
+        self.assertIn('a[href*="/project/"]', source)
+        self.assertIn("existing_links", source)
         self.assertIn("wait_for_url", source)
         self.assertIn("/project/", source)
 
