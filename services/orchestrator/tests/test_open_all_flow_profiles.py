@@ -27,10 +27,19 @@ class OpenAllFlowProfilesTests(unittest.TestCase):
             conn.execute("UPDATE flow_profiles SET project_url='', updated_at=?",
                          (main.utc_now(),))
 
-    def test_open_all_requires_five_saved_project_urls(self):
-        response = self.client.post("/api/v1/flow/profiles/open-all")
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("flow-1", response.json()["detail"])
+    def test_open_all_opens_five_profiles_at_flow_home_when_projects_are_not_saved(self):
+        async def opened(profile_id, url):
+            return {"profile_id": profile_id, "login_required": False,
+                    "current_url": url, "status": "project_open"}
+
+        with patch.object(main.FLOW_MANAGER, "open_profile", new=AsyncMock(side_effect=opened)) as opener:
+            response = self.client.post("/api/v1/flow/profiles/open-all")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["opened"], 5)
+        self.assertEqual(opener.await_count, 5)
+        self.assertTrue(all(p["opened"] for p in response.json()["profiles"]))
+        self.assertTrue(all(p["current_url"] == "https://flow.google.com/" for p in response.json()["profiles"]))
 
     def test_open_all_launches_each_isolated_profile(self):
         project_url = "https://flow.google.com/project/12345678-abcd"
