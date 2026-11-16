@@ -114,12 +114,10 @@ class FlowProfileManager:
                     current_project = ""
                 if not current_project:
                     current_url = await self._create_project_from_home(page)
-                    if "accounts.google.com" in current_url:
-                        page_url = current_url
-                    else:
-                        page_url = validate_flow_project_url(current_url)
+                    # A login redirect is returned as-is; the next open attempt
+                    # after sign-in will create the profile's first project.
                 else:
-                    page_url = current_project
+                    pass
             try:
                 await page.bring_to_front()
             except Exception:
@@ -135,7 +133,7 @@ class FlowProfileManager:
                 "title": await page.title(),
                 "login_required": login_required,
                 "profile_directory": str(self.root / profile_id),
-                "project_created": bool(not project_url and not current_project) if "current_project" in locals() else False,
+                "project_created": bool(not project_url and not login_required and not current_project) if "current_project" in locals() else False,
             }
 
     def status(self, profile_id: str) -> dict[str, Any]:
