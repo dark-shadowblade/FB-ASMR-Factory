@@ -65,21 +65,21 @@
 
   async function openSettingsPanel() {
     const existing = [...document.querySelectorAll('.cdk-overlay-pane button[role="radio"], [role="dialog"] button[role="radio"]')].filter(visible);
-    if (existing.length) return { ok: true, openedByUs: false };
+    if (existing.length) return { ok: true, openedByUs: false, open: true };
     const candidates = [...document.querySelectorAll("button.settings-trigger-button, button[aria-label='Settings trigger']")].filter(enabled);
     if (candidates.length !== 1) return { ok: false, reason: candidates.length ? "Settings panel trigger is ambiguous." : "Settings panel trigger was not found." };
     candidates[0].click();
     for (let i = 0; i < 30; i++) {
       await sleep(150);
       const radios = [...document.querySelectorAll('.cdk-overlay-pane button[role="radio"], [role="dialog"] button[role="radio"]')].filter(visible);
-      if (radios.length) return { ok: true, openedByUs: true };
+      if (radios.length) return { ok: true, openedByUs: true, open: true };
     }
     return { ok: false, reason: "Flow settings panel did not open." };
   }
 
   async function selectVideoMode() {
     const candidates = [...document.querySelectorAll('.cdk-overlay-pane button[role="radio"], [role="dialog"] button[role="radio"]')].filter(visible);
-    const video = candidates.filter(el => /^video$/i.test(label(el)));
+    const video = candidates.filter(el => /(^|\\s)video($|\\s)/i.test(label(el)));
     if (!video.length) return { ok: true, verified: "not-exposed" };
     if (video.length !== 1) return { ok: false, reason: "Video mode option is ambiguous." };
     return clickAndVerify(video[0], "Video mode");
@@ -220,7 +220,7 @@
     const tile = mediaTile(mediaId);
     if (!tile || !visible(tile)) return false;
     const playable = [...tile.querySelectorAll("video")].some(video =>
-      visible(video) && video.readyState >= 2 && Number.isFinite(video.duration) && video.duration > 0
+      video.isConnected && video.readyState >= 2 && Number.isFinite(video.duration) && video.duration > 0
     );
     return playable;
   }
@@ -228,6 +228,10 @@
   async function downloadMediaTile(mediaId) {
     const tile = mediaTile(mediaId);
     if (!tile) return { ok: false, reason: "Generated media tile not found for " + mediaId };
+    try { tile.scrollIntoView({ block: "center", behavior: "instant" }); } catch (_) {}
+    tile.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    tile.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+    await sleep(180);
     const buttons = [...tile.querySelectorAll("button,[role='button']")].filter(enabled);
     let menuButton = buttons.find(button => /more options|more actions/i.test(label(button)));
     if (!menuButton) menuButton = buttons.find(button => [...button.querySelectorAll("mat-icon,i")].some(icon => /more_vert|more_horiz|more/i.test(clean(icon.textContent))));
@@ -259,7 +263,7 @@
     const outputCount = await selectOutputCount(settings.outputCount ?? 1);
     if (!outputCount.ok) return { ok: false, reason: outputCount.reason, actual };
     actual.outputCount = settings.outputCount ?? 1;
-    if (panel.openedByUs) {
+    if (panel.open) {
       const close = uniqueVisible("button.settings-trigger-button, button[aria-label='Settings trigger']");
       if (close.element) {
         close.element.click();
