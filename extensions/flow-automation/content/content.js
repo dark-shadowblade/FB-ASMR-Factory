@@ -345,14 +345,21 @@
     createProjectFromFlowHome().catch(error => console.warn("[ASMR Flow] project creation check failed", error));
   }
 
-  const detectedProject = projectIdentity(location.href);
-  if (detectedProject) {
+  let lastReportedProjectId = "";
+  function reportDetectedProject() {
+    const detectedProject = projectIdentity(location.href);
+    if (!detectedProject || detectedProject.projectId === lastReportedProjectId) return;
+    lastReportedProjectId = detectedProject.projectId;
     chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });
+    chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
+      if (chrome.runtime.lastError || !response?.task) return;
+      execute(response.task);
+    });
   }
-  chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
-    if (chrome.runtime.lastError || !response?.task) return;
-    execute(response.task);
-  });
+  reportDetectedProject();
+  // Flow may create a project with client-side navigation without reloading the tab.
+  // Watch the URL so the new project is persisted to the matching desktop profile.
+  setInterval(reportDetectedProject, 500);
 
   // Read-only DOM diagnostic. It never clicks controls, changes settings or reads prompt contents.
   function diagnosticSelector(el) {
