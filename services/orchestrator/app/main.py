@@ -31,6 +31,8 @@ DATA_DIR = Path(os.environ.get("ASMR_FACTORY_DATA", APP_DIR.parent / "data")).re
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "asmr_factory.sqlite3"
 FLOW_MANAGER = FlowProfileManager(DATA_DIR / "chrome-profiles")
+FLOW_PROJECT_DISCOVERY_TIMEOUT_SECONDS = 90
+FLOW_PROJECT_DISCOVERY_POLL_SECONDS = 0.5
 
 app = FastAPI(title="ASMR Factory Local Orchestrator", version="0.1.0")
 app.include_router(create_extension_router(DB_PATH, DATA_DIR))
@@ -610,12 +612,48 @@ async def open_all_flow_profiles() -> dict[str, Any]:
             profile = await FLOW_MANAGER.open_profile(row["profile_id"], destination)
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
                     "opened": True, "login_required": profile.get("login_required", False),
+                    "project_ready": profile.get("project_ready", False),
                     "current_url": profile.get("current_url", "")}
         except (ValueError, RuntimeError) as exc:
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
                     "opened": False, "error": str(exc)}
 
     results = await asyncio.gather(*(open_one(row) for row in rows))
+    # Flow may create a new project asynchronously after the visible Chrome
+    # window opens. The extension persists that project URL through
+    # /project-detected. Wait for that evidence even when open_profile initially
+    # returned Flow home (project_ready=False); otherwise one-click generation
+    # races project creation and fails immediately.
+    failed = [item for item in results if not item["opened"]]
+    if not failed:
+        deadline = asyncio.get_running_loop().time() + FLOW_PROJECT_DISCOVERY_TIMEOUT_SECONDS
+        while True:
+            with connect() as conn:
+                saved = {
+                    row["profile_id"]: row["project_url"]
+                    for row in conn.execute(
+                        "SELECT profile_id,project_url FROM flow_profiles"
+                    ).fetchall()
+                }
+            pending = []
+            for item in results:
+                if item.get("login_required"):
+                    item["project_ready"] = False
+                    continue
+                candidate = saved.get(item["profile_id"], "")
+                try:
+                    candidate = validate_flow_project_url(candidate) if candidate else ""
+                except ValueError:
+                    candidate = ""
+                if candidate:
+                    item["current_url"] = candidate
+                    item["project_ready"] = True
+                else:
+                    item["project_ready"] = False
+                    pending.append(item["profile_id"])
+            if not pending or asyncio.get_running_loop().time() >= deadline:
+                break
+            await asyncio.sleep(FLOW_PROJECT_DISCOVERY_POLL_SECONDS)
     failed = [item for item in results if not item["opened"]]
     if failed:
         raise HTTPException(status_code=503, detail={

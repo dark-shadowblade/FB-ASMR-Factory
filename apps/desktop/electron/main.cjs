@@ -32,7 +32,8 @@ function startBundledBackend() {
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
-      ASMR_FACTORY_DATA: path.join(app.getPath("userData"), "data")
+      ASMR_FACTORY_DATA: path.join(app.getPath("userData"), "data"),
+      ASMR_FACTORY_EXTENSION_PATH: path.join(process.resourcesPath, "flow-extension")
     }
   });
   backendProcess.stdout?.on("data", chunk => recordDiagnostic("BACKEND", "info", chunk.toString("utf8").trim()));

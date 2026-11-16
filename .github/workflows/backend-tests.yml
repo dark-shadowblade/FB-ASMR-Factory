@@ -2,9 +2,9 @@ name: Backend tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
   pull_request:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
   workflow_dispatch:
 
 jobs:
@@ -22,5 +22,7 @@ jobs:
           cache-dependency-path: services/orchestrator/requirements.txt
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+      - name: Install test runner
+        run: python -m pip install pytest
       - name: Run backend tests
-        run: python -m unittest discover -s tests -v
+        run: python -m pytest -q tests

@@ -2,9 +2,9 @@ name: Flow extension and bridge tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
   pull_request:
-    branches: [main]
+    branches: [main, production-pipeline-foundation]
 
 jobs:
   extension-protocol:

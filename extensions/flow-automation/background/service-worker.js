@@ -274,20 +274,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const senderUrl = sender.tab?.url || "";
       const detectedProject = flowProjectIdentity(senderUrl);
       const c = await config();
+      let projectSaved = false;
       if (detectedProject && c.enabled && c.profileId && c.instanceId) {
         await chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: senderUrl, title: message.title || "", profileId: c.profileId, detectedAt: new Date().toISOString() } });
         await api("/api/v1/extension/project-detected", { method: "POST", body: JSON.stringify({
           protocolVersion: P.VERSION, profileId: c.profileId, instanceId: c.instanceId,
           projectUrl: senderUrl, projectTitle: message.title || ""
         }) });
+        projectSaved = true;
       }
       if (activeTask && sender.tab?.id && sameFlowProject(senderUrl, activeTask.projectUrl)) {
         activeTabId = sender.tab.id;
         await chrome.storage.local.set({ activeTabId });
         await report("PROJECT_PAGE_READY", { url: senderUrl, title: message.title || "", projectId: detectedProject?.projectId || null, matchesAssignedProject: true });
-        sendResponse({ task: activeTask });
+        sendResponse({ task: activeTask, projectSaved });
       } else {
-        sendResponse({ task: null, projectDetected: Boolean(detectedProject) });
+        sendResponse({ task: null, projectDetected: Boolean(detectedProject), projectSaved });
         // The project tab is ready: wake the worker immediately instead of
         // waiting for the periodic alarm to discover queued work.
         poll().catch(error => console.warn("[ASMR Flow] ready-page poll failed", error.message));

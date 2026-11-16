@@ -10,6 +10,8 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .workflow_state import InvalidTransition, validate_transition
+
 PROFILE_IDS = tuple(f"flow-{i}" for i in range(1, 6))
 
 
@@ -298,6 +300,12 @@ def create_extension_router(db_path: Path, data_dir: Path) -> APIRouter:
             except sqlite3.IntegrityError:
                 return {"accepted": True, "duplicate": True, "status": task["status"]}
             status = status_map.get(request.type, task["status"])
+            # Validate the state change before persisting the event. A malformed
+            # or out-of-order worker event must not poison the durable task log.
+            try:
+                validate_transition("task", task["status"], status)
+            except InvalidTransition as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             error = str(request.payload.get("reason") or request.payload.get("error") or "")[:500] if request.type in ("TASK_FAILED","DOWNLOAD_FAILED","FLOW_UI_UNVERIFIED","DOWNLOAD_SELECTOR_UNVERIFIED","PROJECT_URL_MISMATCH","SETTINGS_UNVERIFIED","PROMPT_ALREADY_PRESENT") else None
             download = str(request.payload.get("filename", ""))[:1000] if request.type == "DOWNLOAD_COMPLETED" else task["download_path"]
             conn.execute("UPDATE extension_tasks SET status=?,updated_at=?,last_error=COALESCE(?,last_error),download_path=? WHERE task_id=?",

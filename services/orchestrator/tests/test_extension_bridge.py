@@ -92,6 +92,19 @@ def test_download_completed_event_marks_the_matching_clip_downloaded(tmp_path):
         "timestamp": "2026-11-14T00:00:00Z",
         "payload": {"filename": "/tmp/clip-1.mp4", "fileSize": 12345},
     }
+    # Replay the normal worker lifecycle before reporting a completed download.
+    for event_type, message_id in [
+        ("PROJECT_PAGE_READY", "message-project-ready"),
+        ("SETTINGS_VERIFIED", "message-settings-verified"),
+        ("PROMPT_SUBMITTED", "message-prompt-submitted"),
+        ("GENERATION_STARTED", "message-generation-started"),
+        ("GENERATION_COMPLETED", "message-generation-completed"),
+        ("DOWNLOAD_STARTED", "message-download-started"),
+    ]:
+        step_payload = {**payload, "messageId": message_id, "type": event_type}
+        step_payload["payload"] = {}
+        step_response = client.post("/api/v1/extension/events", json=step_payload, headers=headers)
+        assert step_response.status_code == 200, step_response.text
     response = client.post("/api/v1/extension/events", json=payload, headers=headers)
     assert response.status_code == 200
     with sqlite3.connect(tmp_path / "test.sqlite3") as conn:
@@ -105,7 +118,7 @@ def test_download_completed_event_marks_the_matching_clip_downloaded(tmp_path):
     assert status == "downloaded"
     assert task_status == "downloaded"
     assert prompt == ""
-    assert event_count == 1
+    assert event_count == 7
 
 
 def test_bridge_requires_local_secret(tmp_path):
@@ -284,3 +297,27 @@ def test_worker_only_claims_task_for_its_detected_project(tmp_path):
     assert response.status_code == 200
     assert response.json()["task"] is None
     assert response.json()["waitingForProjectPage"] is True
+
+
+
+def test_out_of_order_event_is_rejected_without_persisting_it(tmp_path):
+    client, headers, db = make_client(tmp_path)
+    client.post("/api/v1/extension/dispatch/job-a", headers=headers)
+    task = client.get(
+        "/api/v1/extension/next-task?profile_id=flow-1&instance_id=instance-flow-1",
+        headers=headers,
+    ).json()["task"]
+    payload = {
+        "protocolVersion": 1, "messageId": "message-out-of-order-001", "type": "DOWNLOAD_COMPLETED",
+        "taskId": task["taskId"], "jobId": task["jobId"], "clipId": task["clipId"],
+        "profileId": "flow-1", "instanceId": "instance-flow-1",
+        "timestamp": "2026-11-16T00:00:00Z",
+        "payload": {"filename": "/tmp/clip-1.mp4", "fileSize": 12345},
+    }
+    response = client.post("/api/v1/extension/events", json=payload, headers=headers)
+    assert response.status_code == 409
+    with sqlite3.connect(db) as conn:
+        status = conn.execute("SELECT status FROM extension_tasks WHERE task_id=?", (task["taskId"],)).fetchone()[0]
+        event_count = conn.execute("SELECT COUNT(*) FROM extension_events WHERE message_id=?", (payload["messageId"],)).fetchone()[0]
+    assert status == "leased"
+    assert event_count == 0

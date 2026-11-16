@@ -313,14 +313,60 @@
       requestDownload();
     }
   }
-  const detectedProject = projectIdentity(location.href);
-  if (detectedProject) {
-    chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });
+  async function createProjectFromFlowHome() {
+    if (location.hostname !== "flow.google.com" || projectIdentity(location.href)) return;
+    if (sessionStorage.getItem("asmrFlowProjectCreateAttempted") === "1") return;
+    sessionStorage.setItem("asmrFlowProjectCreateAttempted", "1");
+    const deadline = Date.now() + 25000;
+    while (Date.now() < deadline && !projectIdentity(location.href)) {
+      const candidates = [...document.querySelectorAll("button,[role='button'],a")]
+        .filter(visible)
+        .filter(el => {
+          const labels = [el.getAttribute("aria-label"), el.getAttribute("title"), el.innerText, el.textContent]
+            .filter(Boolean).map(value => value.replace(/\s+/g, " ").trim());
+          return labels.some(label => /^(?:new project|create project|create new project|start new project)$/i.test(label));
+        });
+      if (candidates.length === 1 && !candidates[0].disabled &&
+          candidates[0].getAttribute("aria-disabled") !== "true") {
+        candidates[0].click();
+        const navigationDeadline = Date.now() + 45000;
+        while (Date.now() < navigationDeadline) {
+          if (projectIdentity(location.href)) return;
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        console.warn("[ASMR Flow] Create project was clicked, but Flow did not navigate to a project URL.");
+        return;
+      }
+      if (candidates.length > 1) {
+        console.warn("[ASMR Flow] Multiple possible project-creation controls found; refusing to click an ambiguous control.");
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    console.warn("[ASMR Flow] No unique visible New project control appeared on Flow home.");
   }
-  chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
-    if (chrome.runtime.lastError || !response?.task) return;
-    execute(response.task);
-  });
+  if (location.hostname === "flow.google.com" && !projectIdentity(location.href)) {
+    createProjectFromFlowHome().catch(error => console.warn("[ASMR Flow] project creation check failed", error));
+  }
+
+  let lastReportedProjectId = "";
+  let pendingProjectId = "";
+  function reportDetectedProject() {
+    const detectedProject = projectIdentity(location.href);
+    if (!detectedProject || detectedProject.projectId === lastReportedProjectId ||
+        detectedProject.projectId === pendingProjectId) return;
+    pendingProjectId = detectedProject.projectId;
+    chrome.storage.local.set({ lastFlowProject: { ...detectedProject, url: location.href, title: document.title, detectedAt: new Date().toISOString() } });
+    chrome.runtime.sendMessage({ type: "FLOW_PAGE_READY", title: document.title, project: detectedProject }, response => {
+      pendingProjectId = "";
+      if (response?.projectSaved) lastReportedProjectId = detectedProject.projectId;
+      if (!chrome.runtime.lastError && response?.task) execute(response.task);
+    });
+  }
+  reportDetectedProject();
+  // Flow may create a project with client-side navigation without reloading the tab.
+  // Watch the URL so the new project is persisted to the matching desktop profile.
+  setInterval(reportDetectedProject, 500);
 
   // Read-only DOM diagnostic. It never clicks controls, changes settings or reads prompt contents.
   function diagnosticSelector(el) {

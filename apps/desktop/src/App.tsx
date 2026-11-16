@@ -164,35 +164,43 @@ export default function App() {
   async function startAutomaticProduction(job: Job, _allowSupersededAttempt = false) {
     if (dispatching) return;
     setDispatching(true);
-    setNotice("Opening your five Google Flow browsers…");
-    try {
-      const response = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+    const requestJson = async (url: string, init?: RequestInit) => {
+      const response = await fetch(url, init);
       const data = await response.json();
-      if (!response.ok) {
-        const detail = data.detail;
-        if (detail && typeof detail === "object") {
-          const failures = (detail.profiles || []).filter((profile: any) => !profile.opened);
-          throw new Error(failures.length
-            ? failures.map((profile: any) => profile.profile_id + ": " + (profile.error || "failed to open")).join(" · ")
-            : detail.message || "Could not open the five Chrome profiles");
-        }
-        throw new Error(detail || "Could not open the five Chrome profiles");
-      }
-      const opened = (data.profiles || []).filter((profile: any) => profile.opened);
-      if (opened.length !== 5) {
-        const failures = (data.profiles || []).filter((profile: any) => !profile.opened);
-        throw new Error(failures.length
-          ? failures.map((profile: any) => profile.profile_id + ": " + (profile.error || "failed to open")).join(" · ")
-          : `Only ${opened.length} of 5 Chrome profiles opened.`);
-      }
-      const loginRequired = opened.filter((profile: any) => profile.login_required).length;
+      if (!response.ok) throw new Error(data.detail || data.message || "Production step failed");
+      return data;
+    };
+    try {
       setSelected(job);
-      setNotice(loginRequired
-        ? `Opened all five Flow browsers. Sign in to Google in ${loginRequired} window(s); saved project URLs open automatically when configured.`
-        : "Opened all five Google Flow browsers. Saved project URLs were opened where available.");
+      setNotice("Step 1/4 · Opening all five persistent Google Flow browsers…");
+      const openedData = await requestJson(API + "/flow/profiles/open-all", { method: "POST" });
+      const opened = (openedData.profiles || []).filter((profile: any) => profile.opened);
+      if (opened.length !== 5) throw new Error(`Only ${opened.length} of 5 Flow browsers opened.`);
+      const loginRequired = opened.filter((profile: any) => profile.login_required);
+      if (loginRequired.length) {
+        throw new Error("Google sign-in is required in: " + loginRequired.map((p: any) => p.profile_id).join(", ") + ". Sign in once in those persistent browser windows, then resume this job.");
+      }
+      const projectsNotReady = opened.filter((profile: any) => !profile.project_ready);
+      if (projectsNotReady.length) {
+        throw new Error("Flow did not confirm a project in: " + projectsNotReady.map((p: any) => p.profile_id).join(", ") + ". The browser windows remain open; check their Flow pages and retry.");
+      }
+
+      setNotice("Step 2/4 · Generating five prompts automatically…");
+      const promptData = await requestJson(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" });
+      const promptedJob: Job = promptData.job;
+
+      setNotice("Step 3/4 · Approving the generated prompt pack…");
+      const approvalData = await requestJson(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
+      const approvedJob: Job = approvalData.job;
+      setSelected(approvedJob);
+
+      setNotice("Step 4/4 · Dispatching five clips to their matching Flow accounts…");
+      const dispatchData = await requestJson(API + "/extension/dispatch/" + job.id, { method: "POST" });
+      if (dispatchData.dispatched !== 5) throw new Error("Flow dispatch did not create exactly five clip tasks.");
+      setNotice("Production started: five prompts assigned to five independent Flow accounts. Generation and downloads are now handled by the extension.");
       await refresh();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not open the five Google Flow browsers.");
+      setNotice(error instanceof Error ? error.message : "Automatic production could not start.");
       await refresh();
     } finally {
       setDispatching(false);
