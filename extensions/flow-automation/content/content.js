@@ -199,14 +199,11 @@
     const baselineMap = baselineState.flowBaselineByTask || {};
     if (Array.isArray(baselineMap[task.taskId])) {
       baselineMediaIds = baselineMap[task.taskId];
+      baselineCaptured = true;
     } else {
-      baselineMediaIds = window.ASMRFlowControls ? window.ASMRFlowControls.mediaIds() : [];
-      baselineMap[task.taskId] = baselineMediaIds;
-      const keys = Object.keys(baselineMap);
-      for (const key of keys.slice(0, Math.max(0, keys.length - 20))) delete baselineMap[key];
-      await chrome.storage.local.set({ flowBaselineByTask: baselineMap });
+      baselineMediaIds = [];
+      baselineCaptured = false;
     }
-    baselineCaptured = true;
     targetMediaId = null;
     const state = detectState();
     if (state === "SESSION_CHECK") {
@@ -283,6 +280,14 @@
     if ((configuredField.value || configuredField.textContent || "").trim() !== task.prompt.trim()) {
       send("PROMPT_INSERT_FAILED", {});
       return;
+    }
+    if (!baselineCaptured) {
+      baselineMediaIds = window.ASMRFlowControls.mediaIds();
+      baselineCaptured = true;
+      baselineMap[task.taskId] = baselineMediaIds;
+      const keys = Object.keys(baselineMap);
+      for (const key of keys.slice(0, Math.max(0, keys.length - 20))) delete baselineMap[key];
+      await chrome.storage.local.set({ flowBaselineByTask: baselineMap });
     }
     generate.click();
     send("GENERATE_CLICKED", { promptLength: task.prompt.length });
