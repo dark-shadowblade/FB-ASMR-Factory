@@ -179,6 +179,52 @@
     return { ok: true, actual: actualText || target + "s", verified: actualText ? "display" : "slider-value" };
   }
 
+
+  function mediaIds() {
+    const ids = new Set();
+    for (const node of document.querySelectorAll("[data-media-id]")) {
+      const id = clean(node.getAttribute("data-media-id"));
+      if (id) ids.add(id);
+    }
+    return [...ids];
+  }
+
+  function mediaTile(mediaId) {
+    const marker = [...document.querySelectorAll("[data-media-id]")].find(node => node.getAttribute("data-media-id") === mediaId);
+    if (!marker) return null;
+    return marker.closest("flow-grid-tile-container, flow-tile-container, .tile-row, [class*='tile-row']") || marker.parentElement;
+  }
+
+  function findNewMediaId(baselineIds = []) {
+    const baseline = new Set(baselineIds);
+    const candidates = [...document.querySelectorAll("[data-media-id]")]
+      .map(node => clean(node.getAttribute("data-media-id")))
+      .filter(Boolean);
+    const fresh = [...new Set(candidates)].filter(id => !baseline.has(id));
+    return fresh.length === 1 ? fresh[0] : null;
+  }
+
+  async function downloadMediaTile(mediaId) {
+    const tile = mediaTile(mediaId);
+    if (!tile) return { ok: false, reason: "Generated media tile not found for " + mediaId };
+    const buttons = [...tile.querySelectorAll("button,[role='button']")].filter(enabled);
+    let menuButton = buttons.find(button => /more options|more actions/i.test(label(button)));
+    if (!menuButton) menuButton = buttons.find(button => [...button.querySelectorAll("mat-icon,i")].some(icon => /more_vert|more_horiz|more/i.test(clean(icon.textContent))));
+    if (!menuButton) return { ok: false, reason: "More-options control not found inside generated tile." };
+    menuButton.click();
+    let download = null;
+    for (let i = 0; i < 25; i++) {
+      await sleep(120);
+      const items = [...document.querySelectorAll("[role='menu'] button[role='menuitem'], [role='menu'] [role='menuitem']")].filter(enabled);
+      const matches = items.filter(item => /\bdownload\b/i.test(label(item)));
+      if (matches.length === 1) { download = matches[0]; break; }
+      if (matches.length > 1) return { ok: false, reason: "Download menu item is ambiguous for generated tile." };
+    }
+    if (!download) return { ok: false, reason: "Flow tile menu did not expose a Download action." };
+    download.click();
+    return { ok: true, mediaId, method: "tile-menu" };
+  }
+
   async function applySettings(settings = {}) {
     const actual = {};
     const panel = await openSettingsPanel();
@@ -189,6 +235,13 @@
     const ratio = await selectAspectRatio(settings.aspectRatio || "9:16");
     if (!ratio.ok) return { ok: false, reason: ratio.reason, actual };
     actual.aspectRatio = settings.aspectRatio || "9:16";
+    if (panel.openedByUs) {
+      const close = uniqueVisible("button.settings-trigger-button, button[aria-label='Settings trigger']");
+      if (close.element) {
+        close.element.click();
+        await sleep(250);
+      }
+    }
     const model = await selectModel(settings.model);
     if (!model.ok) return { ok: false, reason: model.reason, actual, available: model.available || [] };
     actual.model = model.actual || settings.model;
@@ -202,5 +255,5 @@
     return { ok: true, actual, verified: { model: model.verified, aspectRatio: ratio.verified, resolution: resolution.verified, duration: duration.verified } };
   }
 
-  window.ASMRFlowControls = Object.freeze({ applySettings });
+  window.ASMRFlowControls = Object.freeze({ applySettings, mediaIds, findNewMediaId, downloadMediaTile });
 })();
