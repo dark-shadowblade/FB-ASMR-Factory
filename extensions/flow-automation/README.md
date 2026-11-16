@@ -41,11 +41,23 @@ The worker now prefers the observed rich-text editor patterns when identifying a
 
 These are reference-derived candidates, not guarantees that the current Flow UI/account uses them. The worker can use unique semantic auto-detection; explicitly verified custom selectors remain an optional override. The supplied extension's CDP drag/drop, debugger attachment and fallback click techniques have not been copied: they add permissions and complexity and should only be introduced if a specific, reproducible Flow requirement justifies them.
 
-## Live Flow controls: automatic detection with guarded overrides
+## Live Flow controls: reference-informed adapter
 
-The content script first detects a unique prompt editor, Generate control and Download control from the live page. It also checks the currently selected model, resolution, duration and aspect ratio from selected/checked UI elements. Explicitly verified selectors in the options page override automatic detection. If the current Flow page does not expose one unique control or a selected value that matches the assigned task, the worker blocks that clip and reports the exact missing control/value instead of guessing. This automatic detection has not yet been confirmed against a live signed-in Google Flow session.
+The supplied Veo Automation 2.0.1 ZIP is used as a technical reference, not imported or loaded as a dependency. Its Flow-specific interaction patterns are adapted in our own content/flow-controls.js module:
 
-Model, quality, duration and aspect-ratio selection are not implemented as verified actions yet. The worker reports this limitation instead of pretending requested settings were applied.
+- Opens Flow's settings panel and selects Video mode when that control is exposed.
+- Selects the requested aspect ratio, defaulting to the factory's vertical 9:16 format.
+- Selects one output (x1) when the output-count control is exposed.
+- Opens the model-family picker and selects a uniquely matched model option. The reference aliases for Nano Banana 2 and Omni Flash are retained.
+- Selects the requested resolution from the visible 360p/720p/1080p-style radio options.
+- Sets the duration slider when Flow exposes it. The reference UI's three-second slider offset is accounted for; models with fixed/no visible duration slider are explicitly reported as not exposed rather than falsely marked as changed.
+- Uses the reference's ProseMirror prompt editor and icon-only Generate button patterns.
+- Captures the existing data-media-id values immediately before submission, then waits for the newly created output tile rather than downloading an older video already in the project.
+- Opens the new tile's More options menu and selects its Download action. The existing service worker still tracks the browser download and reports completion to the orchestrator.
+
+The adapter uses DOM-visible controls and guarded matching. Ambiguous or missing controls stop the clip before Generate; it does not guess between multiple model, ratio, resolution, or download choices. The extension remains independent: no reference-extension code is installed, imported, or required. Its five-profile binding, local bridge, task/event protocol and download validation remain ours.
+
+**Verification limitation:** these selectors and interactions are adapted from the supplied package and still require a controlled live test in each authorised Flow account. In particular, the current Flow UI may change its DOM, model availability, resolution options or duration behavior. A duration reported as model-fixed-or-not-exposed must be checked against the downloaded clip by the existing FFprobe validation before assembly.
 
 ## Protocol
 
