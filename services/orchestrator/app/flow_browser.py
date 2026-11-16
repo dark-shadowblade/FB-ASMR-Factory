@@ -186,16 +186,21 @@ class FlowProfileManager:
         worker = next((item for item in workers if "/background/service-worker.js" in item.url), None)
         if worker is None:
             raise RuntimeError("The bundled Flow extension service worker was not found in this Chrome profile.")
-        await worker.evaluate("""async ({profileId, bridgeToken}) => {
+        await worker.evaluate("""async ({profileId, bridgeToken, baseUrl, enabled}) => {
           await chrome.storage.local.set({
-            baseUrl: "http://127.0.0.1:8765",
+            baseUrl,
             bridgeToken,
             profileId,
-            enabled: true
+            enabled
           });
           await poll();
           return true;
-        }""", {"profileId": profile_id, "bridgeToken": bridge_token})
+        }""", {
+            "profileId": profile_id,
+            "bridgeToken": bridge_token,
+            "baseUrl": "http://127.0.0.1:8765",
+            "enabled": True,
+        })
 
     async def open_profile(self, profile_id: str, project_url: str) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
