@@ -602,17 +602,12 @@ async def open_all_flow_profiles() -> dict[str, Any]:
         rows = conn.execute(
             "SELECT profile_id,display_name,project_url FROM flow_profiles ORDER BY profile_id"
         ).fetchall()
-    missing = [row["profile_id"] for row in rows if not row["project_url"]]
-    if missing:
-        raise HTTPException(
-            status_code=409,
-            detail="Save a Flow project URL for every account before starting: " + ", ".join(missing),
-        )
-
     import asyncio
     async def open_one(row: sqlite3.Row) -> dict[str, Any]:
         try:
-            profile = await FLOW_MANAGER.open_profile(row["profile_id"], row["project_url"])
+            # Use each saved project URL, or Flow home when no project is saved.
+            destination = row["project_url"] or "https://flow.google.com/"
+            profile = await FLOW_MANAGER.open_profile(row["profile_id"], destination)
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
                     "opened": True, "login_required": profile.get("login_required", False),
                     "current_url": profile.get("current_url", "")}
