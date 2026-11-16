@@ -34,7 +34,8 @@
     "directories": { "output": "release" },
     "files": ["dist/**/*", "electron/**/*", "package.json"],
     "extraResources": [
-      { "from": "backend/asmr-orchestrator", "to": "backend/asmr-orchestrator" }
+      { "from": "backend/asmr-orchestrator", "to": "backend/asmr-orchestrator" },
+      { "from": "../../extensions/flow-automation", "to": "flow-extension" }
     ],
     "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
     "nsis": {
