@@ -107,8 +107,14 @@ class FlowProfileManager:
         chrome = find_chrome()
         profile_dir.mkdir(parents=True, exist_ok=True)
         downloads_dir.mkdir(parents=True, exist_ok=True)
-        if not self.extension_path.is_dir() or not (self.extension_path / "manifest.json").is_file():
-            raise RuntimeError(f"Bundled Flow extension is missing: {self.extension_path}")
+        # Extension packaging/registration must not be a prerequisite for
+        # launching the user's visible Chrome window. A missing extension is a
+        # separate diagnostic; it must never prevent the five account windows
+        # from opening.
+        extension_available = (
+            self.extension_path.is_dir()
+            and (self.extension_path / "manifest.json").is_file()
+        )
 
         # Reattach to a Chrome window left running by a previous app session.
         # This preserves the signed-in Google session and avoids trying to reuse a
@@ -133,11 +139,14 @@ class FlowProfileManager:
                 f"--download-default-directory={downloads_dir.resolve()}",
                 "--no-first-run",
                 "--no-default-browser-check",
-                "--disable-extensions-except=" + str(self.extension_path),
-                "--load-extension=" + str(self.extension_path),
                 "--new-window",
                 FLOW_HOME,
             ]
+            if extension_available:
+                args[args.index("--new-window"):args.index("--new-window")] = [
+                    "--disable-extensions-except=" + str(self.extension_path),
+                    "--load-extension=" + str(self.extension_path),
+                ]
             # Chrome is a GUI application: launch it as a normal desktop
             # process so every account gets a visible, user-interactable window.
             # Do not use CREATE_NO_WINDOW / DETACHED_PROCESS here.
