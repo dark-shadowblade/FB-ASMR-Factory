@@ -204,6 +204,19 @@
     return fresh.length === 1 ? fresh[0] : null;
   }
 
+  function mediaTileReady(mediaId) {
+    const tile = mediaTile(mediaId);
+    if (!tile || !visible(tile)) return false;
+    const playable = [...tile.querySelectorAll("video")].some(video =>
+      visible(video) && video.readyState >= 2 && Number.isFinite(video.duration) && video.duration > 0
+    );
+    const hasMenu = [...tile.querySelectorAll("button,[role='button']")].some(button =>
+      enabled(button) && (/more options|more actions/i.test(label(button)) ||
+        [...button.querySelectorAll("mat-icon,i")].some(icon => /more_vert|more_horiz|more/i.test(clean(icon.textContent))))
+    );
+    return playable || hasMenu;
+  }
+
   async function downloadMediaTile(mediaId) {
     const tile = mediaTile(mediaId);
     if (!tile) return { ok: false, reason: "Generated media tile not found for " + mediaId };
@@ -255,5 +268,5 @@
     return { ok: true, actual, verified: { model: model.verified, aspectRatio: ratio.verified, resolution: resolution.verified, duration: duration.verified } };
   }
 
-  window.ASMRFlowControls = Object.freeze({ applySettings, mediaIds, findNewMediaId, downloadMediaTile });
+  window.ASMRFlowControls = Object.freeze({ applySettings, mediaIds, findNewMediaId, mediaTileReady, downloadMediaTile });
 })();
