@@ -38,7 +38,10 @@ class FlowProfileManager:
     async def open_profile(self, profile_id: str, project_url: str) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
             raise ValueError("Unknown Flow profile.")
-        project_url = validate_flow_project_url(project_url)
+        if project_url.rstrip("/") != "https://flow.google.com":
+            project_url = validate_flow_project_url(project_url)
+        else:
+            project_url = "https://flow.google.com/"
         async with self._locks[profile_id]:
             try:
                 await self._ensure_playwright()
