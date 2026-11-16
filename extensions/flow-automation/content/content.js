@@ -142,16 +142,11 @@
     }
   }
   function videoReady() {
-    if (baselineCaptured && window.ASMRFlowControls) {
-      const freshId = targetMediaId || window.ASMRFlowControls.findNewMediaId(baselineMediaIds);
-      if (!freshId) return false;
-      targetMediaId = freshId;
-      return window.ASMRFlowControls.mediaTileReady(freshId);
-    }
-    const playable = [...document.querySelectorAll("video")].some(v =>
-      visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
-    );
-    return playable && !!findButton(/download/);
+    if (!baselineCaptured || !window.ASMRFlowControls) return false;
+    const freshId = targetMediaId || window.ASMRFlowControls.findNewMediaId(baselineMediaIds);
+    if (!freshId) return false;
+    targetMediaId = freshId;
+    return window.ASMRFlowControls.mediaTileReady(freshId);
   }
   function detectState() {
     const text = (document.body?.innerText || "").toLowerCase();
@@ -299,6 +294,8 @@
     if (downloadRequested) return;
     downloadRequested = true;
     if (targetMediaId && window.ASMRFlowControls) {
+      const requested = await chrome.storage.local.get("downloadRequestedTaskId");
+      if (requested.downloadRequestedTaskId === currentTask?.taskId) return;
       const result = await window.ASMRFlowControls.downloadMediaTile(targetMediaId);
       if (!result.ok) {
         downloadRequested = false;
