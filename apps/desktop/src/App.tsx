@@ -125,7 +125,9 @@ export default function App() {
       if (!response.ok) throw new Error(data.detail || "Could not open Chrome profile");
       setNotice(data.profile.login_required
         ? profile.display_name + " opened. Sign in to Google once in that Chrome window; the session will be reused."
-        : profile.display_name + " opened its saved Google Flow project.");
+        : (data.profile.project_created
+            ? profile.display_name + " created and saved its Google Flow project."
+            : profile.display_name + " opened its saved Google Flow project."));
       await refresh();
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open Chrome profile."); }
   }
@@ -162,10 +164,6 @@ export default function App() {
 
 
   async function startAutomaticProduction(job: Job, allowSupersededAttempt = false) {
-    if (flowProfiles.filter(p=>p.configured).length !== 5) {
-      setNotice("Save all five Google Flow project URLs first.");
-      return;
-    }
     const previousTasks = flowAutomation.tasks.filter(t=>t.job_id===job.id);
     const terminalStatuses = ["superseded","cancelled","failed","blocked_ui","blocked_settings","needs_login","downloaded"];
     const reusableAttempt = allowSupersededAttempt && previousTasks.length > 0 &&
@@ -187,7 +185,7 @@ export default function App() {
       const openedResponse = openedResult.value;
       const openedData = await openedResponse.json();
       if (!openedResponse.ok) throw new Error(openedData.detail?.message || openedData.detail || "Could not open Chrome profiles");
-      const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
+      let loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
       let current = job;
       if (promptResult.status === "rejected") throw promptResult.reason;
       if (promptResult.value) {
@@ -203,9 +201,36 @@ export default function App() {
         current = approvedData.job;
         setSelected(current);
       }
-      setNotice(loginProfiles.length
-        ? "Five browser profiles opened. Sign in where requested; clips will queue independently."
-        : "Five browser profiles opened. Queueing each clip for its matching Flow profile…");
+      // First-time Google sign-in is manual, but project creation and saving are
+      // automatic as soon as each profile is signed in. Re-open the persistent
+      // profile while waiting so the backend can create its missing project.
+      let projectsReady = false;
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const profilesResponse = await fetch(API + "/flow/profiles");
+        const profilesData = await profilesResponse.json();
+        projectsReady = profilesResponse.ok &&
+          (profilesData.profiles || []).length === 5 &&
+          profilesData.profiles.every((p: FlowProfile) => Boolean(p.project_url));
+        if (projectsReady) break;
+        setNotice(loginProfiles.length
+          ? "Sign in to Google in the opened Flow windows. The app will create and save each project automatically…"
+          : "Creating and saving the five Google Flow projects…");
+        await new Promise(resolve => window.setTimeout(resolve, 3000));
+        const retryOpen = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+        const retryData = await retryOpen.json();
+        if (!retryOpen.ok) {
+          const detail = retryData.detail?.message || retryData.detail;
+          if (detail && !String(detail).toLowerCase().includes("sign in")) {
+            throw new Error(typeof detail === "string" ? detail : "Could not initialise all Flow projects.");
+          }
+        } else {
+          loginProfiles = (retryData.profiles || []).filter((p: any) => p.login_required);
+        }
+      }
+      if (!projectsReady) {
+        throw new Error("Google sign-in is still required in one or more Flow profiles. Sign in there, then start Generate Video again; created projects will be reused.");
+      }
+      setNotice("Five Flow projects are ready. Queueing each clip for its matching account…");
       const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
       const dispatchData = await dispatched.json();
       if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
@@ -455,7 +480,7 @@ export default function App() {
               <small>{profile.project_url ? "Flow project detected and saved automatically" : "Waiting for this profile to detect a Flow project"} · {profile.extension_connected ? "Extension connected" : profile.browser_open ? "Browser open · waiting for extension" : "Browser closed"}</small>
             </div>
             <div className="flow-account-actions">
-              <button className="secondary compact" onClick={()=>openFlowProfile(profile)} disabled={!profile.configured}>Open browser</button>
+              <button className="secondary compact" onClick={()=>openFlowProfile(profile)}>Open browser</button>
             </div>
           </div>)}
           <div className="session-foot">Five isolated Chrome profiles · saved Google sessions are reused · first sign-in is done once per profile.</div>
