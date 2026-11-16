@@ -41,6 +41,11 @@ class FlowProfileTests(unittest.TestCase):
             manager = FlowProfileManager(Path(temp))
             self.assertFalse(manager.status("flow-1")["browser_open"])
             self.assertFalse(manager.status("flow-2")["browser_open"])
+            attached_context = object()
+            manager._contexts["flow-1"] = attached_context
+            manager._browsers["flow-1"] = SimpleNamespace(contexts=[attached_context])
+            self.assertTrue(manager.status("flow-1")["browser_open"])
+            self.assertFalse(manager.status("flow-2")["browser_open"])
             self.assertNotEqual(manager.root / "flow-1", manager.root / "flow-2")
 
     def test_open_five_profiles_launches_five_isolated_chrome_contexts_and_configures_workers(self):
