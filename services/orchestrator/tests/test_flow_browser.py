@@ -67,6 +67,7 @@ class FlowProfileTests(unittest.TestCase):
             root = Path(temp) / "data" / "chrome-profiles"
             extension = Path(temp) / "extension"
             extension.mkdir()
+            root.parent.mkdir(parents=True)
             (extension / "manifest.json").write_text("{}", encoding="utf-8")
             (root.parent / "extension-bridge.token").write_text("test-bridge-token", encoding="utf-8")
             workers = [FakeWorker() for _ in PROFILE_IDS]
