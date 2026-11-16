@@ -305,13 +305,14 @@
     if (targetMediaId && window.ASMRFlowControls) {
       const requested = await chrome.storage.local.get("downloadRequestedTaskId");
       if (requested.downloadRequestedTaskId === currentTask?.taskId) return;
+      await chrome.storage.local.set({ downloadRequestedTaskId: currentTask?.taskId });
       const result = await window.ASMRFlowControls.downloadMediaTile(targetMediaId);
       if (!result.ok) {
+        await chrome.storage.local.remove("downloadRequestedTaskId");
         downloadRequested = false;
         send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: result.reason, mediaId: targetMediaId });
         return;
       }
-      chrome.storage.local.set({ downloadRequestedTaskId: currentTask?.taskId });
       send("DOWNLOAD_CLICKED", { source: "generated media tile menu", mediaId: targetMediaId });
       return;
     }
