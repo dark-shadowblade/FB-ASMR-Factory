@@ -186,21 +186,37 @@ class FlowProfileManager:
         worker = next((item for item in workers if "/background/service-worker.js" in item.url), None)
         if worker is None:
             raise RuntimeError("The bundled Flow extension service worker was not found in this Chrome profile.")
-        await worker.evaluate("""async ({profileId, bridgeToken, baseUrl, enabled}) => {
+        registration = await worker.evaluate("""async ({profileId, bridgeToken, baseUrl, enabled}) => {
           await chrome.storage.local.set({
-            baseUrl,
-            bridgeToken,
-            profileId,
-            enabled
+            baseUrl, bridgeToken, profileId, enabled,
+            extensionWorkerStatus: { profileId, connected: false, error: "Registering with local orchestrator…" }
           });
           await poll();
-          return true;
+          // poll() can already be running because Chrome just started the
+          // service worker. Wait for its actual registration result instead
+          // of assuming that invoking poll means the bridge is connected.
+          for (let attempt = 0; attempt < 40; attempt += 1) {
+            const saved = await chrome.storage.local.get("extensionWorkerStatus");
+            const status = saved.extensionWorkerStatus || {};
+            if (status.profileId === profileId && status.connected === true) {
+              return { connected: true, error: "" };
+            }
+            if (status.profileId === profileId && status.error) {
+              return { connected: false, error: status.error };
+            }
+            await new Promise(resolve => setTimeout(resolve, 250));
+          }
+          const saved = await chrome.storage.local.get("extensionWorkerStatus");
+          return { connected: false, error: saved.extensionWorkerStatus?.error || "Extension did not register within 10 seconds." };
         }""", {
             "profileId": profile_id,
             "bridgeToken": bridge_token,
             "baseUrl": "http://127.0.0.1:8765",
             "enabled": True,
         })
+        if not isinstance(registration, dict) or registration.get("connected") is not True:
+            detail = registration.get("error", "Unknown extension registration error") if isinstance(registration, dict) else "No registration result returned"
+            raise RuntimeError("Flow extension could not connect to the local orchestrator: " + str(detail)[:250])
 
     async def open_profile(self, profile_id: str, project_url: str) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
