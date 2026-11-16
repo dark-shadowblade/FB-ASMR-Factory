@@ -150,91 +150,77 @@ export default function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Could not create job");
+
+      setNotice("Creating the five prompts…");
+      const promptResponse = await fetch(`${API}/jobs/${data.job.id}/generate-prompts`, { method: "POST" });
+      const promptData = await promptResponse.json();
+      if (!promptResponse.ok) throw new Error(promptData.detail || "Prompt generation failed");
+
       setTopic("");
-      setSelected(data.job);
-      setNotice("Job created. Starting the five-account production workflow…");
+      setSelected(promptData.job);
+      setActivePage("prompts");
+      setNotice("Five prompts are ready. Review them, then click Generate Videos to open the five Flow browsers.");
       await refresh();
-      await startAutomaticProduction(data.job);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Backend is not running. Start the local service.");
+      setNotice(error instanceof Error ? error.message : "Could not create the prompt pack.");
     } finally { setBusy(false); }
   }
 
+  async function openAllFlowBrowsers(job: Job) {
+    if (dispatching) return;
+    const configured = flowProfiles.filter(profile => profile.configured).length;
+    if (configured !== 5) {
+      setNotice(`Set a Google Flow project URL for all five accounts first (${configured}/5 configured).`);
+      return;
+    }
+    if (!job.clips.every(clip => clip.prompt.trim().length >= 40)) {
+      setNotice("Generate all five prompts before opening the Flow browsers.");
+      return;
+    }
 
-  async function startAutomaticProduction(job: Job, allowSupersededAttempt = false) {
-    if (flowProfiles.filter(p=>p.configured).length !== 5) {
-      setNotice("Save all five Google Flow project URLs first.");
-      return;
-    }
-    const previousTasks = flowAutomation.tasks.filter(t=>t.job_id===job.id);
-    const terminalStatuses = ["superseded","cancelled","failed","blocked_ui","blocked_settings","needs_login","downloaded"];
-    const reusableAttempt = allowSupersededAttempt && previousTasks.length > 0 &&
-      previousTasks.every(t=>terminalStatuses.includes(t.status));
-    if (previousTasks.length && !reusableAttempt) {
-      setNotice("This job already has active Flow tasks. Wait for them to stop before starting another attempt.");
-      return;
-    }
     setDispatching(true);
     try {
-      setNotice("Opening Chrome profiles 01–05 and generating prompts in parallel…");
-      const openPromise = fetch(API + "/flow/profiles/open-all", { method: "POST" });
-      const needsPrompts = !job.clips.every(c=>c.prompt.trim().length>=40);
-      const promptPromise = needsPrompts
-        ? fetch(API + "/jobs/" + job.id + "/generate-prompts", { method: "POST" })
-        : Promise.resolve(null);
-      const [openedResult, promptResult] = await Promise.allSettled([openPromise, promptPromise]);
-      if (openedResult.status === "rejected") throw openedResult.reason;
-      const openedResponse = openedResult.value;
-      const openedData = await openedResponse.json();
-      if (!openedResponse.ok) throw new Error(openedData.detail?.message || openedData.detail || "Could not open Chrome profiles");
-      const loginProfiles = (openedData.profiles || []).filter((p: any) => p.login_required);
-      let current = job;
-      if (promptResult.status === "rejected") throw promptResult.reason;
-      if (promptResult.value) {
-        const generatedData = await promptResult.value.json();
-        if (!promptResult.value.ok) throw new Error(generatedData.detail || "Prompt generation failed");
-        current = generatedData.job;
-        setSelected(current);
+      setNotice("Opening the five separate Chrome profiles…");
+      const response = await fetch(API + "/flow/profiles/open-all", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        const detail = data.detail;
+        if (detail && typeof detail === "object") {
+          const failed = (detail.profiles || []).filter((profile: any) => !profile.opened);
+          throw new Error(failed.length
+            ? failed.map((profile: any) => profile.profile_id + ": " + (profile.error || "Could not open")).join(" · ")
+            : detail.message || "Could not open all five Chrome profiles");
+        }
+        throw new Error(detail || "Could not open all five Chrome profiles");
       }
-      if (current.status !== "prompts_approved") {
-        const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
-        const approvedData = await approved.json();
-        if (!approved.ok) throw new Error(approvedData.detail || "Automatic prompt approval failed");
-        current = approvedData.job;
-        setSelected(current);
+      const opened = (data.profiles || []).filter((profile: any) => profile.opened);
+      if (opened.length !== 5) {
+        throw new Error(`Only ${opened.length} of 5 Chrome profiles reported as opened. Check the Accounts page and try again.`);
       }
-      setNotice(loginProfiles.length
-        ? "Five browser profiles opened. Sign in where requested; clips will queue independently."
-        : "Five browser profiles opened. Queueing each clip for its matching Flow profile…");
-      const dispatched = await fetch(API + "/extension/dispatch/" + job.id, { method: "POST" });
-      const dispatchData = await dispatched.json();
-      if (!dispatched.ok) throw new Error(dispatchData.detail || "Flow dispatch failed");
-      setSelected(current);
-      setNotice("Production queued. Each profile will pick up its own clip when its extension is connected.");
+      const loginRequired = opened.filter((profile: any) => profile.login_required).length;
+      setNotice(loginRequired
+        ? `All five Chrome windows opened. Sign in to Google in the ${loginRequired} window(s) that require it. No prompts have been submitted yet.`
+        : "All five Chrome windows opened on their saved Flow projects. No prompts have been submitted yet.");
       await refresh();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not start automatic production.");
+      setNotice(error instanceof Error ? error.message : "Could not open the five Chrome browsers.");
       await refresh();
-    } finally { setDispatching(false); }
+    } finally {
+      setDispatching(false);
+    }
   }
 
   async function generateFreshPromptsForFailedJob(job: Job) {
     if (dispatching || busy) return;
     setDispatching(true);
     try {
-      setNotice("Superseding the failed attempt and generating five fresh prompts…");
+      setNotice("Generating five fresh prompts…");
       const response = await fetch(API + "/jobs/" + job.id + "/regenerate-prompts", { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not generate a fresh prompt pack");
-      let updated: Job = data.job;
-      const approved = await fetch(API + "/jobs/" + job.id + "/approve-prompts", { method: "POST" });
-      const approvedData = await approved.json();
-      if (!approved.ok) throw new Error(approvedData.detail || "Could not approve the fresh prompts");
-      updated = approvedData.job;
-      setSelected(updated);
+      setSelected(data.job);
       await refresh();
-      setNotice("Fresh prompts ready. Starting a new Flow generation attempt…");
-      await startAutomaticProduction(updated, true);
+      setNotice("Five fresh prompts are ready. Click Generate Videos when you want to open the five Flow browsers.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Fresh prompt generation failed.");
       await refresh();
@@ -442,8 +428,8 @@ export default function App() {
           <select id="theme" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(t=><option key={t.value} value={t.value}>{t.emoji}  {t.label}</option>)}</select>
           <div className="style-hint">Five different subjects per style · 8 seconds each · consistent Style Bible</div>
           <div className="settings-row"><div><small>MODEL</small><b>Veo 3.1 Lite</b></div><div><small>QUALITY</small><b>720p</b></div><div><small>DURATION</small><b>8 seconds</b></div></div>
-          <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy || dispatching ? "Starting automated production…" : "▶  Generate Video"}</button>
-          <p className="helper">One click generates and internally approves five prompts, opens profiles 01–05, dispatches generation, downloads, assembles and publishes automatically. First-time profile pairing, Google sign-in and Facebook Page setup are required; Flow controls are auto-detected when uniquely identifiable.</p>
+          <button className="primary" onClick={createJob} disabled={busy || dispatching || health!=="online"}>{busy ? "Generating prompts…" : "✦  Generate Prompts"}</button>
+          <p className="helper">Creates five prompts for this topic. Video generation is a separate next step.</p>
         </section>}
         {activePage === "accounts" && <section className="panel session-panel">
           <div className="panel-head"><div><div className="eyebrow">BROWSER CONNECTIONS</div><h2>Flow sessions</h2></div><span className="count-pill">{flowAutomation.registered_count} / 5 WORKERS</span></div>
@@ -526,11 +512,15 @@ export default function App() {
 
       {activePage === "prompts" && active && <section className="panel detail-panel">
         <div className="panel-head"><div><div className="eyebrow">AUTOMATED PROMPT PACK</div><h2>{active.topic}</h2></div><span className="count-pill">{active.status.replaceAll("_"," ")}</span></div>
-        <p className="muted">The five prompts are generated, internally approved and dispatched automatically when you click Generate Video on Home. There is no separate prompt-generation or approval step.</p>
+        <p className="muted">Review the five generated prompts below. When ready, click Generate Videos. Step 1 opens the five separate Chrome profiles on their saved Google Flow projects; it does not submit prompts yet.</p>
         <div className="prompt-grid">{active.clips.map(clip=><div className="prompt-card" key={clip.id}>
           <div className="clip-top"><span>CLIP 0{clip.order}</span><span>{clip.status.replaceAll("_"," ")}</span></div>
           <b>{clip.subject}</b><p className="prompt-readonly">{clip.prompt || "Generated automatically when production starts."}</p>
         </div>)}</div>
+        <div className="dispatch-toolbar">
+          <div><b>Step 1 · Open Flow browsers</b><small>Opens five independent Chrome profiles, each with its own saved Google account and Flow project. Prompt submission is not started in this step.</small></div>
+          <button className="primary compact" disabled={dispatching || flowProfiles.filter(profile=>profile.configured).length!==5 || !active.clips.every(clip=>clip.prompt.trim().length>=40)} onClick={()=>openAllFlowBrowsers(active)}>{dispatching ? "Opening 5 browsers…" : "▶  Generate Videos"}</button>
+        </div>
         <div className="dispatch-toolbar">
           <div><b>Production progress</b><small>{flowAutomation.tasks.filter(t=>t.job_id===active.id).length}/5 Flow tasks · {flowAutomation.tasks.filter(t=>t.job_id===active.id && t.status==="downloaded").length}/5 downloads · {active.final_video ? "video assembled" : "assembly runs automatically after all downloads"}</small></div>
           <span className="count-pill">{active.final_video ? "ASSEMBLED" : "AUTOMATIC"}</span>
