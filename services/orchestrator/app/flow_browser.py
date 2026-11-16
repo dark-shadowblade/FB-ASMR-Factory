@@ -10,6 +10,14 @@ from typing import Any
 PROFILE_IDS = tuple(f"flow-{index}" for index in range(1, 6))
 
 
+def validate_project_page(value: str) -> bool:
+    try:
+        validate_flow_project_url(value)
+        return True
+    except ValueError:
+        return False
+
+
 def validate_flow_project_url(value: str) -> str:
     url = value.strip()
     parsed = urlparse(url)
@@ -118,18 +126,27 @@ class FlowProfileManager:
             page = pages[0] if pages else await context.new_page()
             if page.url != project_url:
                 await page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
+            if urlparse(page.url).hostname == "flow.google.com" and not validate_project_page(page.url):
+                try:
+                    await page.wait_for_url("https://flow.google.com/project/**", timeout=35000)
+                except Exception:
+                    # Flow may require sign-in or the page may not expose a unique
+                    # project-creation control; report readiness accurately below.
+                    pass
             try:
                 await page.bring_to_front()
             except Exception:
                 pass
             current_url = page.url
             login_required = "accounts.google.com" in current_url
+            project_ready = bool(validate_project_page(current_url))
             return {
                 "profile_id": profile_id,
                 "status": "login_required" if login_required else "project_open",
                 "current_url": current_url,
                 "title": await page.title(),
                 "login_required": login_required,
+                "project_ready": project_ready,
                 "profile_directory": str(self.root / profile_id),
             }
 
