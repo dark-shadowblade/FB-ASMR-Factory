@@ -321,7 +321,11 @@
     while (Date.now() < deadline && !projectIdentity(location.href)) {
       const candidates = [...document.querySelectorAll("button,[role='button'],a")]
         .filter(visible)
-        .filter(el => /^(?:new project|create project|create new project|start new project)$/i.test(labelOf(el)));
+        .filter(el => {
+          const labels = [el.getAttribute("aria-label"), el.getAttribute("title"), el.innerText, el.textContent]
+            .filter(Boolean).map(value => value.replace(/\\s+/g, " ").trim());
+          return labels.some(label => /^(?:new project|create project|create new project|start new project)$/i.test(label));
+        });
       if (candidates.length === 1 && !candidates[0].disabled &&
           candidates[0].getAttribute("aria-disabled") !== "true") {
         candidates[0].click();
