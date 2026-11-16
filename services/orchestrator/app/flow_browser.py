@@ -110,6 +110,21 @@ class FlowProfileManager:
         if not self.extension_path.is_dir() or not (self.extension_path / "manifest.json").is_file():
             raise RuntimeError(f"Bundled Flow extension is missing: {self.extension_path}")
 
+        # Reattach to a Chrome window left running by a previous app session.
+        # This preserves the signed-in Google session and avoids trying to reuse a
+        # profile directory while its Chrome process is already holding the lock.
+        try:
+            browser = await self._playwright.chromium.connect_over_cdp(endpoint, timeout=1200)
+            contexts = browser.contexts
+            if contexts:
+                context = contexts[0]
+                self._browsers[profile_id] = browser
+                self._contexts[profile_id] = context
+                return browser, context
+            await browser.close()
+        except Exception:
+            pass
+
         if process is None or process.poll() is not None:
             args = [
                 chrome,
