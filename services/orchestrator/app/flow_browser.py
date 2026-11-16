@@ -138,13 +138,14 @@ class FlowProfileManager:
                 "--new-window",
                 FLOW_HOME,
             ]
-            creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            # Chrome is a GUI application: launch it as a normal desktop
+            # process so every account gets a visible, user-interactable window.
+            # Do not use CREATE_NO_WINDOW / DETACHED_PROCESS here.
             process = subprocess.Popen(
                 args,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                creationflags=creationflags,
             )
             self._processes[profile_id] = process
 
