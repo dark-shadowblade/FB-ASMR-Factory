@@ -205,7 +205,7 @@ export default function App() {
       // automatic as soon as each profile is signed in. Re-open the persistent
       // profile while waiting so the backend can create its missing project.
       let projectsReady = false;
-      for (let attempt = 0; attempt < 60; attempt++) {
+      for (let attempt = 0; attempt < 120; attempt++) {
         const profilesResponse = await fetch(API + "/flow/profiles");
         const profilesData = await profilesResponse.json();
         projectsReady = profilesResponse.ok &&
@@ -226,6 +226,13 @@ export default function App() {
         } else {
           loginProfiles = (retryData.profiles || []).filter((p: any) => p.login_required);
         }
+      }
+      if (!projectsReady) {
+        const finalProfilesResponse = await fetch(API + "/flow/profiles");
+        const finalProfilesData = await finalProfilesResponse.json();
+        projectsReady = finalProfilesResponse.ok &&
+          (finalProfilesData.profiles || []).length === 5 &&
+          finalProfilesData.profiles.every((p: FlowProfile) => Boolean(p.project_url));
       }
       if (!projectsReady) {
         throw new Error("Google sign-in is still required in one or more Flow profiles. Sign in there, then start Generate Video again; created projects will be reused.");
