@@ -6,6 +6,8 @@
   let executingTaskId = null;
   let executingPromise = null;
   let lastState = "";
+  let baselineMediaIds = [];
+  let targetMediaId = null;
 
   const send = (event, payload = {}) => chrome.runtime.sendMessage({ type: "FLOW_EVENT", event, payload }).catch(() => {});
   const visible = el => !!(el && el.isConnected && (el.getClientRects().length || el.offsetWidth || el.offsetHeight));
@@ -139,6 +141,12 @@
     }
   }
   function videoReady() {
+    if (baselineMediaIds.length && window.ASMRFlowControls) {
+      const freshId = targetMediaId || window.ASMRFlowControls.findNewMediaId(baselineMediaIds);
+      if (!freshId) return false;
+      targetMediaId = freshId;
+      return window.ASMRFlowControls.mediaTileReady(freshId);
+    }
     const playable = [...document.querySelectorAll("video")].some(v =>
       visible(v) && v.readyState >= 2 && Number.isFinite(v.duration) && v.duration > 0 && !!v.currentSrc
     );
@@ -186,6 +194,18 @@
       send("PROJECT_URL_MISMATCH", { actual: location.href, expected: task.projectUrl });
       return;
     }
+    const baselineState = await chrome.storage.local.get("flowBaselineByTask");
+    const baselineMap = baselineState.flowBaselineByTask || {};
+    if (Array.isArray(baselineMap[task.taskId])) {
+      baselineMediaIds = baselineMap[task.taskId];
+    } else {
+      baselineMediaIds = window.ASMRFlowControls ? window.ASMRFlowControls.mediaIds() : [];
+      baselineMap[task.taskId] = baselineMediaIds;
+      const keys = Object.keys(baselineMap);
+      for (const key of keys.slice(0, Math.max(0, keys.length - 20))) delete baselineMap[key];
+      await chrome.storage.local.set({ flowBaselineByTask: baselineMap });
+    }
+    targetMediaId = null;
     const state = detectState();
     if (state === "SESSION_CHECK") {
       send("SESSION_REQUIRED", { url: location.href });
@@ -268,9 +288,20 @@
     startMonitor();
   }
   let downloadRequested = false;
-  function requestDownload() {
+  async function requestDownload() {
     if (downloadRequested) return;
     downloadRequested = true;
+    if (targetMediaId && window.ASMRFlowControls) {
+      const result = await window.ASMRFlowControls.downloadMediaTile(targetMediaId);
+      if (!result.ok) {
+        downloadRequested = false;
+        send("DOWNLOAD_SELECTOR_UNVERIFIED", { reason: result.reason, mediaId: targetMediaId });
+        return;
+      }
+      chrome.storage.local.set({ downloadRequestedTaskId: currentTask?.taskId });
+      send("DOWNLOAD_CLICKED", { source: "generated media tile menu", mediaId: targetMediaId });
+      return;
+    }
     chrome.storage.local.get(["downloadSelector", "selectorsVerified", "downloadRequestedTaskId"], settings => {
       if (!currentTask) { downloadRequested = false; return; }
       if (settings.downloadRequestedTaskId === currentTask.taskId) return;
