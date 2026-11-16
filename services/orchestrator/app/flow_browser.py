@@ -35,14 +35,31 @@ class FlowProfileManager:
             from playwright.async_api import async_playwright
             self._playwright = await async_playwright().start()
 
-    async def _create_project_from_home(self, page: Any) -> str:
-        """Create a Flow project through the visible + New project control and verify its URL."""
+    async def _ensure_project_from_home(self, page: Any) -> tuple[str, bool]:
+        """Reuse the newest visible project, or create one when the account has none."""
         from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
         await page.goto("https://flow.google.com/", wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(1200)
         if "accounts.google.com" in page.url:
-            return page.url
+            return page.url, False
+
+        # Reuse an existing project in this account before creating anything.
+        # Flow's home page lists project cards as links to /project/{id}.
+        existing_links = await page.locator('a[href*="/project/"]').evaluate_all(
+            """nodes => nodes.filter(node => {
+                const style = getComputedStyle(node);
+                return node.getClientRects().length > 0 &&
+                    style.visibility !== 'hidden' && style.display !== 'none';
+            }).map(node => node.href)"""
+        )
+        for candidate in existing_links:
+            try:
+                existing_url = validate_flow_project_url(candidate)
+            except ValueError:
+                continue
+            await page.goto(existing_url, wait_until="domcontentloaded", timeout=60000)
+            return existing_url, False
 
         # Google documents the action as "+ New project". Match the visible
         # button by accessible name/text and refuse ambiguous matches.
@@ -67,7 +84,7 @@ class FlowProfileManager:
                 "Flow's '+ New project' action was clicked, but no project URL appeared. "
                 "The app will not mark this profile as configured."
             ) from exc
-        return validate_flow_project_url(page.url)
+        return validate_flow_project_url(page.url), True
 
     async def open_profile(self, profile_id: str, project_url: str | None = None) -> dict[str, Any]:
         if profile_id not in PROFILE_IDS:
@@ -104,6 +121,8 @@ class FlowProfileManager:
             page = pages[0] if pages else await context.new_page()
             # A saved URL always wins. With no saved URL, reuse an already-open
             # project in this persistent profile; otherwise create one on Flow.
+            project_created = False
+            current_project = ""
             if project_url:
                 if page.url != project_url:
                     await page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
@@ -113,11 +132,9 @@ class FlowProfileManager:
                 except ValueError:
                     current_project = ""
                 if not current_project:
-                    current_url = await self._create_project_from_home(page)
+                    current_url, project_created = await self._ensure_project_from_home(page)
                     # A login redirect is returned as-is; the next open attempt
-                    # after sign-in will create the profile's first project.
-                else:
-                    pass
+                    # after sign-in will select or create the profile's project.
             try:
                 await page.bring_to_front()
             except Exception:
@@ -133,7 +150,7 @@ class FlowProfileManager:
                 "title": await page.title(),
                 "login_required": login_required,
                 "profile_directory": str(self.root / profile_id),
-                "project_created": bool(not project_url and not login_required and not current_project) if "current_project" in locals() else False,
+                "project_created": bool(project_created and not login_required),
             }
 
     def status(self, profile_id: str) -> dict[str, Any]:
