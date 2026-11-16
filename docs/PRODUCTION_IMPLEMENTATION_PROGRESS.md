@@ -28,20 +28,20 @@ Implement the production workflow step by step, with backend/orchestrator reliab
 
 ## Next steps
 
-1. Extend transition validation to job/clip update paths, preserving existing statuses and compatibility.
+1. Make job-start idempotent and add automatic Flow project creation/detection for profiles without saved project URLs.
 2. Add atomic state-and-event persistence helpers and tests for rollback/idempotency.
 3. Add database-enforced per-profile task leasing and concurrency tests.
 4. Build a single idempotent job-start orchestrator (prompt generation → auto-approval → preflight → dispatch).
 5. Continue through extension execution, download ingestion, restart recovery, media normalization and publication reconciliation.
 
-## Latest implementation step (2026-11-16)\n\n- Commit `715c3d5`: validate incoming extension task-state transitions before persistence.\n- Commit `8e08d77`: test the ordered worker lifecycle and verify invalid events are rejected without persistence.\n- Commit `398f6ab`: fix backend CI to run pytest; the previous unittest discovery command would not collect the repository's pytest-style tests.\n- Added a PR to `main` to run CI; no merge has been performed.\n\n## Verification record
+## Latest implementation step (2026-11-16)\n\n- Commit `715c3d5`: validate incoming extension task-state transitions before persistence.\n- Commit `8e08d77`: test the ordered worker lifecycle and verify invalid events are rejected without persistence.\n- Commit `398f6ab`: fix backend CI to run pytest; the previous unittest discovery command would not collect the repository's pytest-style tests.\n- Added a PR to `main` to run CI; no merge has been performed.\n\n## Latest implementation step (2026-11-16, Generate Video orchestration)\n\n- Commit `ab7f76f`: connected the existing Generate Video action to prompt generation, automatic approval and five-task Flow dispatch after opening all five persistent browsers. Existing desktop UI is unchanged.\n- Commit `92b1d3a`: corrected the bridge lifecycle test to count all seven accepted events in its full ordered sequence.\n- Existing UI already auto-runs assembly when all five extension tasks report downloaded; Facebook publishing is invoked by the backend assembly route when a Page is configured.\n- GitHub Actions for the latest commit are queued at last check; do not treat as passed until completed.\n- Important remaining blocker: dispatch currently requires saved project URLs for all five profiles. The desired create-project-if-missing behavior is not yet implemented.\n\n## Verification record
 
 | Check | Status |
 |---|---|
 | Architecture document committed | Done |
 | State transition module committed | Done |
 | State transition tests committed | Done |
-| Backend CI for this branch | Pending PR run |
+| Backend CI for this branch | Pending latest run |
 | Extension bridge CI for this branch | Pending / not checked |
 | Windows installer for this branch | Not built |
 | Live five-profile Flow test | Not performed |
