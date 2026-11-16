@@ -61,6 +61,7 @@ class FlowProfileTests(unittest.TestCase):
                 self.configurations = []
             async def evaluate(self, _script, config):
                 self.configurations.append(config)
+                return {"connected": True, "error": ""}
 
         class FakeContext:
             def __init__(self, worker):
