@@ -44,12 +44,16 @@ class FlowProfileTests(unittest.TestCase):
             self.assertNotEqual(manager.root / "flow-1", manager.root / "flow-2")
 
     def test_open_five_profiles_launches_five_isolated_chrome_contexts_and_configures_workers(self):
+        from unittest.mock import patch
+
         class FakePage:
             url = "https://flow.google.com/project/12345678-abcd"
             async def title(self):
                 return "Flow project"
             async def bring_to_front(self):
                 return None
+            async def goto(self, url, **_kwargs):
+                self.url = url
 
         class FakeWorker:
             url = "chrome-extension://" + ("a" * 32) + "/background/service-worker.js"
@@ -62,6 +66,26 @@ class FlowProfileTests(unittest.TestCase):
             def __init__(self, worker):
                 self.pages = [FakePage()]
                 self.service_workers = [worker]
+            async def new_page(self):
+                page = FakePage()
+                self.pages.append(page)
+                return page
+
+        class FakeBrowser:
+            def __init__(self, context):
+                self.contexts = [context]
+                self.closed = False
+            async def close(self):
+                self.closed = True
+
+        class FakeProcess:
+            def __init__(self, args):
+                self.args = args
+                self.terminated = False
+            def poll(self):
+                return None if not self.terminated else 0
+            def terminate(self):
+                self.terminated = True
 
         with TemporaryDirectory() as temp:
             root = Path(temp) / "data" / "chrome-profiles"
@@ -70,12 +94,31 @@ class FlowProfileTests(unittest.TestCase):
             root.parent.mkdir(parents=True)
             (extension / "manifest.json").write_text("{}", encoding="utf-8")
             (root.parent / "extension-bridge.token").write_text("test-bridge-token", encoding="utf-8")
-            workers = [FakeWorker() for _ in PROFILE_IDS]
-            contexts = [FakeContext(worker) for worker in workers]
-            launcher = AsyncMock(side_effect=contexts)
+            workers = {pid: FakeWorker() for pid in PROFILE_IDS}
+            contexts = {pid: FakeContext(workers[pid]) for pid in PROFILE_IDS}
+            browsers = {pid: FakeBrowser(contexts[pid]) for pid in PROFILE_IDS}
+            attempts = {}
+            processes = []
+
+            async def connect(endpoint, timeout):
+                port = int(endpoint.rsplit(":", 1)[1])
+                profile_id = PROFILE_IDS[port - 9301]
+                attempts[port] = attempts.get(port, 0) + 1
+                # First call checks whether an old Chrome process is already running.
+                if attempts[port] == 1:
+                    raise RuntimeError("no existing Chrome endpoint")
+                return browsers[profile_id]
+
+            def popen(args, **_kwargs):
+                process = FakeProcess(args)
+                processes.append(process)
+                return process
+
             manager = FlowProfileManager(root)
             manager.extension_path = extension
-            manager._playwright = SimpleNamespace(chromium=SimpleNamespace(launch_persistent_context=launcher))
+            manager._playwright = SimpleNamespace(
+                chromium=SimpleNamespace(connect_over_cdp=AsyncMock(side_effect=connect))
+            )
 
             async def open_all():
                 return await asyncio.gather(*(
@@ -83,11 +126,33 @@ class FlowProfileTests(unittest.TestCase):
                     for pid in PROFILE_IDS
                 ))
 
-            results = asyncio.run(open_all())
+            with patch("app.flow_browser.find_chrome", return_value="/fake/chrome"), \\
+                 patch("app.flow_browser.subprocess.Popen", side_effect=popen):
+                results = asyncio.run(open_all())
+
             self.assertEqual(len(results), 5)
-            self.assertEqual(launcher.await_count, 5)
-            self.assertEqual([worker.configurations[0]["profileId"] for worker in workers], list(PROFILE_IDS))
-            self.assertTrue(all(worker.configurations[0]["bridgeToken"] == "test-bridge-token" for worker in workers))
-            self.assertEqual(len({call.kwargs["user_data_dir"] for call in launcher.await_args_list}), 5)
-
-
+            self.assertTrue(all(result["project_ready"] for result in results))
+            self.assertEqual(len(processes), 5)
+            self.assertEqual([result["debugging_port"] for result in results], [9301, 9302, 9303, 9304, 9305])
+            user_data_dirs = [
+                next(arg.split("=", 1)[1] for arg in process.args if arg.startswith("--user-data-dir="))
+                for process in processes
+            ]
+            self.assertEqual(len(set(user_data_dirs)), 5)
+            self.assertTrue(all(any(arg.startswith("--load-extension=") for arg in process.args) for process in processes))
+            self.assertEqual(
+                [workers[pid].configurations[0]["profileId"] for pid in PROFILE_IDS],
+                list(PROFILE_IDS),
+            )
+            self.assertTrue(all(
+                workers[pid].configurations[0]["bridgeToken"] == "test-bridge-token"
+                for pid in PROFILE_IDS
+            ))
+            self.assertTrue(all(
+                workers[pid].configurations[0]["baseUrl"] == "http://127.0.0.1:8765"
+                and workers[pid].configurations[0]["enabled"] is True
+                for pid in PROFILE_IDS
+            ))
+            self.assertTrue(all(manager.status(pid)["browser_open"] for pid in PROFILE_IDS))
+            asyncio.run(manager.close_all())
+            self.assertTrue(all(process.terminated for process in processes))
