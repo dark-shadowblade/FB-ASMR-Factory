@@ -323,7 +323,7 @@
         .filter(visible)
         .filter(el => {
           const labels = [el.getAttribute("aria-label"), el.getAttribute("title"), el.innerText, el.textContent]
-            .filter(Boolean).map(value => value.replace(/\\s+/g, " ").trim());
+            .filter(Boolean).map(value => value.replace(/\s+/g, " ").trim());
           return labels.some(label => /^(?:new project|create project|create new project|start new project)$/i.test(label));
         });
       if (candidates.length === 1 && !candidates[0].disabled &&
