@@ -617,6 +617,20 @@ async def open_all_flow_profiles() -> dict[str, Any]:
                     "opened": False, "error": str(exc)}
 
     results = await asyncio.gather(*(open_one(row) for row in rows))
+    # The extension reports newly-created project URLs asynchronously after
+    # Flow's client-side navigation. Wait for all five URLs to be persisted
+    # before allowing Generate Video to continue to prompt dispatch.
+    if all(item["opened"] and item.get("project_ready") for item in results):
+        for _ in range(40):
+            with connect() as conn:
+                saved = {row["profile_id"]: row["project_url"] for row in conn.execute(
+                    "SELECT profile_id,project_url FROM flow_profiles"
+                ).fetchall()}
+            if all(saved.get(profile_id) for profile_id in PROFILE_IDS):
+                break
+            await asyncio.sleep(0.25)
+        for item in results:
+            item["project_ready"] = bool(saved.get(item["profile_id"]))
     failed = [item for item in results if not item["opened"]]
     if failed:
         raise HTTPException(status_code=503, detail={
