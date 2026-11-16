@@ -610,6 +610,7 @@ async def open_all_flow_profiles() -> dict[str, Any]:
             profile = await FLOW_MANAGER.open_profile(row["profile_id"], destination)
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
                     "opened": True, "login_required": profile.get("login_required", False),
+                    "project_ready": profile.get("project_ready", False),
                     "current_url": profile.get("current_url", "")}
         except (ValueError, RuntimeError) as exc:
             return {"profile_id": row["profile_id"], "display_name": row["display_name"],
