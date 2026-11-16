@@ -20,7 +20,8 @@
     el?.getAttribute("data-state") === "on" ||
     el?.classList?.contains("mat-radio-checked") ||
     el?.classList?.contains("mat-button-toggle-checked") ||
-    el?.classList?.contains("selected")
+    el?.classList?.contains("selected") ||
+    el?.closest?.(".mat-radio-checked, .mat-button-toggle-checked, .mdc-radio--checked")
   );
 
   function uniqueVisible(selector, root = document) {
@@ -52,13 +53,10 @@
     if (!enabled(element)) return { ok: false, reason: description + " is not visible and enabled." };
     if (!selected(element)) {
       element.click();
-      await sleep(300);
+      for (let attempt = 0; attempt < 6 && !selected(element); attempt++) await sleep(120);
     }
     if (!selected(element)) {
-      const state = element.getAttribute("aria-checked") || element.getAttribute("aria-pressed") || element.getAttribute("data-state") || "";
-      // Some Flow menu items close their menu after selection without exposing an ARIA state.
-      if (element.isConnected && state !== "false") return { ok: true, verified: "clicked" };
-      return { ok: false, reason: description + " was clicked but Flow did not expose a selected state." };
+      return { ok: false, reason: description + " was clicked but Flow did not confirm the selected state." };
     }
     return { ok: true, verified: "selected" };
   }
@@ -265,10 +263,9 @@
     actual.outputCount = settings.outputCount ?? 1;
     if (panel.open) {
       const close = uniqueVisible("button.settings-trigger-button, button[aria-label='Settings trigger']");
-      if (close.element) {
-        close.element.click();
-        await sleep(250);
-      }
+      if (!close.element) return { ok: false, reason: "Flow settings panel could not be closed before selecting the model.", actual };
+      close.element.click();
+      await sleep(250);
     }
     const model = await selectModel(settings.model);
     if (!model.ok) return { ok: false, reason: model.reason, actual, available: model.available || [] };
