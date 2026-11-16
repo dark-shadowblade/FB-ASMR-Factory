@@ -79,7 +79,7 @@
 
   async function selectVideoMode() {
     const candidates = [...document.querySelectorAll('.cdk-overlay-pane button[role="radio"], [role="dialog"] button[role="radio"]')].filter(visible);
-    const video = candidates.filter(el => /(^|\\s)video($|\\s)/i.test(label(el)));
+    const video = candidates.filter(el => /(^|\s)video($|\s)/i.test(label(el)));
     if (!video.length) return { ok: true, verified: "not-exposed" };
     if (video.length !== 1) return { ok: false, reason: "Video mode option is ambiguous." };
     return clickAndVerify(video[0], "Video mode");
